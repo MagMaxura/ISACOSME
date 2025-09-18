@@ -109,7 +109,7 @@ export const updateProduction = async (data: UpdateProductionData): Promise<void
     if (error) {
         console.error(`[${SERVICE_NAME}] RPC call 'modificar_produccion' failed:`, JSON.stringify(error, null, 2));
          if (error.message?.includes('lotes_numero_lote_producto_id_key')) {
-             throw new Error(`El número de lote "${data.numeroLote}" ya existe para este producto. Por favor, elige un número de lote único.`);
+             throw new Error(`El número de lote 1"${data.numeroLote}" ya existe para este producto. Por favor, elige un número de lote único.`);
         }
         throw new Error(`Error al modificar la producción: ${error.message}`);
     }
