@@ -134,7 +134,7 @@ export const fetchPublicProductsList = async (): Promise<Partial<Producto>[]> =>
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error fetching public products. Raw error:`, JSON.stringify(error, null, 2));
 
-        if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        if (error instanceof TypeError && error.message?.includes('Failed to fetch')) {
             const enhancedError = {
                 message: "Error de Permisos: La lista pública de productos no se puede mostrar.",
                 details: "El error de red 'Failed to fetch' oculta un problema de permisos en la base de datos. La tabla 'productos' tiene la Seguridad a Nivel de Fila (RLS) activada, pero no existe una política que permita a los usuarios no autenticados (rol 'anon') leer los datos. El servidor rechaza la solicitud y, como resultado, el navegador la bloquea por un error de CORS.",
