@@ -6,7 +6,7 @@ const SERVICE_NAME = 'InsumosService';
 
 const handleSupabaseError = (error: any, context: string) => {
     console.error(`[${SERVICE_NAME}] Error in ${context}:`, error);
-    if (error.message.includes('security policy') || error.message.includes('does not exist')) {
+    if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
         throw new Error(`Error de permisos (RLS) en '${context}'. Por favor, revisa las políticas de seguridad.`);
     }
     throw new Error(`Ocurrió un error en '${context}': ${error.message}`);
@@ -152,7 +152,7 @@ export const addStockToInsumo = async (stockData: StockUpdateData): Promise<void
         if (error) throw error;
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] RPC call 'add_insumo_stock' failed:`, error);
-         if (error.message.includes('does not exist')) {
+         if (error.message?.includes('does not exist')) {
             throw new Error(`Error de base de datos: La función 'add_insumo_stock' no existe. Ejecuta el script SQL para crearla.`);
         }
         throw new Error(`No se pudo agregar stock: ${error.message}`);

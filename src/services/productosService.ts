@@ -103,7 +103,7 @@ export const fetchProductosConStock = async (): Promise<Producto[]> => {
     } catch (error: any) {
         const tableName = error.table ? ` en la tabla '${error.table}'` : '';
         console.error(`[${SERVICE_NAME}] Error fetching products${tableName}:`, error.message);
-        if (error.message.includes('security policy') || error.message.includes('does not exist')) {
+        if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
             throw new Error(`Error de permisos (RLS)${tableName}. Por favor, revisa las políticas de seguridad en la base de datos.`);
         }
         throw error;

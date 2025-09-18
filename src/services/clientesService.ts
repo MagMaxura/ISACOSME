@@ -64,7 +64,7 @@ export const fetchClientes = async (): Promise<Cliente[]> => {
         return [];
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error fetching clients:`, error);
-        if (error.message.includes('security policy') || error.message.includes('does not exist')) {
+        if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
             throw new Error(`Error de permisos (RLS) en la tabla 'clientes'. Por favor, revisa las políticas de seguridad en la base de datos.`);
         }
         throw new Error(`No se pudieron cargar los clientes: ${error.message}`);
@@ -105,7 +105,7 @@ export const createCliente = async (clienteData: Partial<Cliente>): Promise<void
         console.log(`[${SERVICE_NAME}] Client created successfully.`);
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error creating client:`, error);
-        if (error.message.includes('security policy')) {
+        if (error.message?.includes('security policy')) {
             throw new Error(`Error de permisos (RLS) al crear el cliente. Revisa las políticas de seguridad.`);
         }
         throw new Error(`No se pudo crear el cliente: ${error.message}`);
@@ -123,7 +123,7 @@ export const updateCliente = async (clienteId: string, clienteData: Partial<Clie
         console.log(`[${SERVICE_NAME}] Client updated successfully.`);
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error updating client:`, error);
-        if (error.message.includes('security policy')) {
+        if (error.message?.includes('security policy')) {
             throw new Error(`Error de permisos (RLS) al actualizar el cliente. Revisa las políticas de seguridad.`);
         }
         throw new Error(`No se pudo actualizar el cliente: ${error.message}`);
@@ -141,7 +141,7 @@ export const deleteCliente = async (clienteId: string): Promise<void> => {
         console.log(`[${SERVICE_NAME}] Client deleted successfully.`);
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error deleting client:`, error);
-        if (error.message.includes('security policy')) {
+        if (error.message?.includes('security policy')) {
             throw new Error(`Error de permisos (RLS) al eliminar el cliente. Revisa las políticas de seguridad.`);
         }
         throw new Error(`No se pudo eliminar el cliente: ${error.message}`);

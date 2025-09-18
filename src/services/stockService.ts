@@ -50,7 +50,7 @@ export const fetchStockProductos = async (): Promise<StockProducto[]> => {
     } catch (error: any) {
         const tableName = error.table ? ` en la tabla '${error.table}'` : '';
         console.error(`[${SERVICE_NAME}] Error fetching stock productos${tableName}:`, error.message);
-        if (error.message.includes('security policy') || error.message.includes('does not exist')) {
+        if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
             throw new Error(`Error de permisos (RLS)${tableName}. Por favor, revisa las políticas de seguridad en la base de datos.`);
         }
         throw error;
@@ -78,7 +78,7 @@ export const registerProduction = async (data: ProductionData): Promise<void> =>
 
     if (error) {
         console.error(`[${SERVICE_NAME}] RPC call 'registrar_produccion' failed:`, JSON.stringify(error, null, 2));
-        if (error.message.includes('lotes_numero_lote_producto_id_key')) {
+        if (error.message?.includes('lotes_numero_lote_producto_id_key')) {
              throw new Error(`El número de lote "${data.numeroLote}" ya existe para este producto. Por favor, elige un número de lote único.`);
         }
         throw new Error(`Error al registrar la producción: ${error.message}`);
@@ -108,7 +108,7 @@ export const updateProduction = async (data: UpdateProductionData): Promise<void
     
     if (error) {
         console.error(`[${SERVICE_NAME}] RPC call 'modificar_produccion' failed:`, JSON.stringify(error, null, 2));
-         if (error.message.includes('lotes_numero_lote_producto_id_key')) {
+         if (error.message?.includes('lotes_numero_lote_producto_id_key')) {
              throw new Error(`El número de lote "${data.numeroLote}" ya existe para este producto. Por favor, elige un número de lote único.`);
         }
         throw new Error(`Error al modificar la producción: ${error.message}`);

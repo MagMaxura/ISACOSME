@@ -24,13 +24,13 @@ export const fetchDashboardData = async (): Promise<DashboardStats> => {
         
         // More robust check for the "function not found" error from Supabase/PostgREST.
         const functionNotFound = 
-            error.message.includes('function get_dashboard_stats does not exist') || 
-            error.message.includes('Could not find the function');
+            error.message?.includes('function get_dashboard_stats does not exist') || 
+            error.message?.includes('Could not find the function');
 
         if (functionNotFound) {
             throw new Error(`Error de base de datos: La función 'get_dashboard_stats' no existe. Por favor, ejecuta el script SQL de corrección proporcionado para crearla y actualizar las políticas.`);
         }
-        if (error.message.includes('security policy')) {
+        if (error.message?.includes('security policy')) {
             throw new Error(`Error de permisos (RLS) en 'get_dashboard_stats'. Por favor, revisa las políticas de seguridad en la base de datos.`);
         }
         // Re-throw the already created descriptive error or a new one
