@@ -143,7 +143,7 @@ export const fetchPublicProductsList = async (): Promise<Partial<Producto>[]> =>
             throw enhancedError;
         }
 
-        if (error.message && (error.message.includes('security policy') || error.message.includes('does not exist'))) {
+        if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
             const enhancedError = {
                 ...error,
                 message: `Error de permisos (RLS) en la tabla 'productos'.`,

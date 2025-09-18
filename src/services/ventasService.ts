@@ -161,7 +161,7 @@ export const deleteVenta = async (ventaId: string): Promise<void> => {
         if (error) {
             console.error(`[${SERVICE_NAME}] Error in RPC 'eliminar_venta_y_restaurar_stock'. Message: ${error.message}.`);
             // The RPC might not exist, so let's give a helpful error message for that case.
-            if (error.message.includes('function eliminar_venta_y_restaurar_stock does not exist')) {
+            if (error.message?.includes('function eliminar_venta_y_restaurar_stock does not exist')) {
                 throw new Error(`Error de base de datos: La función 'eliminar_venta_y_restaurar_stock' no existe. Por favor, ejecuta el script SQL necesario para crearla.`);
             }
             throw error;

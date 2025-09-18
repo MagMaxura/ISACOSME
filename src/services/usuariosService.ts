@@ -89,10 +89,8 @@ export const fetchAccessRequests = async (): Promise<AccessRequest[]> => {
         if (error) {
             const isFunctionNotFoundError = error.code === '42883' || 
                                             error.code === 'PGRST202' || 
-                                            (error.message && (
-                                                error.message.includes('does not exist') || 
-                                                error.message.includes('Could not find the function')
-                                            ));
+                                            (error.message?.includes('does not exist') || 
+                                                error.message?.includes('Could not find the function'));
             if (isFunctionNotFoundError) {
                  const enhancedError = {
                      ...error,
