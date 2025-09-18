@@ -1,4 +1,5 @@
 
+
 import { supabase } from '../supabase';
 import { Deposito, TransferenciaStock } from '../types';
 
