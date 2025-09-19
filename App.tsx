@@ -1,7 +1,3 @@
-
-
-
-
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
@@ -19,7 +15,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AppRole } from './types';
-import ProductoDashboard from './pages/ProductoDashboard.tsx';
+import ProductoDashboard from '/src/pages/ProductoDashboard';
 import GestionUsuarios from './pages/GestionUsuarios';
 import CrearVenta from './pages/CrearVenta';
 import GestionListasPrecios from './pages/GestionListasPrecios';
