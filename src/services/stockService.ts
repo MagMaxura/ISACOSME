@@ -49,7 +49,7 @@ export const fetchStockProductos = async (): Promise<StockProducto[]> => {
         return transformedProductos;
     } catch (error: any) {
         const tableName = error.table ? ` en la tabla '${error.table}'` : '';
-        console.error(`[${SERVICE_NAME}] Error fetching stock productos${tableName}:`, error.message);
+        console.error(`[${SERVICE_NAME}] Error fetching stock productos${tableName}:`, error?.message);
         if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
             throw new Error(`Error de permisos (RLS)${tableName}. Por favor, revisa las políticas de seguridad en la base de datos.`);
         }
@@ -78,10 +78,43 @@ export const registerProduction = async (data: ProductionData): Promise<void> =>
 
     if (error) {
         console.error(`[${SERVICE_NAME}] RPC call 'registrar_produccion' failed:`, JSON.stringify(error, null, 2));
+        const functionNotFound = error.code === '42883' || error.message?.includes('function registrar_produccion does not exist') || error.message?.includes('Could not find the function');
+        if (functionNotFound) {
+            throw {
+                message: "Error de base de datos: La función 'registrar_produccion' no existe.",
+                details: "Esta función es necesaria para registrar la producción de nuevos lotes de productos y asignarlos al depósito predeterminado.",
+                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria.",
+                sql: `CREATE OR REPLACE FUNCTION registrar_produccion(
+    p_producto_id uuid,
+    p_cantidad_producida integer,
+    p_numero_lote text,
+    p_fecha_vencimiento date,
+    p_costo_laboratorio numeric
+)
+RETURNS void AS $$
+DECLARE
+    v_deposito_id uuid;
+BEGIN
+    -- Find the default warehouse
+    SELECT id INTO v_deposito_id FROM depositos WHERE es_predeterminado = TRUE LIMIT 1;
+
+    -- If no default warehouse, raise an error
+    IF v_deposito_id IS NULL THEN
+        RAISE EXCEPTION 'No se encontró un depósito predeterminado. Por favor, marque uno en "Gestión de Depósitos".';
+    END IF;
+
+    -- Insert the new lot into the lots table, assigned to the default warehouse
+    INSERT INTO lotes (producto_id, numero_lote, cantidad_inicial, cantidad_actual, fecha_vencimiento, costo_laboratorio, deposito_id)
+    VALUES (p_producto_id, p_numero_lote, p_cantidad_producida, p_cantidad_producida, p_fecha_vencimiento, p_costo_laboratorio, v_deposito_id);
+
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`
+            };
+        }
         if (error.message?.includes('lotes_numero_lote_producto_id_key')) {
              throw new Error(`El número de lote "${data.numeroLote}" ya existe para este producto. Por favor, elige un número de lote único.`);
         }
-        throw new Error(`Error al registrar la producción: ${error.message}`);
+        throw new Error(`Error al registrar la producción: ${error?.message}`);
     }
 
     console.log(`[${SERVICE_NAME}] Successfully registered production via RPC.`);
@@ -108,10 +141,51 @@ export const updateProduction = async (data: UpdateProductionData): Promise<void
     
     if (error) {
         console.error(`[${SERVICE_NAME}] RPC call 'modificar_produccion' failed:`, JSON.stringify(error, null, 2));
+        const functionNotFound = error.code === '42883' || error.message?.includes('function modificar_produccion does not exist') || error.message?.includes('Could not find the function');
+        if (functionNotFound) {
+            throw {
+                message: "Error de base de datos: La función 'modificar_produccion' no existe.",
+                details: "Esta función es necesaria para editar los detalles de un lote de producción existente, como su cantidad o número de lote.",
+                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria.",
+                sql: `CREATE OR REPLACE FUNCTION modificar_produccion(
+    p_lote_id uuid,
+    p_nuevo_numero_lote text,
+    p_nueva_cantidad_inicial integer,
+    p_nueva_fecha_vencimiento date,
+    p_nuevo_costo_laboratorio numeric
+)
+RETURNS void AS $$
+DECLARE
+    v_cantidad_vendida integer;
+BEGIN
+    -- Calculate how many units have been sold from this lot
+    SELECT (cantidad_inicial - cantidad_actual) INTO v_cantidad_vendida
+    FROM lotes
+    WHERE id = p_lote_id;
+
+    -- Check if the new initial quantity is valid
+    IF p_nueva_cantidad_inicial < v_cantidad_vendida THEN
+        RAISE EXCEPTION 'La nueva cantidad inicial no puede ser menor que la cantidad ya vendida de este lote (%)', v_cantidad_vendida;
+    END IF;
+
+    -- Update the lot
+    UPDATE lotes
+    SET
+        numero_lote = p_nuevo_numero_lote,
+        cantidad_inicial = p_nueva_cantidad_inicial,
+        cantidad_actual = p_nueva_cantidad_inicial - v_cantidad_vendida,
+        fecha_vencimiento = p_nueva_fecha_vencimiento,
+        costo_laboratorio = p_nuevo_costo_laboratorio
+    WHERE id = p_lote_id;
+
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`
+            };
+        }
          if (error.message?.includes('lotes_numero_lote_producto_id_key')) {
              throw new Error(`El número de lote "${data.numeroLote}" ya existe para este producto. Por favor, elige un número de lote único.`);
         }
-        throw new Error(`Error al modificar la producción: ${error.message}`);
+        throw new Error(`Error al modificar la producción: ${error?.message}`);
     }
 
     console.log(`[${SERVICE_NAME}] Successfully updated production via RPC.`);

@@ -69,7 +69,7 @@ export const updateUsuarioRoles = async (userId: string, newRoles: AppRole[]): P
         
         console.log(`[${SERVICE_NAME}] Successfully updated roles for user ${userId}.`);
     } catch (error: any) {
-        console.error(`[${SERVICE_NAME}] Error updating user roles:`, error.message);
+        console.error(`[${SERVICE_NAME}] Error updating user roles:`, error?.message);
         if (error.message?.includes('security policy')) {
              throw new Error(`Error de permisos (RLS): El rol 'superadmin' no tiene permiso para actualizar la tabla 'profiles' o estás intentando cambiar tus propios roles. Revisa las políticas de seguridad en Supabase.`);
         }
@@ -127,7 +127,7 @@ export const approveComexRequest = async (requestId: string, userId: string): Pr
         if (error.message?.includes('does not exist') || error.code === '42883') {
             throw new Error("Error de base de datos: La función 'approve_comex_request' no existe. Por favor, ejecuta el último script SQL proporcionado para crearla.");
         }
-        throw new Error(`No se pudo aprobar la solicitud: ${error.message || 'Error desconocido'}`);
+        throw new Error(`No se pudo aprobar la solicitud: ${error?.message || 'Error desconocido'}`);
     }
 };
 
@@ -147,6 +147,6 @@ export const rejectComexRequest = async (requestId: string): Promise<void> => {
         if (error.message?.includes('does not exist') || error.code === '42883') {
             throw new Error("Error de base de datos: La función 'reject_comex_request' no existe. Por favor, ejecuta el último script SQL proporcionado para crearla.");
         }
-        throw new Error(`No se pudo rechazar la solicitud: ${error.message || 'Error desconocido'}`);
+        throw new Error(`No se pudo rechazar la solicitud: ${error?.message || 'Error desconocido'}`);
     }
 };

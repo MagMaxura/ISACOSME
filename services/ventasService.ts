@@ -142,7 +142,7 @@ export const updateVentaStatus = async (ventaId: string, newStatus: Venta['estad
             .eq('id', ventaId);
 
         if (error) {
-            console.error(`[${SERVICE_NAME}] Error updating sale status. Message: ${error.message}.`);
+            console.error(`[${SERVICE_NAME}] Error updating sale status. Message: ${error?.message}.`);
             throw error;
         }
         console.log(`[${SERVICE_NAME}] Successfully updated status for sale ${ventaId}.`);
@@ -159,10 +159,35 @@ export const deleteVenta = async (ventaId: string): Promise<void> => {
         });
 
         if (error) {
-            console.error(`[${SERVICE_NAME}] Error in RPC 'eliminar_venta_y_restaurar_stock'. Message: ${error.message}.`);
-            // The RPC might not exist, so let's give a helpful error message for that case.
-            if (error.message.includes('function eliminar_venta_y_restaurar_stock does not exist')) {
-                throw new Error(`Error de base de datos: La función 'eliminar_venta_y_restaurar_stock' no existe. Por favor, ejecuta el script SQL necesario para crearla.`);
+            console.error(`[${SERVICE_NAME}] Error in RPC 'eliminar_venta_y_restaurar_stock'. Message: ${error?.message}.`);
+            const functionNotFound = error.message?.includes('function eliminar_venta_y_restaurar_stock does not exist') || error.message?.includes('Could not find the function') || error.code === '42883';
+            if (functionNotFound) {
+                throw {
+                    message: "Error de base de datos: La función 'eliminar_venta_y_restaurar_stock' no existe.",
+                    details: "Esta función es crucial para eliminar una venta de forma segura, ya que garantiza que el stock de los productos vendidos se devuelva a los lotes correspondientes.",
+                    hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria.",
+                    sql: `CREATE OR REPLACE FUNCTION eliminar_venta_y_restaurar_stock(p_venta_id uuid)
+RETURNS void AS $$
+DECLARE
+    item RECORD;
+BEGIN
+    -- Loop through each item in the sale to restore stock to the correct lot
+    FOR item IN
+        SELECT lote_id, cantidad FROM venta_items WHERE venta_id = p_venta_id
+    LOOP
+        UPDATE lotes
+        SET cantidad_actual = cantidad_actual + item.cantidad
+        WHERE id = item.lote_id;
+    END LOOP;
+
+    -- Delete the sale items
+    DELETE FROM venta_items WHERE venta_id = p_venta_id;
+
+    -- Delete the sale itself
+    DELETE FROM ventas WHERE id = p_venta_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`
+                };
             }
             throw error;
         }

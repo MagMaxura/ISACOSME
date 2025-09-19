@@ -31,7 +31,7 @@ const Register: React.FC = () => {
             }
             setMessage("¡Registro exitoso! Por favor, revisa tu correo para confirmar tu cuenta y poder iniciar sesión.");
         } catch (err: any) {
-            if (err.message && err.message.includes('Database error saving new user')) {
+            if (err.message?.includes('Database error saving new user')) {
                 const enhancedError = {
                     ...err,
                     message: 'Error interno del servidor al crear el perfil de usuario.',
@@ -62,7 +62,7 @@ const Register: React.FC = () => {
                     <div className="p-3 text-red-800 bg-red-100 border border-red-200 rounded-lg">
                         <p className="font-bold text-center">Error al registrar</p>
                          <div className="mt-2 text-left whitespace-pre-wrap text-xs p-2 bg-red-50 border border-red-100 rounded-md font-mono">
-                            <strong>Mensaje:</strong> {error.message || 'No disponible'}<br/>
+                            <strong>Mensaje:</strong> {error?.message || 'No disponible'}<br/>
                             {error.code && <><strong>Código:</strong> {error.code}<br/></>}
                             {error.details && <><strong>Detalles:</strong> {error.details}<br/></>}
                             {error.hint && <><strong>Sugerencia:</strong> {error.hint}<br/></>}

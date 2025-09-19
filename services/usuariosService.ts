@@ -69,8 +69,8 @@ export const updateUsuarioRoles = async (userId: string, newRoles: AppRole[]): P
         
         console.log(`[${SERVICE_NAME}] Successfully updated roles for user ${userId}.`);
     } catch (error: any) {
-        console.error(`[${SERVICE_NAME}] Error updating user roles:`, error.message);
-        if (error.message.includes('security policy')) {
+        console.error(`[${SERVICE_NAME}] Error updating user roles:`, error?.message);
+        if (error.message?.includes('security policy')) {
              throw new Error(`Error de permisos (RLS): El rol 'superadmin' no tiene permiso para actualizar la tabla 'profiles' o estás intentando cambiar tus propios roles. Revisa las políticas de seguridad en Supabase.`);
         }
         throw error;
@@ -89,10 +89,8 @@ export const fetchAccessRequests = async (): Promise<AccessRequest[]> => {
         if (error) {
             const isFunctionNotFoundError = error.code === '42883' || 
                                             error.code === 'PGRST202' || 
-                                            (error.message && (
-                                                error.message.includes('does not exist') || 
-                                                error.message.includes('Could not find the function')
-                                            ));
+                                            (error.message?.includes('does not exist') || 
+                                                error.message?.includes('Could not find the function'));
             if (isFunctionNotFoundError) {
                  const enhancedError = {
                      ...error,
@@ -126,10 +124,10 @@ export const approveComexRequest = async (requestId: string, userId: string): Pr
         console.log(`[${SERVICE_NAME}] COMEX request approved successfully via RPC.`);
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error approving COMEX request via RPC. Raw error:`, JSON.stringify(error, null, 2));
-        if (error.message && (error.message.includes('does not exist') || error.code === '42883')) {
+        if (error.message?.includes('does not exist') || error.code === '42883') {
             throw new Error("Error de base de datos: La función 'approve_comex_request' no existe. Por favor, ejecuta el último script SQL proporcionado para crearla.");
         }
-        throw new Error(`No se pudo aprobar la solicitud: ${error.message || 'Error desconocido'}`);
+        throw new Error(`No se pudo aprobar la solicitud: ${error?.message || 'Error desconocido'}`);
     }
 };
 
@@ -146,9 +144,9 @@ export const rejectComexRequest = async (requestId: string): Promise<void> => {
         console.log(`[${SERVICE_NAME}] COMEX request rejected successfully via RPC.`);
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error rejecting COMEX request via RPC. Raw error:`, JSON.stringify(error, null, 2));
-        if (error.message && (error.message.includes('does not exist') || error.code === '42883')) {
+        if (error.message?.includes('does not exist') || error.code === '42883') {
             throw new Error("Error de base de datos: La función 'reject_comex_request' no existe. Por favor, ejecuta el último script SQL proporcionado para crearla.");
         }
-        throw new Error(`No se pudo rechazar la solicitud: ${error.message || 'Error desconocido'}`);
+        throw new Error(`No se pudo rechazar la solicitud: ${error?.message || 'Error desconocido'}`);
     }
 };

@@ -9,7 +9,7 @@ const handleSupabaseError = (error: any, context: string) => {
     if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
         throw new Error(`Error de permisos (RLS) en '${context}'. Por favor, revisa las políticas de seguridad.`);
     }
-    throw new Error(`Ocurrió un error en '${context}': ${error.message}`);
+    throw new Error(`Ocurrió un error en '${context}': ${error?.message}`);
 };
 
 export const fetchInsumos = async (): Promise<Insumo[]> => {
@@ -155,6 +155,6 @@ export const addStockToInsumo = async (stockData: StockUpdateData): Promise<void
          if (error.message?.includes('does not exist')) {
             throw new Error(`Error de base de datos: La función 'add_insumo_stock' no existe. Ejecuta el script SQL para crearla.`);
         }
-        throw new Error(`No se pudo agregar stock: ${error.message}`);
+        throw new Error(`No se pudo agregar stock: ${error?.message}`);
     }
 };

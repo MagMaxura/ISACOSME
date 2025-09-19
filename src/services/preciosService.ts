@@ -22,7 +22,7 @@ export const fetchListasDePrecios = async (): Promise<ListMeta[]> => {
         if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
             throw new Error(`Error de permisos (RLS) en 'listas_de_precios'. Por favor, revisa las políticas de seguridad.`);
         }
-        throw new Error(`No se pudieron cargar las listas de precios: ${error.message}`);
+        throw new Error(`No se pudieron cargar las listas de precios: ${error?.message}`);
     }
 };
 
@@ -61,7 +61,7 @@ export const fetchProductosDeLista = async (listaId: string): Promise<ListaPreci
         if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
             throw new Error(`Error de permisos (RLS) en 'lista_precio_productos'. Por favor, revisa las políticas de seguridad.`);
         }
-        throw new Error(`No se pudieron cargar los productos de la lista: ${error.message}`);
+        throw new Error(`No se pudieron cargar los productos de la lista: ${error?.message}`);
     }
 };
 
@@ -87,7 +87,7 @@ export const fetchAllProducts = async (): Promise<Pick<Producto, 'id' | 'nombre'
         if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
             throw new Error(`Error de permisos (RLS) en 'productos'. Por favor, revisa las políticas de seguridad.`);
         }
-        throw new Error(`No se pudieron cargar los productos: ${error.message}`);
+        throw new Error(`No se pudieron cargar los productos: ${error?.message}`);
     }
 };
 
@@ -112,7 +112,7 @@ export const createListaDePrecios = async (nombre: string): Promise<ListMeta> =>
         if (error.message?.includes('duplicate key value')) {
             throw new Error(`Ya existe una lista de precios con el nombre "${nombre}".`);
         }
-        throw new Error(`No se pudo crear la lista de precios: ${error.message}`);
+        throw new Error(`No se pudo crear la lista de precios: ${error?.message}`);
     }
 };
 
@@ -137,6 +137,6 @@ export const upsertPreciosDeLista = async (listaId: string, precios: { productoI
         if (error.message?.includes('security policy')) {
             throw new Error(`Error de permisos (RLS) al guardar en 'lista_precio_productos'.`);
         }
-        throw new Error(`No se pudieron guardar los precios: ${error.message}`);
+        throw new Error(`No se pudieron guardar los precios: ${error?.message}`);
     }
 };

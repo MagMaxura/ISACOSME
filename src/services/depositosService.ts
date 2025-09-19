@@ -1,3 +1,5 @@
+
+
 import { supabase } from '../supabase';
 import { Deposito, TransferenciaStock } from '../types';
 
@@ -15,7 +17,7 @@ export const fetchDepositos = async (): Promise<Deposito[]> => {
         return data || [];
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error fetching depositos:`, error);
-        throw new Error(`No se pudieron cargar los depósitos: ${error.message}`);
+        throw new Error(`No se pudieron cargar los depósitos: ${error?.message}`);
     }
 };
 
@@ -41,7 +43,7 @@ export const createDeposito = async (depositoData: Partial<Deposito>): Promise<v
         if (error.message?.includes('un_solo_predeterminado_idx')) {
             throw new Error('Ya existe un depósito predeterminado. Por favor, desmarque el actual antes de asignar uno nuevo.');
         }
-        throw new Error(`No se pudo crear el depósito: ${error.message}`);
+        throw new Error(`No se pudo crear el depósito: ${error?.message}`);
     }
 };
 
@@ -65,7 +67,7 @@ export const updateDeposito = async (id: string, depositoData: Partial<Deposito>
         if (error.message?.includes('un_solo_predeterminado_idx')) {
             throw new Error('Ya existe otro depósito predeterminado. Por favor, desmarque el actual antes de asignar este.');
         }
-        throw new Error(`No se pudo actualizar el depósito: ${error.message}`);
+        throw new Error(`No se pudo actualizar el depósito: ${error?.message}`);
     }
 };
 
@@ -76,16 +78,13 @@ export const deleteDeposito = async (id: string): Promise<void> => {
         if (error) throw error;
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error deleting deposito:`, error);
-        throw new Error(`No se pudo eliminar el depósito: ${error.message}`);
+        throw new Error(`No se pudo eliminar el depósito: ${error?.message}`);
     }
 };
 
 export const transferirStock = async (loteId: string, depositoDestinoId: string, cantidad: number): Promise<void> => {
     console.log(`[${SERVICE_NAME}] Transferring ${cantidad} from lot ${loteId} to deposit ${depositoDestinoId}`);
     try {
-        // Using `any` on `supabase.rpc` is a targeted workaround for a known Supabase/TypeScript issue
-        // ("Type instantiation is excessively deep") that can occur with complex schemas and RPC calls.
-        // It bypasses the complex type inference that causes the error, without affecting runtime behavior.
         const { error } = await (supabase.rpc as any)('transferir_stock', {
             p_lote_id: loteId,
             p_deposito_destino_id: depositoDestinoId,
@@ -95,21 +94,69 @@ export const transferirStock = async (loteId: string, depositoDestinoId: string,
         if (error) throw error;
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error in RPC transferir_stock:`, error);
-        throw new Error(`No se pudo realizar la transferencia: ${error.message}`);
+        const functionNotFound = error.code === '42883' || error.message?.includes('function transferir_stock does not exist') || error.message?.includes('Could not find the function');
+        if (functionNotFound) {
+             throw {
+                message: "Error de base de datos: La función 'transferir_stock' no existe.",
+                details: "Esta función es vital para mover inventario entre depósitos. Sin ella, no se pueden realizar transferencias.",
+                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria.",
+                sql: `CREATE OR REPLACE FUNCTION transferir_stock(
+    p_lote_id uuid,
+    p_deposito_destino_id uuid,
+    p_cantidad integer,
+    p_notas text DEFAULT NULL
+)
+RETURNS void AS $$
+DECLARE
+    v_lote lotes%ROWTYPE;
+    v_nuevo_lote_id uuid;
+    v_usuario_email text;
+BEGIN
+    -- Get the current user's email
+    SELECT email INTO v_usuario_email FROM auth.users WHERE id = auth.uid();
+
+    -- Get the source lot details
+    SELECT * INTO v_lote FROM lotes WHERE id = p_lote_id;
+
+    -- Check for sufficient stock
+    IF v_lote.cantidad_actual < p_cantidad THEN
+        RAISE EXCEPTION 'Stock insuficiente en el lote de origen.';
+    END IF;
+    
+    -- Check if destination is different from origin
+    IF v_lote.deposito_id = p_deposito_destino_id THEN
+        RAISE EXCEPTION 'El depósito de destino no puede ser el mismo que el de origen.';
+    END IF;
+
+    -- Update the source lot
+    UPDATE lotes SET cantidad_actual = cantidad_actual - p_cantidad WHERE id = p_lote_id;
+
+    -- Create or update the lot in the destination warehouse
+    INSERT INTO lotes (producto_id, numero_lote, cantidad_inicial, cantidad_actual, fecha_vencimiento, costo_laboratorio, deposito_id)
+    VALUES (v_lote.producto_id, v_lote.numero_lote, p_cantidad, p_cantidad, v_lote.fecha_vencimiento, v_lote.costo_laboratorio, p_deposito_destino_id)
+    ON CONFLICT (producto_id, numero_lote, deposito_id) DO UPDATE
+    SET cantidad_actual = lotes.cantidad_actual + EXCLUDED.cantidad_actual,
+        cantidad_inicial = lotes.cantidad_inicial + EXCLUDED.cantidad_inicial
+    RETURNING id INTO v_nuevo_lote_id;
+
+    -- Log the transfer
+    INSERT INTO transferencias_stock (producto_id, lote_origen_id, deposito_origen_id, deposito_destino_id, cantidad, usuario_id, notas, lote_destino_id)
+    VALUES (v_lote.producto_id, p_lote_id, v_lote.deposito_id, p_deposito_destino_id, p_cantidad, auth.uid(), p_notas, v_nuevo_lote_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`
+            };
+        }
+        throw new Error(`No se pudo realizar la transferencia: ${error?.message}`);
     }
 };
 
 export const fetchTransferencias = async (): Promise<TransferenciaStock[]> => {
     console.log(`[${SERVICE_NAME}] Fetching transfer history via RPC.`);
     try {
-        // Using `any` on `supabase.rpc` is a targeted workaround for the "Type instantiation is excessively deep"
-        // TypeScript error that can occur with complex schemas and RPC calls.
         const { data, error } = await (supabase.rpc as any)('get_historial_transferencias', {});
 
         if (error) throw error;
         
-        // The RPC can return null, and with an <any> schema, data is 'unknown'.
-        // We cast it to the expected array type to safely use .map.
         const transferenciasData = data as unknown as any[];
         
         return (transferenciasData || []).map((t: any) => ({
@@ -124,20 +171,53 @@ export const fetchTransferencias = async (): Promise<TransferenciaStock[]> => {
         }));
 
     } catch (error: any) {
-        // Log the full error object for better debugging in the developer console
         console.error(`[${SERVICE_NAME}] Full error object from RPC 'get_historial_transferencias':`, JSON.stringify(error, null, 2));
         
-        // Create a more informative error message for the UI's error display component
+        const functionNotFound = error.code === '42883' || error.message?.includes('function get_historial_transferencias does not exist') || error.message?.includes('Could not find the function');
+        if (functionNotFound) {
+             throw {
+                message: "Error de base de datos: La función 'get_historial_transferencias' no se encontró.",
+                details: "Esta función es necesaria para mostrar el historial de movimientos de stock entre depósitos.",
+                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria.",
+                sql: `CREATE OR REPLACE FUNCTION get_historial_transferencias()
+RETURNS TABLE (
+    id uuid,
+    fecha timestamptz,
+    producto_nombre text,
+    deposito_origen_nombre text,
+    deposito_destino_nombre text,
+    cantidad integer,
+    usuario_email text,
+    notas text
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        ts.id,
+        ts.created_at as fecha,
+        p.nombre as producto_nombre,
+        origen.nombre as deposito_origen_nombre,
+        destino.nombre as deposito_destino_nombre,
+        ts.cantidad,
+        u.email as usuario_email,
+        ts.notas
+    FROM transferencias_stock ts
+    JOIN productos p ON ts.producto_id = p.id
+    JOIN depositos origen ON ts.deposito_origen_id = origen.id
+    JOIN depositos destino ON ts.deposito_destino_id = destino.id
+    JOIN auth.users u ON ts.usuario_id = u.id
+    ORDER BY ts.created_at DESC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`
+            };
+        }
+        
         let userMessage = `No se pudo cargar el historial de transferencias.`;
-        if (error.message) {
+        if (error?.message) {
             userMessage += ` Detalles: ${error.message}`;
         }
-        if (error.hint) {
+        if (error?.hint) {
             userMessage += ` Sugerencia: ${error.hint}`;
-        }
-        // Check for a specific PostgreSQL error code for "function does not exist"
-        if (error.code === '42883') {
-             userMessage = `Error de base de datos: La función 'get_historial_transferencias' no se encontró. Por favor, asegúrate de haber ejecutado el script SQL proporcionado para crear esta función y sus permisos.`;
         }
         
         throw new Error(userMessage);

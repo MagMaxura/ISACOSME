@@ -5,108 +5,177 @@ import { PostgrestError } from '@supabase/supabase-js';
 const SERVICE_NAME = 'ProductosService';
 
 export const fetchProductosConStock = async (): Promise<Producto[]> => {
-    console.log(`[${SERVICE_NAME}] Fetching products, lots, and deposits.`);
+    console.log(`[${SERVICE_NAME}] Fetching products with stock via RPC 'get_productos_con_stock'.`);
     try {
-        const { data: productosData, error: pError } = await supabase
-            .from('productos')
-            .select('*')
-            .order('created_at', { ascending: false });
+        const { data, error } = await supabase.rpc('get_productos_con_stock');
 
-        if (pError) {
-            (pError as any).table = 'productos';
-            throw pError;
+        if (error) {
+            throw error;
         }
 
-        const { data: lotesData, error: lError } = await supabase
-            .from('lotes')
-            .select('*, depositos(nombre)')
-            .order('fecha_vencimiento', { ascending: true });
-
-
-        if (lError) {
-             (lError as any).table = 'lotes';
-            throw lError;
+        if (!data) {
+            console.warn(`[${SERVICE_NAME}] RPC call 'get_productos_con_stock' returned no data.`);
+            return [];
         }
         
-        console.log(`[${SERVICE_NAME}] Successfully fetched ${productosData.length} products and ${lotesData.length} lots.`);
+        console.log(`[${SERVICE_NAME}] Successfully fetched and transforming ${data.length} products from RPC.`);
 
-        const transformedProductos: Producto[] = productosData.map(p => {
-            const productoLotes = lotesData.filter(l => l.producto_id === p.id);
-            const stockTotal = productoLotes.reduce((sum, lote) => sum + lote.cantidad_actual, 0);
-            
-            const stockPorDepositoMap = new Map<string, StockPorDeposito>();
+        // The RPC likely returns snake_case keys that need to be mapped to the camelCase Producto interface.
+        // It's assumed the RPC handles the aggregation of stock and grouping of lots.
+        const transformedProductos: Producto[] = data.map((p: any) => ({
+            id: p.id,
+            nombre: p.nombre,
+            codigoBarras: p.codigo_barras,
+            descripcion: p.descripcion,
+            precioPublico: p.precio_publico ?? 0,
+            precioComercio: p.precio_comercio ?? 0,
+            precioMayorista: p.precio_mayorista ?? 0,
+            imagenUrl: p.imagen_url,
+            costoInsumos: p.costo_insumos ?? 0,
+            linea: p.linea,
+            boxLengthCm: p.box_length_cm,
+            boxWidthCm: p.box_width_cm,
+            boxHeightCm: p.box_height_cm,
+            productWeightKg: p.product_weight_kg,
+            productsPerBox: p.products_per_box,
+            stock: p.stock_total ?? 0,
+            stockTotal: p.stock_total ?? 0,
+            lotes: p.lotes || [],
+            stockPorDeposito: p.stock_por_deposito || [],
+            insumos: [], // This was empty in the original function as well.
+        }));
 
-            productoLotes.forEach(l => {
-                const depositoId = l.deposito_id;
-                const depositoNombre = (l.depositos as any)?.nombre || 'Indefinido';
-
-                const loteTyped: Lote = {
-                    id: l.id,
-                    numero_lote: l.numero_lote,
-                    cantidad_inicial: l.cantidad_inicial,
-                    cantidad_actual: l.cantidad_actual,
-                    fecha_vencimiento: l.fecha_vencimiento,
-                    costo_laboratorio: l.costo_laboratorio,
-                    deposito_id: l.deposito_id,
-                    depositoNombre: depositoNombre,
-                };
-
-                if (!stockPorDepositoMap.has(depositoId)) {
-                    stockPorDepositoMap.set(depositoId, {
-                        depositoId: depositoId,
-                        depositoNombre: depositoNombre,
-                        stock: 0,
-                        lotes: [],
-                    });
-                }
-                
-                const depositoData = stockPorDepositoMap.get(depositoId)!;
-                depositoData.stock += l.cantidad_actual;
-                depositoData.lotes.push(loteTyped);
-            });
-
-            return {
-                id: p.id,
-                nombre: p.nombre,
-                codigoBarras: p.codigo_barras,
-                descripcion: p.descripcion,
-                precioPublico: p.precio_publico ?? 0,
-                precioComercio: p.precio_comercio ?? 0,
-                precioMayorista: p.precio_mayorista ?? 0,
-                imagenUrl: p.imagen_url,
-                costoInsumos: p.costo_insumos,
-                linea: p.linea,
-                boxLengthCm: p.box_length_cm,
-                boxWidthCm: p.box_width_cm,
-                boxHeightCm: p.box_height_cm,
-                productWeightKg: p.product_weight_kg,
-                productsPerBox: p.products_per_box,
-                stock: stockTotal, // for backwards compatibility
-                stockTotal: stockTotal,
-                lotes: productoLotes.map(l => ({
-                    id: l.id,
-                    numero_lote: l.numero_lote,
-                    cantidad_inicial: l.cantidad_inicial,
-                    cantidad_actual: l.cantidad_actual,
-                    fecha_vencimiento: l.fecha_vencimiento,
-                    costo_laboratorio: l.costo_laboratorio,
-                    deposito_id: l.deposito_id,
-                    depositoNombre: (l.depositos as any)?.nombre || 'Indefinido'
-                })),
-                stockPorDeposito: Array.from(stockPorDepositoMap.values()),
-                insumos: [], // Insumos data can be fetched on demand or joined
-            };
-        });
-        
-        console.log(`[${SERVICE_NAME}] Data transformation complete.`);
         return transformedProductos;
+
     } catch (error: any) {
-        const tableName = error.table ? ` en la tabla '${error.table}'` : '';
-        console.error(`[${SERVICE_NAME}] Error fetching products${tableName}:`, error.message);
-        if (error.message.includes('security policy') || error.message.includes('does not exist')) {
-            throw new Error(`Error de permisos (RLS)${tableName}. Por favor, revisa las políticas de seguridad en la base de datos.`);
+        console.error(`[${SERVICE_NAME}] Exception while fetching products with stock:`, error);
+        
+        const functionNotFound = 
+            error.code === '42883' || 
+            error.message?.includes('function get_productos_con_stock does not exist') ||
+            error.message?.includes('Could not find the function');
+            
+        if (functionNotFound) {
+            throw {
+                message: "Error de base de datos: La función 'get_productos_con_stock' no existe.",
+                details: "Esta función es esencial para cargar la lista de productos con su stock agregado de todos los depósitos. Sin ella, la aplicación no puede mostrar el inventario.",
+                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria. Esto solucionará el problema de forma permanente.",
+                sql: `CREATE OR REPLACE FUNCTION get_productos_con_stock()
+RETURNS TABLE (
+    id uuid,
+    nombre text,
+    codigo_barras text,
+    descripcion text,
+    precio_publico numeric,
+    precio_comercio numeric,
+    precio_mayorista numeric,
+    imagen_url text,
+    costo_insumos numeric,
+    linea text,
+    box_length_cm numeric,
+    box_width_cm numeric,
+    box_height_cm numeric,
+    product_weight_kg numeric,
+    products_per_box integer,
+    stock_total bigint,
+    lotes json,
+    stock_por_deposito jsonb
+) AS $$
+BEGIN
+    RETURN QUERY
+    WITH producto_lotes AS (
+        SELECT
+            p.id as producto_id,
+            l.id as lote_id,
+            l.numero_lote,
+            l.cantidad_inicial,
+            l.cantidad_actual,
+            l.fecha_vencimiento,
+            l.costo_laboratorio,
+            l.deposito_id,
+            d.nombre as deposito_nombre
+        FROM productos p
+        LEFT JOIN lotes l ON p.id = l.producto_id
+        LEFT JOIN depositos d ON l.deposito_id = d.id
+    ),
+    deposito_stock AS (
+        SELECT
+            pl.producto_id,
+            pl.deposito_id,
+            pl.deposito_nombre,
+            SUM(pl.cantidad_actual) as stock,
+            jsonb_agg(jsonb_build_object(
+                'id', pl.lote_id,
+                'numero_lote', pl.numero_lote,
+                'cantidad_inicial', pl.cantidad_inicial,
+                'cantidad_actual', pl.cantidad_actual,
+                'fecha_vencimiento', pl.fecha_vencimiento,
+                'costo_laboratorio', pl.costo_laboratorio,
+                'deposito_id', pl.deposito_id
+            )) as lotes
+        FROM producto_lotes pl
+        WHERE pl.lote_id IS NOT NULL
+        GROUP BY pl.producto_id, pl.deposito_id, pl.deposito_nombre
+    ),
+    producto_deposito_agg AS (
+        SELECT
+            ds.producto_id,
+            jsonb_agg(jsonb_build_object(
+                'depositoId', ds.deposito_id,
+                'depositoNombre', ds.deposito_nombre,
+                'stock', ds.stock,
+                'lotes', ds.lotes
+            )) as stock_por_deposito_json
+        FROM deposito_stock ds
+        GROUP BY ds.producto_id
+    ),
+    all_lotes_agg AS (
+        SELECT
+            pl.producto_id,
+            json_agg(json_build_object(
+                'id', pl.lote_id,
+                'numero_lote', pl.numero_lote,
+                'cantidad_inicial', pl.cantidad_inicial,
+                'cantidad_actual', pl.cantidad_actual,
+                'fecha_vencimiento', pl.fecha_vencimiento,
+                'costo_laboratorio', pl.costo_laboratorio,
+                'deposito_id', pl.deposito_id,
+                'depositoNombre', pl.deposito_nombre
+            )) as lotes_json,
+            SUM(pl.cantidad_actual) as stock_total
+        FROM producto_lotes pl
+        WHERE pl.lote_id IS NOT NULL
+        GROUP BY pl.producto_id
+    )
+    SELECT
+        p.id,
+        p.nombre,
+        p.codigo_barras,
+        p.descripcion,
+        p.precio_publico,
+        p.precio_comercio,
+        p.precio_mayorista,
+        p.imagen_url,
+        p.costo_insumos,
+        p.linea,
+        p.box_length_cm,
+        p.box_width_cm,
+        p.box_height_cm,
+        p.product_weight_kg,
+        p.products_per_box,
+        COALESCE(ala.stock_total, 0)::bigint,
+        COALESCE(ala.lotes_json, '[]'::json),
+        COALESCE(pda.stock_por_deposito_json, '[]'::jsonb)
+    FROM productos p
+    LEFT JOIN all_lotes_agg ala ON p.id = ala.producto_id
+    LEFT JOIN producto_deposito_agg pda ON p.id = pda.producto_id
+    ORDER BY p.nombre;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`
+            };
         }
-        throw error;
+
+        throw new Error(`Error inesperado al cargar productos: ${error?.message || 'Error desconocido'}`);
     }
 };
 
@@ -134,7 +203,9 @@ export const fetchPublicProductsList = async (): Promise<Partial<Producto>[]> =>
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error fetching public products. Raw error:`, JSON.stringify(error, null, 2));
 
-        if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        // FIX: Changed check from `instanceof TypeError` to a more reliable string check on the message property.
+        // This correctly identifies network errors caused by blocked RLS policies.
+        if (error.message?.includes('Failed to fetch')) {
             const enhancedError = {
                 message: "Error de Permisos: La lista pública de productos no se puede mostrar.",
                 details: "El error de red 'Failed to fetch' oculta un problema de permisos en la base de datos. La tabla 'productos' tiene la Seguridad a Nivel de Fila (RLS) activada, pero no existe una política que permita a los usuarios no autenticados (rol 'anon') leer los datos. El servidor rechaza la solicitud y, como resultado, el navegador la bloquea por un error de CORS.",
@@ -143,7 +214,7 @@ export const fetchPublicProductsList = async (): Promise<Partial<Producto>[]> =>
             throw enhancedError;
         }
 
-        if (error.message && (error.message.includes('security policy') || error.message.includes('does not exist'))) {
+        if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
             const enhancedError = {
                 ...error,
                 message: `Error de permisos (RLS) en la tabla 'productos'.`,
@@ -185,7 +256,7 @@ export const fetchProductosParaVenta = async (): Promise<SimpleProducto[]> => {
             precioMayorista: p.precio_mayorista ?? 0,
         }));
     } catch(error: any) {
-        console.error(`[${SERVICE_NAME}] Error fetching products for sale:`, error.message);
+        console.error(`[${SERVICE_NAME}] Error fetching products for sale:`, error?.message);
         throw error;
     }
 }
@@ -225,7 +296,7 @@ export const fetchSimpleProductos = async (): Promise<SimpleProducto[]> => {
         return simpleProductos;
 
     } catch(error: any) {
-        console.error(`[${SERVICE_NAME}] Error fetching simple products:`, error.message);
+        console.error(`[${SERVICE_NAME}] Error fetching simple products:`, error?.message);
         throw error;
     }
 }
@@ -243,7 +314,7 @@ const uploadImage = async (imageFile: File): Promise<string> => {
 
     if (uploadError) {
         console.error(`[${SERVICE_NAME}] Image upload failed:`, uploadError);
-        throw new Error(`Error al subir la imagen: ${uploadError.message}`);
+        throw new Error(`Error al subir la imagen: ${uploadError?.message}`);
     }
 
     const { data: urlData } = supabase.storage
@@ -291,7 +362,7 @@ export const createProducto = async (
 
     if (insertError) {
         console.error(`[${SERVICE_NAME}] Database insert failed:`, insertError.message);
-        throw new Error(`Error al guardar en la base de datos: ${insertError.message}`);
+        throw new Error(`Error al guardar en la base de datos: ${insertError?.message}`);
     }
     
     console.log(`[${SERVICE_NAME}] Product created successfully with ID: ${insertedData.id}`);
@@ -318,7 +389,7 @@ export const updateProducto = async (
     
     if (fetchError) {
         console.error(`[${SERVICE_NAME}] Failed to fetch current product for update:`, fetchError);
-        throw new Error(`No se pudo obtener el producto actual: ${fetchError.message}`);
+        throw new Error(`No se pudo obtener el producto actual: ${fetchError?.message}`);
     }
 
     let imageUrl: string | null = currentProduct.imagen_url;
@@ -362,7 +433,7 @@ export const updateProducto = async (
 
     if (updateError) {
         console.error(`[${SERVICE_NAME}] Database update failed:`, updateError.message);
-        throw new Error(`Error al actualizar en la base de datos: ${updateError.message}`);
+        throw new Error(`Error al actualizar en la base de datos: ${updateError?.message}`);
     }
 
     console.log(`[${SERVICE_NAME}] Product updated successfully.`);
@@ -386,7 +457,7 @@ export const deleteProducto = async (productoId: string): Promise<void> => {
 
     if (fetchError) {
         console.error(`[${SERVICE_NAME}] Failed to fetch product for deletion:`, fetchError);
-        throw new Error(`No se pudo obtener el producto para eliminarlo: ${fetchError.message}`);
+        throw new Error(`No se pudo obtener el producto para eliminarlo: ${fetchError?.message}`);
     }
 
     // Delete the image from storage if it exists
@@ -396,7 +467,7 @@ export const deleteProducto = async (productoId: string): Promise<void> => {
             console.log(`[${SERVICE_NAME}] Deleting image from storage: public/${imageName}`);
             const { error: storageError } = await supabase.storage.from('PRODUCTOS').remove([`public/${imageName}`]);
             if (storageError) {
-                console.warn(`[${SERVICE_NAME}] Could not delete image from storage, but proceeding with DB deletion:`, storageError.message);
+                console.warn(`[${SERVICE_NAME}] Could not delete image from storage, but proceeding with DB deletion:`, storageError?.message);
             }
         }
     }
@@ -409,7 +480,7 @@ export const deleteProducto = async (productoId: string): Promise<void> => {
 
     if (deleteError) {
         console.error(`[${SERVICE_NAME}] Database delete failed:`, deleteError.message);
-        throw new Error(`Error al eliminar el producto de la base de datos: ${deleteError.message}`);
+        throw new Error(`Error al eliminar el producto de la base de datos: ${deleteError?.message}`);
     }
 
     console.log(`[${SERVICE_NAME}] Product deleted successfully.`);
