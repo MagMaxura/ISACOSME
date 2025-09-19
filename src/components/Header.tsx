@@ -1,6 +1,6 @@
 import React from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { IconMenu2 } from './Icons';
+import { useAuth } from '@/contexts/AuthContext';
+import { IconMenu2 } from '@/components/Icons';
 
 interface HeaderProps {
   onMenuClick: () => void;

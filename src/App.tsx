@@ -1,31 +1,31 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
-import Sidebar from './components/Sidebar';
-import Header from './components/Header';
-import Dashboard from './pages/Dashboard';
-import Productos from './pages/Productos';
-import Stock from './pages/Stock';
-import StockInsumos from './pages/StockInsumos';
-import Clientes from './pages/Clientes';
-import Ventas from './pages/Ventas';
-import Precios from './pages/Precios';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ProtectedRoute from './components/ProtectedRoute';
-import { AppRole } from './types';
-import ProductoDashboard from './pages/ProductoDashboard';
-import GestionUsuarios from './pages/GestionUsuarios';
-import CrearVenta from './pages/CrearVenta';
-import GestionListasPrecios from './pages/GestionListasPrecios';
-import GestionDepositos from './pages/GestionDepositos';
-import TransferenciasStock from './pages/TransferenciasStock';
-import PublicPriceListPage from './pages/PublicPriceListPage';
-import ClientPriceListPage from './pages/ClientPriceListPage';
-import Comex from './pages/Comex';
-import ComexRequestPage from './pages/ComexRequestPage';
-import ComexPendingPage from './pages/ComexPendingPage';
+import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
+import Dashboard from '@/pages/Dashboard';
+import Productos from '@/pages/Productos';
+import Stock from '@/pages/Stock';
+import StockInsumos from '@/pages/StockInsumos';
+import Clientes from '@/pages/Clientes';
+import Ventas from '@/pages/Ventas';
+import Precios from '@/pages/Precios';
+import Login from '@/pages/Login';
+import Register from '@/pages/Register';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { AppRole } from '@/types';
+import ProductoDashboard from '@/pages/ProductoDashboard';
+import GestionUsuarios from '@/pages/GestionUsuarios';
+import CrearVenta from '@/pages/CrearVenta';
+import GestionListasPrecios from '@/pages/GestionListasPrecios';
+import GestionDepositos from '@/pages/GestionDepositos';
+import TransferenciasStock from '@/pages/TransferenciasStock';
+import PublicPriceListPage from '@/pages/PublicPriceListPage';
+import ClientPriceListPage from '@/pages/ClientPriceListPage';
+import Comex from '@/pages/Comex';
+import ComexRequestPage from '@/pages/ComexRequestPage';
+import ComexPendingPage from '@/pages/ComexPendingPage';
 
 // Define roles for each route for clarity
 const routeConfig: { path: string; component: React.ReactElement; roles: AppRole[] }[] = [

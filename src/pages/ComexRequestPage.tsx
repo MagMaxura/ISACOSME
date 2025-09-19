@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 const ComexRequestPage: React.FC = () => {
     const { signup } = useAuth();
@@ -111,36 +111,4 @@ const ComexRequestPage: React.FC = () => {
                             </div>
                              <div>
                                 <label htmlFor="confirmPassword" className="label-style">Confirmar Contraseña</label>
-                                <input id="confirmPassword" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleInputChange} required className="input-style" />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label htmlFor="message" className="label-style">Mensaje (Opcional)</label>
-                            <textarea id="message" name="message" value={formData.message} onChange={handleInputChange} rows={3} className="input-style" placeholder="Cuéntenos sobre su negocio o qué productos le interesan..."></textarea>
-                        </div>
-                        
-                        <div>
-                            <button type="submit" disabled={loading} className="w-full flex justify-center py-3 px-4 text-sm font-medium text-white bg-primary rounded-lg shadow-sm hover:bg-primary-dark disabled:bg-violet-300">
-                                {loading ? 'Creando cuenta...' : 'Crear Cuenta y Solicitar Acceso'}
-                            </button>
-                        </div>
-
-                        <p className="text-sm text-center text-gray-600">
-                            <Link to="/lista-publica" className="font-medium text-primary hover:underline">
-                                Cancelar y volver
-                            </Link>
-                        </p>
-                    </form>
-                )}
-            </div>
-             <style>{`
-                .label-style { display: block; margin-bottom: 0.25rem; font-size: 0.875rem; font-weight: 500; color: #374151; }
-                .input-style { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); } 
-                .input-style:focus { outline: 2px solid transparent; outline-offset: 2px; border-color: #8a5cf6; }
-            `}</style>
-        </div>
-    );
-};
-
-export default ComexRequestPage;
+                                <input id="confirmPassword" name="confirmPassword" type="password" value={formData.

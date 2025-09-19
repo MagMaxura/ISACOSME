@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import Card from '../components/Card';
-import PageHeader from '../components/PageHeader';
-import { IconShoppingCart, IconPackage, IconUsers, IconBuildingWarehouse } from '../components/Icons';
-import { LowStockInsumo, LowStockProducto } from '../types';
-import Table, { Column } from '../components/Table';
+import Card from '@/components/Card';
+import PageHeader from '@/components/PageHeader';
+import { IconShoppingCart, IconPackage, IconUsers, IconBuildingWarehouse } from '@/components/Icons';
+import { LowStockInsumo, LowStockProducto } from '@/types';
+import Table, { Column } from '@/components/Table';
 import { Link } from 'react-router-dom';
-import { fetchDashboardData } from '../services/dashboardService';
-import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
-import { useAuth } from '../contexts/AuthContext';
+import { fetchDashboardData } from '@/services/dashboardService';
+import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Dashboard: React.FC = () => {
   const { profile } = useAuth();

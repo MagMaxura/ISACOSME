@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import PageHeader from '../components/PageHeader';
-import Table, { Column } from '../components/Table';
-import { Venta } from '../types';
-import { IconPlus, IconTrash } from '../components/Icons';
-import { useAuth } from '../contexts/AuthContext';
-import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta } from '../services/ventasService';
-import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
+import PageHeader from '@/components/PageHeader';
+import Table, { Column } from '@/components/Table';
+import { Venta } from '@/types';
+import { IconPlus, IconTrash } from '@/components/Icons';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta } from '@/services/ventasService';
+import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
 const Ventas: React.FC = () => {
     const { profile } = useAuth();

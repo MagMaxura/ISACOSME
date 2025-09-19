@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 // FIX: Use `import type` for type-only imports for User and AuthError to resolve module errors. Removed unused PostgrestError import.
 import type { User, AuthError } from '@supabase/supabase-js';
-import { supabase } from '../supabase';
-import { AuthContextType, Profile, AppRole } from '../types';
+import { supabase } from '@/supabase';
+import { AuthContextType, Profile, AppRole } from '@/types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 

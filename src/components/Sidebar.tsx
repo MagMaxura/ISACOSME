@@ -1,8 +1,8 @@
 import React, { Dispatch, SetStateAction } from 'react';
 import { NavLink } from 'react-router-dom';
-import { IconChartPie, IconShoppingCart, IconPackage, IconUsers, IconTag, IconBuildingWarehouse, IconUserCog, IconX, IconCashBanknote, IconBuilding, IconSwitchHorizontal, IconFileText, IconWorld } from './Icons';
-import { useAuth } from '../contexts/AuthContext';
-import { AppRole } from '../types';
+import { IconChartPie, IconShoppingCart, IconPackage, IconUsers, IconTag, IconBuildingWarehouse, IconUserCog, IconX, IconCashBanknote, IconBuilding, IconSwitchHorizontal, IconFileText, IconWorld } from '@/components/Icons';
+import { useAuth } from '@/contexts/AuthContext';
+import { AppRole } from '@/types';
 
 interface SidebarProps {
   isOpen: boolean;

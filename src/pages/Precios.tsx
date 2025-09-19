@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Producto } from '../types';
-import { fetchProductosConStock } from '../services/productosService';
-import { IconPackage } from '../components/Icons';
+import { Producto } from '@/types';
+import { fetchProductosConStock } from '@/services/productosService';
+import { IconPackage } from '@/components/Icons';
 
 type ListaType = 'CLIENTE' | 'COMERCIO' | 'MAYORISTA';
 

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import PageHeader from '../components/PageHeader';
-import { IconPlus, IconX, IconPencil } from '../components/Icons';
-import { Lote, SimpleProducto, Producto } from '../types';
-import Table, { Column } from '../components/Table';
-import { useAuth } from '../contexts/AuthContext';
-import { registerProduction, updateProduction } from '../services/stockService';
-import { fetchSimpleProductos, fetchProductosConStock } from '../services/productosService';
-import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
+import PageHeader from '@/components/PageHeader';
+import { IconPlus, IconX, IconPencil } from '@/components/Icons';
+import { Lote, SimpleProducto, Producto } from '@/types';
+import Table, { Column } from '@/components/Table';
+import { useAuth } from '@/contexts/AuthContext';
+import { registerProduction, updateProduction } from '@/services/stockService';
+import { fetchSimpleProductos, fetchProductosConStock } from '@/services/productosService';
+import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
 // --- Production Modal Component ---
 interface ProductionModalProps {

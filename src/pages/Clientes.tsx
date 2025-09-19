@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import PageHeader from '../components/PageHeader';
-import Table, { Column } from '../components/Table';
-import { Cliente, ListMeta } from '../types';
-import { IconPlus, IconX, IconPencil, IconTrash, IconBrandWhatsapp } from '../components/Icons';
-import { useAuth } from '../contexts/AuthContext';
-import { fetchClientes, createCliente, updateCliente, deleteCliente } from '../services/clientesService';
-import { fetchListasDePrecios } from '../services/preciosService';
-import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
+import PageHeader from '@/components/PageHeader';
+import Table, { Column } from '@/components/Table';
+import { Cliente, ListMeta } from '@/types';
+import { IconPlus, IconX, IconPencil, IconTrash, IconBrandWhatsapp } from '@/components/Icons';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchClientes, createCliente, updateCliente, deleteCliente } from '@/services/clientesService';
+import { fetchListasDePrecios } from '@/services/preciosService';
+import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
 // --- Cliente Modal Component ---
 interface ClienteModalProps {

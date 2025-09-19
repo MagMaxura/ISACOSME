@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import PageHeader from '../components/PageHeader';
-import Table, { Column } from '../components/Table';
-import { Producto } from '../types';
-import { IconPackage, IconPlus, IconX, IconCamera, IconPencil, IconTrash, IconChartBar } from '../components/Icons';
-import { useAuth } from '../contexts/AuthContext';
-import { fetchProductosConStock, createProducto, updateProducto, deleteProducto } from '../services/productosService';
-import BarcodeScanner from '../components/BarcodeScanner';
-import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
+import PageHeader from '@/components/PageHeader';
+import Table, { Column } from '@/components/Table';
+import { Producto } from '@/types';
+import { IconPackage, IconPlus, IconX, IconCamera, IconPencil, IconTrash, IconChartBar } from '@/components/Icons';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchProductosConStock, createProducto, updateProducto, deleteProducto } from '@/services/productosService';
+import BarcodeScanner from '@/components/BarcodeScanner';
+import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
 const Productos: React.FC = () => {
     const { profile } = useAuth();
