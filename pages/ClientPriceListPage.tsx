@@ -1,11 +1,12 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import ClientHeader from '../components/ClientHeader';
-import { supabase } from '../supabase';
-import { ListaPrecioItem } from '../types';
-import { fetchProductosDeLista } from '../services/preciosService';
-import { fetchProductosConStock } from '../services/productosService';
-import { IconPackage } from '../components/Icons';
+import { useAuth } from '@/contexts/AuthContext';
+import ClientHeader from '@/components/ClientHeader';
+import { supabase } from '@/supabase';
+import { ListaPrecioItem } from '@/types';
+import { fetchProductosDeLista } from '@/services/preciosService';
+import { fetchProductosConStock } from '@/services/productosService';
+import { IconPackage } from '@/components/Icons';
 
 const ClientPriceListPage: React.FC = () => {
     const { user } = useAuth();

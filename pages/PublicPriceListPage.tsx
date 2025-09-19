@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { Producto } from '../types';
-import { fetchPublicProductsList } from '../services/productosService';
-import { IconPackage } from '../components/Icons';
+import { useAuth } from '@/contexts/AuthContext';
+import { Producto } from '@/types';
+import { fetchPublicProductsList } from '@/services/productosService';
+import { IconPackage } from '@/components/Icons';
 
 const PublicErrorDisplay = ({ error }: { error: any }) => {
     if (!error) return null;

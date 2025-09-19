@@ -1,14 +1,13 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
-import PageHeader from '../components/PageHeader';
-import { IconPlus, IconPencil, IconClipboardPlus } from '../components/Icons';
-import { Insumo } from '../types';
-import Table, { Column } from '../components/Table';
-import { useAuth } from '../contexts/AuthContext';
-import { fetchInsumos } from '../services/insumosService';
-import InsumoModal from '../components/InsumoModal';
-import StockUpdateModal from '../components/StockUpdateModal';
+import PageHeader from '@/components/PageHeader';
+import { IconPlus, IconPencil, IconClipboardPlus } from '@/components/Icons';
+import { Insumo } from '@/types';
+import Table, { Column } from '@/components/Table';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchInsumos } from '@/services/insumosService';
+import InsumoModal from '@/components/InsumoModal';
+import StockUpdateModal from '@/components/StockUpdateModal';
 
 const StockInsumos: React.FC = () => {
     const { profile } = useAuth();

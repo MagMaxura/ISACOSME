@@ -1,5 +1,6 @@
-import { supabase } from '../supabase';
-import { Insumo } from '../types';
+
+import { supabase } from '@/supabase';
+import { Insumo } from '@/types';
 import { PostgrestError } from '@supabase/supabase-js';
 
 const SERVICE_NAME = 'InsumosService';

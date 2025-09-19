@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { IconCopy } from './Icons';
+import { useAuth } from '@/contexts/AuthContext';
+import { IconCopy } from '@/components/Icons';
 
 interface Props {
   error: any | null;

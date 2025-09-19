@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { Insumo, InsumoCategoria, SimpleProducto } from '../types';
-import { createInsumo, updateInsumo, fetchInsumoWithDetails } from '../services/insumosService';
-import { fetchSimpleProductos } from '../services/productosService';
-import { IconX } from './Icons';
+import { Insumo, InsumoCategoria, SimpleProducto } from '@/types';
+import { createInsumo, updateInsumo, fetchInsumoWithDetails } from '@/services/insumosService';
+import { fetchSimpleProductos } from '@/services/productosService';
+import { IconX } from '@/components/Icons';
 
 interface InsumoModalProps {
   isOpen: boolean;

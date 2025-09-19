@@ -1,6 +1,7 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
-import { IconX } from './Icons';
+import { IconX } from '@/components/Icons';
 
 interface BarcodeScannerProps {
   onScan: (result: string) => void;

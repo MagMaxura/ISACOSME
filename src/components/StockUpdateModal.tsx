@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
-import { Insumo } from '../types';
-import { IconX } from './Icons';
-import { addStockToInsumo } from '../services/insumosService';
+import { Insumo } from '@/types';
+import { IconX } from '@/components/Icons';
+import { addStockToInsumo } from '@/services/insumosService';
 
 interface StockUpdateModalProps {
   isOpen: boolean;
