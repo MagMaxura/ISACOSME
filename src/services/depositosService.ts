@@ -1,5 +1,3 @@
-
-
 import { supabase } from '../supabase';
 import { Deposito, TransferenciaStock } from '../types';
 
@@ -168,18 +166,24 @@ export const fetchTransferencias = async (): Promise<TransferenciaStock[]> => {
             depositoOrigenNombre: t.deposito_origen_nombre || 'N/A',
             depositoDestinoNombre: t.deposito_destino_nombre || 'N/A',
             usuarioEmail: t.usuario_email || 'N/A',
+            numeroLote: t.numero_lote || null,
         }));
 
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Full error object from RPC 'get_historial_transferencias':`, JSON.stringify(error, null, 2));
         
+        const isStructureMismatchError = (error.code === '42804' || error.message.includes('structure of query does not match'));
+        const isColumnMissingError = (error.code === '42703'); // e.g. "column ts.fecha does not exist"
         const functionNotFound = error.code === '42883' || error.message?.includes('function get_historial_transferencias does not exist') || error.message?.includes('Could not find the function');
-        if (functionNotFound) {
+
+        if (functionNotFound || isStructureMismatchError || isColumnMissingError) {
              throw {
-                message: "Error de base de datos: La función 'get_historial_transferencias' no se encontró.",
-                details: "Esta función es necesaria para mostrar el historial de movimientos de stock entre depósitos.",
-                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria.",
-                sql: `CREATE OR REPLACE FUNCTION get_historial_transferencias()
+                message: "Error de base de datos: La función 'get_historial_transferencias' no se encontró o está desactualizada.",
+                details: `El sistema detectó un problema con la función de la base de datos que obtiene el historial. Detalles técnicos: ${error.message}`,
+                hint: "Ejecute el siguiente script completo en su editor de Supabase. Es una versión más robusta que debería resolver cualquier inconsistencia de tipos de datos.",
+                sql: `DROP FUNCTION IF EXISTS public.get_historial_transferencias();
+
+CREATE OR REPLACE FUNCTION get_historial_transferencias()
 RETURNS TABLE (
     id uuid,
     fecha timestamptz,
@@ -188,38 +192,34 @@ RETURNS TABLE (
     deposito_destino_nombre text,
     cantidad integer,
     usuario_email text,
-    notas text
+    notas text,
+    numero_lote text
 ) AS $$
 BEGIN
     RETURN QUERY
     SELECT
         ts.id,
-        ts.created_at as fecha,
-        p.nombre as producto_nombre,
-        origen.nombre as deposito_origen_nombre,
-        destino.nombre as deposito_destino_nombre,
+        ts.fecha,
+        p.nombre,
+        origen.nombre,
+        destino.nombre,
         ts.cantidad,
-        u.email as usuario_email,
-        ts.notas
+        u.email::text,
+        ts.notas,
+        lote.numero_lote
     FROM transferencias_stock ts
     JOIN productos p ON ts.producto_id = p.id
     JOIN depositos origen ON ts.deposito_origen_id = origen.id
     JOIN depositos destino ON ts.deposito_destino_id = destino.id
     JOIN auth.users u ON ts.usuario_id = u.id
-    ORDER BY ts.created_at DESC;
+    LEFT JOIN lotes lote ON ts.lote_origen_id = lote.id
+    ORDER BY ts.fecha DESC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;`
             };
         }
         
-        let userMessage = `No se pudo cargar el historial de transferencias.`;
-        if (error?.message) {
-            userMessage += ` Detalles: ${error.message}`;
-        }
-        if (error?.hint) {
-            userMessage += ` Sugerencia: ${error.hint}`;
-        }
-        
-        throw new Error(userMessage);
+        // Fallback for other errors
+        throw error;
     }
 }

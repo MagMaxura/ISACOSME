@@ -35,7 +35,7 @@ const Productos: React.FC = () => {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -54,8 +54,8 @@ const Productos: React.FC = () => {
             setProductos(data);
             console.log("[ProductosPage] Data fetched successfully.", data);
         } catch (error: any) {
-            console.error("[ProductosPage] Failed to fetch data:", error.message);
-            setError(error.message);
+            console.error("[ProductosPage] Failed to fetch data:", error);
+            setError(error);
         } finally {
             setLoading(false);
             console.log("[ProductosPage] Fetch process finished.");
@@ -113,7 +113,7 @@ const Productos: React.FC = () => {
                 setProductos(prev => prev.filter(p => p.id !== productoId));
             } catch (err: any) {
                 console.error("Failed to delete product:", err);
-                setError(`Error al eliminar el producto: ${err.message}`);
+                setError(err);
             }
         }
     };
@@ -121,7 +121,7 @@ const Productos: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentProducto.nombre || (currentProducto.precioPublico ?? 0) <= 0) {
-            setError("El nombre y un precio público válido son requeridos.");
+            setError({ message: "El nombre y un precio público válido son requeridos." });
             return;
         }
         setIsSubmitting(true);
@@ -138,7 +138,7 @@ const Productos: React.FC = () => {
             resetModal();
         } catch (err: any) {
             console.error("Failed to save product:", err);
-            setError(err.message);
+            setError(err);
         } finally {
             setIsSubmitting(false);
         }
@@ -239,7 +239,7 @@ const Productos: React.FC = () => {
                             </button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            {error && <div className="bg-red-100 text-red-700 p-3 rounded-md text-sm">{error}</div>}
+                            {error && <DatabaseErrorDisplay error={error} />}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">Nombre del Producto</label>

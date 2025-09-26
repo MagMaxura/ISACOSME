@@ -1,8 +1,8 @@
 import React, { Dispatch, SetStateAction } from 'react';
 import { NavLink } from 'react-router-dom';
-import { IconChartPie, IconShoppingCart, IconPackage, IconUsers, IconTag, IconBuildingWarehouse, IconUserCog, IconX, IconCashBanknote, IconBuilding, IconSwitchHorizontal, IconFileText, IconWorld } from '@/components/Icons';
-import { useAuth } from '@/contexts/AuthContext';
-import { AppRole } from '@/types';
+import { IconChartPie, IconShoppingCart, IconPackage, IconUsers, IconTag, IconBuildingWarehouse, IconUserCog, IconX, IconCashBanknote, IconBuilding, IconSwitchHorizontal, IconFileText, IconWorld, IconChartBar } from './Icons';
+import { useAuth } from '../contexts/AuthContext';
+import { AppRole } from '../types';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -18,6 +18,7 @@ interface NavLinkConfig {
 
 const navLinks: NavLinkConfig[] = [
   { to: '/', text: 'Dashboard', icon: <IconChartPie className="h-5 w-5" />, allowedRoles: ['superadmin', 'vendedor', 'administrativo', 'analitico'] },
+  { to: '/estadisticas-productos', text: 'Estadísticas Prod.', icon: <IconChartBar className="h-5 w-5" />, allowedRoles: ['superadmin', 'analitico'] },
   { to: '/ventas', text: 'Ventas', icon: <IconShoppingCart className="h-5 w-5" />, allowedRoles: ['superadmin', 'vendedor', 'analitico'] },
   { to: '/productos', text: 'Productos', icon: <IconPackage className="h-5 w-5" />, allowedRoles: ['superadmin', 'administrativo', 'vendedor', 'analitico'] },
   { to: '/stock/productos', text: 'Stock Productos', icon: <IconPackage className="h-5 w-5" />, allowedRoles: ['superadmin', 'administrativo'] },

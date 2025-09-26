@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -120,10 +119,18 @@ const PublicPriceListPage: React.FC = () => {
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
+                             <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="p-3 w-24 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Imagen</th>
+                                    <th className="p-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Producto</th>
+                                    <th className="p-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Lote Mín.</th>
+                                    <th className="p-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Precio</th>
+                                </tr>
+                            </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {(prods as Partial<Producto>[]).map(producto => (
                                     <tr key={producto.id}>
-                                        <td className="p-3 w-24">
+                                        <td className="p-3">
                                             {producto.imagenUrl ? (
                                                 <img src={producto.imagenUrl} alt={producto.nombre} className="h-16 w-16 object-contain mx-auto" />
                                             ) : (
@@ -136,6 +143,7 @@ const PublicPriceListPage: React.FC = () => {
                                             <p className="font-semibold text-gray-800">{producto.nombre}</p>
                                             <p className="text-gray-600 text-xs">{producto.descripcion}</p>
                                         </td>
+                                        <td className="p-3 text-center align-middle font-semibold text-gray-700">1</td>
                                         <td className="p-3 text-right align-middle font-bold text-lg text-primary">{formatPrice(producto.precioPublico ?? 0)}</td>
                                     </tr>
                                 ))}

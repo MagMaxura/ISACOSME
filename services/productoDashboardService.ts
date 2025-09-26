@@ -11,21 +11,10 @@ export interface InsumoConCosto {
     costo_total_insumo: number;
 }
 
-export interface DashboardData {
-    producto: Producto;
-    costoInsumos: number;
-    costoLaboratorioPromedio: number;
-    costoTotal: number;
-    gananciaNeta: number;
-    margenGanancia: number;
-    unidadesVendidas: number;
-    insumosDetalle: InsumoConCosto[];
-    ventasPorDia: { [date: string]: number };
-    ventasPorMes: { [month: string]: number };
-    ventasPorAnio: { [year: string]: number };
-}
+// FIX: Removed outdated local DashboardData interface to rely on the one from types.ts
+// export interface DashboardData { ... }
 
-export const fetchProductoDashboardData = async (productoId: string): Promise<DashboardData> => {
+export const fetchProductoDashboardData = async (productoId: string): Promise<any> => {
     console.log(`[${SERVICE_NAME}] Fetching all dashboard data for product ID: ${productoId}`);
     try {
         const productRes = await (supabase

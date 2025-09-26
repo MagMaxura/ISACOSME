@@ -26,7 +26,7 @@ const ProductionModal: React.FC<ProductionModalProps> = ({ onClose, onSuccess, p
     const [fechaVencimiento, setFechaVencimiento] = useState('');
     const [costoLaboratorio, setCostoLaboratorio] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
 
     useEffect(() => {
         if (isEditMode && loteToEdit) {
@@ -54,7 +54,7 @@ const ProductionModal: React.FC<ProductionModalProps> = ({ onClose, onSuccess, p
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if ((!productoId && !isEditMode) || cantidad <= 0 || !numeroLote) {
-            setError('Producto, cantidad y número de lote son requeridos.');
+            setError({ message: 'Producto, cantidad y número de lote son requeridos.' });
             return;
         }
         setIsSubmitting(true);
@@ -81,7 +81,7 @@ const ProductionModal: React.FC<ProductionModalProps> = ({ onClose, onSuccess, p
             onSuccess();
             resetAndClose();
         } catch (err: any) {
-            setError(`Error al guardar: ${err.message}`);
+            setError(err);
         } finally {
             setIsSubmitting(false);
         }
@@ -99,7 +99,7 @@ const ProductionModal: React.FC<ProductionModalProps> = ({ onClose, onSuccess, p
                     </button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {error && <div className="bg-red-100 text-red-700 p-3 rounded-md text-sm">{error}</div>}
+                    {error && <DatabaseErrorDisplay error={error} />}
                     
                     <div>
                         <label htmlFor="productoId" className="block text-sm font-medium text-gray-700 mb-1">Producto Terminado</label>
@@ -133,7 +133,7 @@ const ProductionModal: React.FC<ProductionModalProps> = ({ onClose, onSuccess, p
                             <input type="date" name="fechaVencimiento" id="fechaVencimiento" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} className="w-full input-style" />
                         </div>
                          <div>
-                            <label htmlFor="costoLaboratorio" className="block text-sm font-medium text-gray-700 mb-1">Costo Laboratorio (Total Lote)</label>
+                            <label htmlFor="costoLaboratorio" className="block text-sm font-medium text-gray-700 mb-1">Costo Laboratorio (por Unidad)</label>
                             <input type="number" name="costoLaboratorio" id="costoLaboratorio" value={costoLaboratorio} onChange={(e) => setCostoLaboratorio(parseFloat(e.target.value) || 0)} min="0" step="0.01" className="w-full input-style" />
                         </div>
                     </div>
@@ -157,7 +157,7 @@ const Stock: React.FC = () => {
     const [productos, setProductos] = useState<Producto[]>([]);
     const [simpleProductos, setSimpleProductos] = useState<SimpleProducto[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
     const [modalContent, setModalContent] = useState<'create' | Lote | null>(null);
     const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
@@ -177,7 +177,7 @@ const Stock: React.FC = () => {
             console.log("[StockProductosPage] All data fetched successfully.");
         } catch (err: any) {
             console.error(`[StockProductosPage] Error fetching data:`, err);
-            setError(err.message);
+            setError(err);
         } finally {
             setLoading(false);
             console.log(`[StockProductosPage] Fetch finished.`);

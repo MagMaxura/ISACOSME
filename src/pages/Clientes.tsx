@@ -20,7 +20,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ onClose, onSuccess, listasD
     const isEditMode = !!clienteToEdit?.id;
     const [formData, setFormData] = useState<Partial<Cliente>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
     
     useEffect(() => {
         const initialState: Partial<Cliente> = {
@@ -54,7 +54,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ onClose, onSuccess, listasD
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.nombre) {
-            setError('El nombre del comercio es requerido.');
+            setError({ message: 'El nombre del comercio es requerido.' });
             return;
         }
         setIsSubmitting(true);
@@ -67,7 +67,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ onClose, onSuccess, listasD
             }
             onSuccess();
         } catch (err: any) {
-            setError(`Error al guardar: ${err.message}`);
+            setError(err);
         } finally {
             setIsSubmitting(false);
         }
@@ -81,7 +81,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ onClose, onSuccess, listasD
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><IconX className="w-6 h-6" /></button>
           </div>
           <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
-            {error && <div className="bg-red-100 text-red-700 p-3 rounded-md text-sm">{error}</div>}
+            {error && <DatabaseErrorDisplay error={error} />}
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Column 1 */}
@@ -211,7 +211,7 @@ const Clientes: React.FC = () => {
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [listasDePrecios, setListasDePrecios] = useState<ListMeta[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingClient, setEditingClient] = useState<Partial<Cliente> | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -229,7 +229,7 @@ const Clientes: React.FC = () => {
             setClientes(clientesData);
             setListasDePrecios(listasData);
         } catch (err: any) {
-            setError(err.message);
+            setError(err);
         } finally {
             setLoading(false);
         }
@@ -261,7 +261,7 @@ const Clientes: React.FC = () => {
                 await deleteCliente(clienteId);
                 loadData();
             } catch (err: any) {
-                setError(`Error al eliminar: ${err.message}`);
+                setError(err);
             }
         }
     };

@@ -25,19 +25,16 @@ const toDatabaseFormat = (cliente: Partial<Cliente>) => ({
 
 
 export const fetchClientes = async (): Promise<Cliente[]> => {
-    console.log(`[${SERVICE_NAME}] Fetching clients.`);
+    console.log(`[${SERVICE_NAME}] Fetching clients via RPC 'get_clientes_con_ventas'.`);
     try {
-        const { data, error } = await supabase
-            .from('clientes')
-            .select('*, listas_de_precios(nombre)')
-            .order('created_at', { ascending: false });
+        const { data, error } = await supabase.rpc('get_clientes_con_ventas');
 
         if (error) throw error;
 
         if (data) {
-            const transformedData: Cliente[] = data.map(c => ({
+            const transformedData: Cliente[] = data.map((c: any) => ({
                 id: c.id,
-                nombre: c.nombre, // Nombre del Comercio
+                nombre: c.nombre,
                 representante: c.representante,
                 provincia: c.provincia,
                 localidad: c.localidad,
@@ -54,7 +51,8 @@ export const fetchClientes = async (): Promise<Cliente[]> => {
                 fechaEnvioLista: c.fecha_envio_lista,
                 tieneStock: c.tiene_stock,
                 fechaRegistro: new Date(c.created_at).toLocaleDateString('es-AR'),
-                listaPrecioNombre: c.listas_de_precios?.nombre || 'N/A',
+                listaPrecioNombre: c.lista_precio_nombre || 'N/A',
+                totalComprado: c.total_comprado || 0,
             }));
             console.log(`[${SERVICE_NAME}] Successfully fetched and transformed ${transformedData.length} clients.`);
             return transformedData;
@@ -64,8 +62,67 @@ export const fetchClientes = async (): Promise<Cliente[]> => {
         return [];
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error fetching clients:`, error);
-        if (error.message?.includes('security policy') || error.message?.includes('does not exist')) {
-            throw new Error(`Error de permisos (RLS) en la tabla 'clientes'. Por favor, revisa las políticas de seguridad en la base de datos.`);
+        if (error.message?.includes('function get_clientes_con_ventas does not exist')) {
+            throw {
+                message: "La función 'get_clientes_con_ventas' no existe en la base de datos.",
+                details: "Esta función es necesaria para mostrar la lista de clientes junto con el total de sus compras, lo cual es usado para la categorización automática.",
+                hint: "Un administrador debe ejecutar el siguiente script SQL para crear la función.",
+                sql: `
+CREATE OR REPLACE FUNCTION get_clientes_con_ventas()
+RETURNS TABLE (
+    id uuid,
+    created_at timestamptz,
+    nombre text,
+    representante text,
+    provincia text,
+    localidad text,
+    codigo_postal text,
+    direccion text,
+    rubro text,
+    telefono text,
+    red_social text,
+    cuit text,
+    email text,
+    descripcion text,
+    lista_precio_id uuid,
+    lista_enviada boolean,
+    fecha_envio_lista date,
+    tiene_stock boolean,
+    lista_precio_nombre text,
+    total_comprado numeric
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        c.id,
+        c.created_at,
+        c.nombre,
+        c.representante,
+        c.provincia,
+        c.localidad,
+        c.codigo_postal,
+        c.direccion,
+        c.rubro,
+        c.telefono,
+        c.red_social,
+        c.cuit,
+        c.email,
+        c.descripcion,
+        c.lista_precio_id,
+        c.lista_enviada,
+        c.fecha_envio_lista,
+        c.tiene_stock,
+        lp.nombre as lista_precio_nombre,
+        (SELECT COALESCE(SUM(v.total), 0)
+         FROM public.ventas v
+         WHERE v.cliente_id = c.id AND (v.estado = 'Pagada' OR v.estado = 'Enviada')) as total_comprado
+    FROM public.clientes c
+    LEFT JOIN public.listas_de_precios lp ON c.lista_precio_id = lp.id
+    ORDER BY c.created_at DESC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+`
+            }
         }
         throw new Error(`No se pudieron cargar los clientes: ${error?.message}`);
     }

@@ -145,3 +145,14 @@ export const IconCopy: React.FC<IconProps> = (props) => (
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
     </svg>
 );
+
+// FIX: Add missing IconScale for use in dashboards.
+export const IconScale: React.FC<IconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M7 20l10 0" />
+        <path d="M6 6l6 -4l6 4" />
+        <path d="M12 3l0 17" />
+        <path d="M9 12l-3 -6l-3 6a3 3 0 0 0 6 0" />
+        <path d="M21 12l-3 -6l-3 6a3 3 0 0 0 6 0" />
+    </svg>
+);

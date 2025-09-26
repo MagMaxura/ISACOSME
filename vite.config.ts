@@ -7,7 +7,10 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+// FIX: Replace `__dirname`, which is unavailable in some module contexts.
+// `path.resolve` with a relative path like './src' will resolve from the
+// current working directory, which is the project root when running Vite.
+      '@': path.resolve('./src'),
     },
   },
 })

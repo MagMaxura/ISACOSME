@@ -18,7 +18,7 @@ const Dashboard: React.FC = () => {
   const [lowStockProducts, setLowStockProducts] = useState<LowStockProducto[]>([]);
   const [lowStockInsumos, setLowStockInsumos] = useState<LowStockInsumo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<any | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -36,7 +36,7 @@ const Dashboard: React.FC = () => {
         console.log("[DashboardPage] Data fetched successfully.", data);
       } catch (err: any) {
         console.error("[DashboardPage] Failed to fetch data.", err.message);
-        setError(err.message);
+        setError(err);
       } finally {
         setLoading(false);
         console.log("[DashboardPage] Fetch process finished.");

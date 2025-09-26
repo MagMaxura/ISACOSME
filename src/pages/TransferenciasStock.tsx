@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import PageHeader from '@/components/PageHeader';
-import { Producto, Lote, Deposito, TransferenciaStock } from '@/types';
-import { fetchProductosConStock } from '@/services/productosService';
-import { fetchDepositos, transferirStock, fetchTransferencias } from '@/services/depositosService';
-import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
-import Table, { Column } from '@/components/Table';
-import { IconSwitchHorizontal } from '@/components/Icons';
+import PageHeader from '../components/PageHeader';
+import { Producto, Lote, Deposito, TransferenciaStock } from '../types';
+import { fetchProductosConStock } from '../services/productosService';
+import { fetchDepositos, transferirStock, fetchTransferencias } from '../services/depositosService';
+import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
+import Table, { Column } from '../components/Table';
+import { IconSwitchHorizontal } from '../components/Icons';
 
 const TransferenciasStock: React.FC = () => {
     const [productos, setProductos] = useState<Producto[]>([]);
@@ -13,7 +13,7 @@ const TransferenciasStock: React.FC = () => {
     const [transferencias, setTransferencias] = useState<TransferenciaStock[]>([]);
     
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Form state
@@ -40,7 +40,7 @@ const TransferenciasStock: React.FC = () => {
             setDepositos(depositosData);
             setTransferencias(transferenciasData);
         } catch (err: any) {
-            setError(err.message);
+            setError(err);
         } finally {
             setLoading(false);
         }
@@ -66,11 +66,11 @@ const TransferenciasStock: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedLoteId || !selectedDestinoId || cantidad <= 0) {
-            setError("Completa todos los campos para la transferencia.");
+            setError({ message: "Completa todos los campos para la transferencia." });
             return;
         }
         if (selectedLote && cantidad > selectedLote.cantidad_actual) {
-            setError("La cantidad a transferir no puede ser mayor al stock del lote.");
+            setError({ message: "La cantidad a transferir no puede ser mayor al stock del lote." });
             return;
         }
 
@@ -85,7 +85,7 @@ const TransferenciasStock: React.FC = () => {
             setCantidad(1);
             loadData();
         } catch (err: any) {
-            setError(`Error al transferir: ${err.message}`);
+            setError(err);
         } finally {
             setIsSubmitting(false);
         }
@@ -94,6 +94,7 @@ const TransferenciasStock: React.FC = () => {
     const transferenciasColumns: Column<TransferenciaStock>[] = [
         { header: 'Fecha', accessor: 'fecha' },
         { header: 'Producto', accessor: 'productoNombre' },
+        { header: 'Lote Origen', accessor: 'numeroLote', render: item => item.numeroLote || 'N/A' },
         { header: 'Cantidad', accessor: 'cantidad', render: item => `${item.cantidad} u.` },
         { header: 'Origen', accessor: 'depositoOrigenNombre' },
         { header: 'Destino', accessor: 'depositoDestinoNombre' },

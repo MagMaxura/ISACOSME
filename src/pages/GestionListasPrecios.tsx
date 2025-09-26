@@ -1,22 +1,102 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import PageHeader from '@/components/PageHeader';
-import { ListMeta, ProductoConPrecio } from '@/types';
-import { fetchListasDePrecios, fetchAllProducts, createListaDePrecios, fetchProductosDeLista, upsertPreciosDeLista } from '@/services/preciosService';
-import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
-import { IconDeviceFloppy, IconPlus, IconX } from '@/components/Icons';
+import PageHeader from '../components/PageHeader';
+import { ListMeta, ProductoConPrecio } from '../types';
+import { fetchListasDePrecios, fetchAllProducts, createListaDePrecios, fetchProductosDeLista, upsertPreciosDeLista } from '../services/preciosService';
+import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
+import { IconDeviceFloppy, IconPlus, IconX } from '../components/Icons';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchUmbrales, saveUmbrales, Umbrales } from '../services/ajustesService';
+
+
+const UmbralesPrecios: React.FC = () => {
+    const [umbrales, setUmbrales] = useState<Umbrales>({ comercio: 0, mayorista: 0 });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<any | null>(null);
+    const [success, setSuccess] = useState(false);
+
+    useEffect(() => {
+        const loadUmbrales = async () => {
+            setLoading(true);
+            try {
+                const data = await fetchUmbrales();
+                setUmbrales(data);
+            } catch (err) {
+                setError(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadUmbrales();
+    }, []);
+
+    const handleSave = async () => {
+        setSaving(true);
+        setError(null);
+        setSuccess(false);
+        try {
+            await saveUmbrales(umbrales);
+            setSuccess(true);
+            setTimeout(() => setSuccess(false), 3000);
+        } catch (err: any) {
+            setError(err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setUmbrales(prev => ({...prev, [name]: parseFloat(value) || 0 }));
+    }
+    
+    if(loading) return <div className="p-4 text-center">Cargando umbrales...</div>
+
+    return (
+        <div className="bg-surface p-6 rounded-lg shadow-md mb-8">
+            <h3 className="text-xl font-bold text-on-surface mb-4">Umbrales de Categorización de Clientes</h3>
+            <DatabaseErrorDisplay error={error} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                 <div>
+                    <label htmlFor="umbralComercio" className="block text-sm font-medium text-gray-700">Monto para acceder a lista 'Comercio' (ARS)</label>
+                    <input type="number" name="comercio" id="umbralComercio" value={umbrales.comercio} onChange={handleChange} className="mt-1 w-full input-style" />
+                </div>
+                 <div>
+                    <label htmlFor="umbralMayorista" className="block text-sm font-medium text-gray-700">Monto para acceder a lista 'Mayorista' (ARS)</label>
+                    <input type="number" name="mayorista" id="umbralMayorista" value={umbrales.mayorista} onChange={handleChange} className="mt-1 w-full input-style" />
+                </div>
+                <div>
+                    <button onClick={handleSave} disabled={saving} className="w-full flex justify-center items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow hover:bg-green-600 transition-colors disabled:bg-gray-400">
+                        <IconDeviceFloppy className="h-5 w-5 mr-2" />
+                        {saving ? 'Guardando...' : 'Guardar Umbrales'}
+                    </button>
+                </div>
+            </div>
+            {success && <p className="text-green-600 text-sm mt-2">Umbrales guardados con éxito.</p>}
+            <p className="text-xs text-gray-500 mt-2">
+                Un cliente ascenderá a la categoría 'Comercio' o 'Mayorista' automáticamente una vez que el total de sus compras pagadas supere estos montos. El sistema nunca degrada a un cliente.
+            </p>
+            <style>{`.input-style { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; } .input-style:focus { border-color: #8a5cf6; }`}</style>
+        </div>
+    );
+};
+
 
 const GestionListasPrecios: React.FC = () => {
+    const { profile } = useAuth();
     const [listas, setListas] = useState<ListMeta[]>([]);
     const [selectedListaId, setSelectedListaId] = useState<string>('');
     const [productosConPrecios, setProductosConPrecios] = useState<ProductoConPrecio[]>([]);
     const [originalPrecios, setOriginalPrecios] = useState<Record<string, number>>({});
     
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newListName, setNewListName] = useState('');
+
+    const isSuperAdmin = profile?.roles?.includes('superadmin');
 
     const hasChanges = useMemo(() => {
         if (Object.keys(originalPrecios).length === 0) return false;
@@ -36,7 +116,7 @@ const GestionListasPrecios: React.FC = () => {
                  setLoading(false);
             }
         } catch (err: any) {
-            setError(err.message);
+            setError(err);
             setLoading(false);
         }
     }, [selectedListaId]);
@@ -83,7 +163,7 @@ const GestionListasPrecios: React.FC = () => {
                 setOriginalPrecios(original);
 
             } catch (err: any) {
-                setError(err.message);
+                setError(err);
             } finally {
                 setLoading(false);
             }
@@ -121,7 +201,7 @@ const GestionListasPrecios: React.FC = () => {
             }, {} as Record<string, number>);
             setOriginalPrecios(original);
         } catch (err: any) {
-            setError(err.message);
+            setError(err);
         } finally {
             setIsSaving(false);
         }
@@ -139,7 +219,7 @@ const GestionListasPrecios: React.FC = () => {
             setIsCreateModalOpen(false);
             setNewListName('');
         } catch (err: any) {
-            setError(err.message);
+            setError(err);
         } finally {
             setIsSaving(false);
         }
@@ -151,6 +231,8 @@ const GestionListasPrecios: React.FC = () => {
         <div>
             <PageHeader title="Gestión de Listas de Precios" />
             <DatabaseErrorDisplay error={error} />
+
+            {isSuperAdmin && <UmbralesPrecios />}
             
             <div className="bg-surface p-4 rounded-lg shadow-md mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-2">

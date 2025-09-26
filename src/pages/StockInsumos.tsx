@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import PageHeader from '@/components/PageHeader';
 import { IconPlus, IconPencil, IconClipboardPlus } from '@/components/Icons';
@@ -8,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { fetchInsumos } from '@/services/insumosService';
 import InsumoModal from '@/components/InsumoModal';
 import StockUpdateModal from '@/components/StockUpdateModal';
+import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
 const StockInsumos: React.FC = () => {
     const { profile } = useAuth();
@@ -16,7 +16,7 @@ const StockInsumos: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStockModalOpen, setIsStockModalOpen] = useState(false);
     const [selectedInsumo, setSelectedInsumo] = useState<Insumo | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
 
     const canManage = profile?.roles?.some(role => ['superadmin', 'administrativo'].includes(role));
     
@@ -30,7 +30,7 @@ const StockInsumos: React.FC = () => {
             console.log("[StockInsumosPage] Insumos fetched successfully.", data);
         } catch (err: any) {
             console.error(`[StockInsumosPage] Error fetching data:`, err);
-            setError(`No se pudieron cargar los datos: ${err.message}`);
+            setError(err);
         } finally {
             setLoading(false);
             console.log(`[StockInsumosPage] Fetch finished.`);
@@ -106,12 +106,7 @@ const StockInsumos: React.FC = () => {
                 )}
             </PageHeader>
             
-            {error && (
-                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4" role="alert">
-                    <p className="font-bold">Error</p>
-                    <p>{error}</p>
-                </div>
-            )}
+            <DatabaseErrorDisplay error={error} />
 
             <Table columns={insumoColumns} data={insumos} isLoading={loading} />
 

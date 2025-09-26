@@ -9,7 +9,7 @@ import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 const GestionDepositos: React.FC = () => {
     const [depositos, setDepositos] = useState<Deposito[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentDeposito, setCurrentDeposito] = useState<Partial<Deposito>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -21,7 +21,7 @@ const GestionDepositos: React.FC = () => {
             const data = await fetchDepositos();
             setDepositos(data);
         } catch (err: any) {
-            setError(err.message);
+            setError(err);
         } finally {
             setLoading(false);
         }
@@ -53,7 +53,7 @@ const GestionDepositos: React.FC = () => {
                 await deleteDeposito(depositoId);
                 loadData();
             } catch (err: any) {
-                setError(`Error al eliminar: ${err.message}`);
+                setError(err);
             }
         }
     };
@@ -69,7 +69,7 @@ const GestionDepositos: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentDeposito.nombre) {
-            setError('El nombre es requerido.');
+            setError({ message: 'El nombre es requerido.' });
             return;
         }
         setIsSubmitting(true);
@@ -83,7 +83,7 @@ const GestionDepositos: React.FC = () => {
             loadData();
             resetModal();
         } catch (err: any) {
-            setError(`Error al guardar: ${err.message}`);
+            setError(err);
         } finally {
             setIsSubmitting(false);
         }
@@ -124,7 +124,7 @@ const GestionDepositos: React.FC = () => {
                             <button onClick={resetModal} className="text-gray-400 hover:text-gray-600"><IconX className="w-6 h-6" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            {error && <div className="bg-red-100 text-red-700 p-3 rounded-md text-sm">{error}</div>}
+                            {error && <DatabaseErrorDisplay error={error} />}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Nombre*</label>
                                 <input type="text" name="nombre" value={currentDeposito.nombre || ''} onChange={handleInputChange} required className="mt-1 w-full input-style" />

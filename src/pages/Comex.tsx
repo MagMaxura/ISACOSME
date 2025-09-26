@@ -18,7 +18,7 @@ const Comex: React.FC = () => {
     const { profile } = useAuth();
     const [productos, setProductos] = useState<Producto[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
     const [usdExchangeRate, setUsdExchangeRate] = useState<number>(1000);
 
     const isSuperAdmin = profile?.roles?.includes('superadmin');
@@ -31,7 +31,7 @@ const Comex: React.FC = () => {
                 const data = await fetchProductosConStock();
                 setProductos(data);
             } catch (err: any) {
-                setError(err.message);
+                setError(err);
             } finally {
                 setLoading(false);
             }

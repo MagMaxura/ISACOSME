@@ -191,22 +191,31 @@ export interface DashboardStats {
 }
 
 // Types for Product Dashboard
+// FIX: Add 'unidad' property to match data from the service and fix UI errors.
 export interface InsumoConCosto {
     id: string;
     nombre: string;
     cantidad_necesaria: number;
     costo_total_insumo: number;
+    unidad: InsumoUnidad;
 }
 
+// FIX: Update DashboardData to match the new, more detailed data structure from the service.
+// This fixes errors related to missing properties like 'costoLaboratorioReciente', 'totalIngresosProducto', etc.
 export interface DashboardData {
     producto: Producto;
     costoInsumos: number;
-    costoLaboratorioPromedio: number;
+    costoLaboratorioReciente: number;
     costoTotal: number;
     gananciaNeta: number;
     margenGanancia: number;
     unidadesVendidas: number;
+    totalIngresosProducto: number;
+    stockTotalActual: number;
+    ultimaVentaFecha: string | null;
+    precioPromedioVenta: number;
     insumosDetalle: InsumoConCosto[];
+    stockPorDeposito: StockPorDeposito[];
     ventasPorDia: { [date: string]: number };
     ventasPorMes: { [month: string]: number };
     ventasPorAnio: { [year: string]: number };
@@ -229,6 +238,7 @@ export interface TransferenciaStock {
     cantidad: number;
     usuarioEmail: string;
     notas: string | null;
+    numeroLote: string | null;
 }
 
 // Type for COMEX access requests

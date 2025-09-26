@@ -56,23 +56,46 @@ export const fetchUsuarios = async (): Promise<Profile[]> => {
 };
 
 export const updateUsuarioRoles = async (userId: string, newRoles: AppRole[]): Promise<void> => {
-    console.log(`[${SERVICE_NAME}] Updating roles for user ${userId} to [${newRoles.join(', ')}].`);
+    console.log(`[${SERVICE_NAME}] Updating roles for user ${userId} via RPC to [${newRoles.join(', ')}].`);
     try {
         const uniqueRoles = [...new Set(newRoles)];
 
-        const { error } = await (supabase
-            .from('profiles') as any)
-            .update({ roles: uniqueRoles })
-            .eq('id', userId);
+        const { error } = await supabase.rpc('update_user_roles_as_admin', {
+            p_user_id: userId,
+            p_new_roles: uniqueRoles,
+        });
 
         if (error) throw error;
-        
-        console.log(`[${SERVICE_NAME}] Successfully updated roles for user ${userId}.`);
+
+        console.log(`[${SERVICE_NAME}] Successfully updated roles for user ${userId} via RPC.`);
     } catch (error: any) {
-        console.error(`[${SERVICE_NAME}] Error updating user roles:`, error?.message);
-        if (error.message?.includes('security policy')) {
-             throw new Error(`Error de permisos (RLS): El rol 'superadmin' no tiene permiso para actualizar la tabla 'profiles' o estás intentando cambiar tus propios roles. Revisa las políticas de seguridad en Supabase.`);
+        console.error(`[${SERVICE_NAME}] Error updating user roles via RPC:`, error?.message);
+
+        const functionNotFound = error.code === '42883' || error.message?.includes('function update_user_roles_as_admin does not exist');
+        if (functionNotFound) {
+            throw {
+                message: "Error de base de datos: La función 'update_user_roles_as_admin' no existe.",
+                details: "Esta función es necesaria para que los superadministradores puedan modificar roles sin causar errores de recursión en las políticas de seguridad (RLS).",
+                hint: "Por favor, ejecute el script SQL proporcionado en el editor de SQL de Supabase para crear esta función.",
+                sql: `CREATE OR REPLACE FUNCTION update_user_roles_as_admin(p_user_id uuid, p_new_roles text[])
+RETURNS void AS $$
+DECLARE
+    is_superadmin boolean;
+BEGIN
+    SELECT 'superadmin' = ANY(roles) INTO is_superadmin FROM public.profiles WHERE id = auth.uid();
+    IF NOT is_superadmin THEN
+        RAISE EXCEPTION 'Permission denied: You must be a superadmin to update user roles.';
+    END IF;
+    UPDATE public.profiles SET roles = p_new_roles WHERE id = p_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`
+            };
         }
+
+        if (error.message?.includes('Permission denied')) {
+             throw new Error(`Error de permisos: Tu cuenta ya no tiene privilegios de superadministrador para realizar esta acción.`);
+        }
+
         throw error;
     }
 };

@@ -140,3 +140,64 @@ export const upsertPreciosDeLista = async (listaId: string, precios: { productoI
         throw new Error(`No se pudieron guardar los precios: ${error?.message}`);
     }
 };
+
+export const createListaConProductos = async (nombre: string, productos: { productoId: string; precio: number }[]): Promise<void> => {
+    console.log(`[${SERVICE_NAME}] Creating new price list "${nombre}" with ${productos.length} products via RPC.`);
+    try {
+        const { error } = await supabase.rpc('create_lista_con_productos', {
+            p_nombre_lista: nombre,
+            p_productos_precios: productos,
+        });
+        
+        if (error) throw error;
+        
+        console.log(`[${SERVICE_NAME}] Successfully created price list "${nombre}".`);
+
+    } catch (error: any) {
+        console.error(`[${SERVICE_NAME}] Error in RPC create_lista_con_productos:`, error);
+        
+        const functionNotFound = error.code === '42883' || error.message?.includes('function create_lista_con_productos does not exist');
+        if (functionNotFound) {
+             throw {
+                message: "Error de base de datos: La función 'create_lista_con_productos' no existe.",
+                details: "Esta función es necesaria para guardar una vista de precios como una nueva lista editable en la base de datos.",
+                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función.",
+                sql: `CREATE OR REPLACE FUNCTION create_lista_con_productos(
+    p_nombre_lista text,
+    p_productos_precios jsonb
+)
+RETURNS uuid AS $$
+DECLARE
+    v_new_lista_id uuid;
+    item record;
+BEGIN
+    -- Check for duplicate list name first to give a clearer error
+    IF EXISTS (SELECT 1 FROM public.listas_de_precios WHERE nombre = p_nombre_lista) THEN
+        RAISE EXCEPTION 'Ya existe una lista de precios con el nombre "%"', p_nombre_lista;
+    END IF;
+
+    -- Create the new price list and get its ID
+    INSERT INTO public.listas_de_precios (nombre)
+    VALUES (p_nombre_lista)
+    RETURNING id INTO v_new_lista_id;
+
+    -- Loop through the JSONB array of products and prices and insert them
+    FOR item IN SELECT * FROM jsonb_to_recordset(p_productos_precios) AS x(producto_id uuid, precio numeric)
+    LOOP
+        INSERT INTO public.lista_precio_productos (lista_id, producto_id, precio)
+        VALUES (v_new_lista_id, item.producto_id, item.precio);
+    END LOOP;
+    
+    RETURN v_new_lista_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`
+            };
+        }
+        
+        if (error.message?.includes('duplicate key value') || error.message?.includes('Ya existe una lista de precios')) {
+             throw new Error(`Ya existe una lista de precios con el nombre "${nombre}". Por favor, elige otro nombre.`);
+        }
+
+        throw new Error(`No se pudo crear la lista: ${error?.message}`);
+    }
+};

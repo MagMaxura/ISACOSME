@@ -78,12 +78,13 @@ export const registerProduction = async (data: ProductionData): Promise<void> =>
 
     if (error) {
         console.error(`[${SERVICE_NAME}] RPC call 'registrar_produccion' failed:`, JSON.stringify(error, null, 2));
+        
         const functionNotFound = error.code === '42883' || error.message?.includes('function registrar_produccion does not exist') || error.message?.includes('Could not find the function');
         if (functionNotFound) {
             throw {
-                message: "Error de base de datos: La función 'registrar_produccion' no existe.",
-                details: "Esta función es necesaria para registrar la producción de nuevos lotes de productos y asignarlos al depósito predeterminado.",
-                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria.",
+                message: "Error de base de datos: La función 'registrar_produccion' no existe o está desactualizada.",
+                details: "Esta función es necesaria para registrar la producción de nuevos lotes. La versión actual en la app soluciona un problema que impedía agregar stock a un lote ya existente.",
+                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear o actualizar la función. Esto solucionará el problema de forma permanente.",
                 sql: `CREATE OR REPLACE FUNCTION registrar_produccion(
     p_producto_id uuid,
     p_cantidad_producida integer,
@@ -95,25 +96,39 @@ RETURNS void AS $$
 DECLARE
     v_deposito_id uuid;
 BEGIN
-    -- Find the default warehouse
+    -- Encuentra el depósito predeterminado
     SELECT id INTO v_deposito_id FROM depositos WHERE es_predeterminado = TRUE LIMIT 1;
 
-    -- If no default warehouse, raise an error
+    -- Si no hay depósito predeterminado, lanza un error
     IF v_deposito_id IS NULL THEN
         RAISE EXCEPTION 'No se encontró un depósito predeterminado. Por favor, marque uno en "Gestión de Depósitos".';
     END IF;
 
-    -- Insert the new lot into the lots table, assigned to the default warehouse
+    -- Inserta el nuevo lote. Si ya existe uno con el mismo producto, número y depósito,
+    -- actualiza el existente sumando las cantidades y costos.
     INSERT INTO lotes (producto_id, numero_lote, cantidad_inicial, cantidad_actual, fecha_vencimiento, costo_laboratorio, deposito_id)
-    VALUES (p_producto_id, p_numero_lote, p_cantidad_producida, p_cantidad_producida, p_fecha_vencimiento, p_costo_laboratorio, v_deposito_id);
-
+    VALUES (p_producto_id, p_numero_lote, p_cantidad_producida, p_cantidad_producida, p_fecha_vencimiento, p_costo_laboratorio, v_deposito_id)
+    ON CONFLICT (producto_id, numero_lote, deposito_id) DO UPDATE
+    SET
+        cantidad_inicial = lotes.cantidad_inicial + EXCLUDED.cantidad_inicial,
+        cantidad_actual = lotes.cantidad_actual + EXCLUDED.cantidad_actual,
+        -- Actualiza la fecha de vencimiento a la más reciente si se proporciona una nueva
+        fecha_vencimiento = GREATEST(lotes.fecha_vencimiento, EXCLUDED.fecha_vencimiento),
+        -- Suma el costo del nuevo lote al costo total del lote existente
+        costo_laboratorio = lotes.costo_laboratorio + EXCLUDED.costo_laboratorio;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;`
             };
         }
-        if (error.message?.includes('lotes_numero_lote_producto_id_key')) {
-             throw new Error(`El número de lote "${data.numeroLote}" ya existe para este producto. Por favor, elige un número de lote único.`);
+
+        if (error.code === '23505' && error.message?.includes('lotes_producto_id_numero_lote_deposito_id_key')) {
+             throw {
+                message: `El lote "${data.numeroLote}" ya existe para este producto en el depósito predeterminado.`,
+                details: "La base de datos está intentando crear un lote duplicado, pero la función actual no maneja esta situación. Para solucionarlo, la función debe ser actualizada para que sume la nueva producción al lote existente en lugar de fallar.",
+                hint: "Pide al administrador que ejecute el script SQL de actualización para la función 'registrar_produccion', el cual está disponible dentro del código de la aplicación (en el error de 'función no encontrada').",
+             };
         }
+        
         throw new Error(`Error al registrar la producción: ${error?.message}`);
     }
 

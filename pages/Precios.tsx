@@ -3,18 +3,27 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Producto } from '../types';
 import { fetchProductosConStock } from '../services/productosService';
-import { IconPackage } from '../components/Icons';
+import { createListaConProductos } from '../services/preciosService';
+import { IconPackage, IconDeviceFloppy, IconX } from '../components/Icons';
+import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
 
 type ListaType = 'CLIENTE' | 'COMERCIO' | 'MAYORISTA';
 
 const Precios: React.FC = () => {
     const [productos, setProductos] = useState<Producto[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
     const [listaSeleccionada, setListaSeleccionada] = useState<ListaType>('COMERCIO');
     const [isDownloading, setIsDownloading] = useState(false);
     const [editedLotes, setEditedLotes] = useState<Record<string, number>>({});
     const pdfRef = useRef<HTMLDivElement>(null);
+    
+    // State for the new "Save List" modal
+    const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+    const [newListName, setNewListName] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
 
     useEffect(() => {
         const loadData = async () => {
@@ -24,7 +33,7 @@ const Precios: React.FC = () => {
                 const data = await fetchProductosConStock();
                 setProductos(data);
             } catch (err: any) {
-                setError(`No se pudieron cargar los productos: ${err.message}`);
+                setError(err);
             } finally {
                 setLoading(false);
             }
@@ -107,18 +116,46 @@ const Precios: React.FC = () => {
 
         } catch (err) {
             console.error("Error generating PDF:", err);
-            setError("No se pudo generar el PDF.");
+            setError({ message: "No se pudo generar el PDF." });
         } finally {
             setIsDownloading(false);
         }
     };
+    
+    const handleCreateNewList = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newListName.trim()) {
+            setError({ message: "El nombre de la lista es requerido." });
+            return;
+        }
+        setIsSaving(true);
+        setError(null);
+        try {
+            const productosParaGuardar = productos.map(p => ({
+                productoId: p.id,
+                precio: getPrecioForSelectedList(p)
+            }));
+
+            await createListaConProductos(newListName.trim(), productosParaGuardar);
+            
+            setIsSaveModalOpen(false);
+            setNewListName('');
+            setSuccessMessage(`Lista "${newListName.trim()}" creada con éxito. Ahora puede ser asignada a clientes.`);
+            setTimeout(() => setSuccessMessage(null), 5000); // Hide message after 5 seconds
+
+        } catch (err: any) {
+            setError(err); // The modal will display this error
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
 
     const formatPrice = (price: number) => {
         return `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
     if (loading) return <div className="p-8 text-center">Cargando lista de precios...</div>;
-    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
     const lineaColors: Record<string, string> = {
         'ULTRAHISNE': 'bg-orange-500',
@@ -144,14 +181,30 @@ const Precios: React.FC = () => {
                         <option value="CLIENTE">Cliente (Público)</option>
                     </select>
                 </div>
-                <button
-                    onClick={handleDownloadPDF}
-                    disabled={isDownloading}
-                    className="w-full sm:w-auto bg-primary text-white px-6 py-2 rounded-lg shadow hover:bg-primary-dark transition-colors disabled:bg-violet-300 disabled:cursor-wait"
-                >
-                    {isDownloading ? 'Generando PDF...' : 'Descargar como PDF'}
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setIsSaveModalOpen(true)}
+                        className="w-full sm:w-auto bg-green-500 text-white px-6 py-2 rounded-lg shadow hover:bg-green-600 transition-colors flex items-center"
+                    >
+                         <IconDeviceFloppy className="h-5 w-5 mr-2" />
+                        Guardar como Nueva Lista
+                    </button>
+                    <button
+                        onClick={handleDownloadPDF}
+                        disabled={isDownloading}
+                        className="w-full sm:w-auto bg-primary text-white px-6 py-2 rounded-lg shadow hover:bg-primary-dark transition-colors disabled:bg-violet-300 disabled:cursor-wait"
+                    >
+                        {isDownloading ? 'Generando PDF...' : 'Descargar como PDF'}
+                    </button>
+                </div>
             </div>
+
+            <DatabaseErrorDisplay error={error} />
+            {successMessage && (
+                 <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4" role="alert">
+                    <p>{successMessage}</p>
+                </div>
+            )}
 
             <div ref={pdfRef} className="p-8 bg-white" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <header className="text-center mb-10">
@@ -176,7 +229,6 @@ const Precios: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
-                                    {/* Cast 'prods' to 'Producto[]' because Object.entries widens the value type to 'unknown'. */}
                                     {(prods as Producto[]).map(producto => {
                                         const precioUnitario = getPrecioForSelectedList(producto);
                                         const currentLote = editedLotes[producto.id] ?? 1;
@@ -224,6 +276,37 @@ const Precios: React.FC = () => {
                     <p className="text-xs text-gray-500">Contacto: contacto@isabelladelaperla.com</p>
                 </footer>
             </div>
+            
+            {isSaveModalOpen && (
+                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-md">
+                        <div className="flex justify-between items-center p-5 border-b">
+                            <h3 className="text-xl font-semibold text-gray-800">Guardar como Nueva Lista</h3>
+                            <button onClick={() => setIsSaveModalOpen(false)} className="text-gray-400 hover:text-gray-600"><IconX className="w-6 h-6" /></button>
+                        </div>
+                        <form onSubmit={handleCreateNewList} className="p-6 space-y-4">
+                            <DatabaseErrorDisplay error={error} />
+                             <div>
+                                <label htmlFor="newListName" className="block text-sm font-medium text-gray-700 mb-1">Nombre para la Nueva Lista</label>
+                                <input
+                                    type="text"
+                                    id="newListName"
+                                    value={newListName}
+                                    onChange={(e) => setNewListName(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
+                                    required
+                                />
+                            </div>
+                            <div className="flex justify-end pt-4 border-t mt-6">
+                                <button type="button" onClick={() => setIsSaveModalOpen(false)} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg mr-2 hover:bg-gray-300">Cancelar</button>
+                                <button type="submit" disabled={isSaving} className="bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark disabled:bg-violet-300">
+                                    {isSaving ? 'Guardando...' : 'Guardar Lista'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

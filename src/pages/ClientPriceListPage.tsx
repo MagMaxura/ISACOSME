@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import ClientHeader from '@/components/ClientHeader';
@@ -87,6 +86,14 @@ const ClientPriceListPage: React.FC = () => {
         loadClientData();
     }, [user]);
 
+    const getLoteMinimo = (listName?: string): number => {
+        if (!listName) return 1;
+        const lowerCaseName = listName.toLowerCase();
+        if (lowerCaseName.includes('mayorista')) return 6;
+        if (lowerCaseName.includes('comercio')) return 3;
+        return 1;
+    };
+
     const groupedProducts = useMemo(() => {
         const lineOrder = ['ULTRAHISNE', 'BODYTAN CARIBEAN', 'SECRET', 'ESSENS', 'General'];
         
@@ -142,8 +149,9 @@ const ClientPriceListPage: React.FC = () => {
                                     <table className="w-full text-sm">
                                         <thead className="bg-gray-50">
                                             <tr>
-                                                <th className="p-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[60%]">Producto</th>
-                                                <th className="p-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-[40%]">Precio</th>
+                                                <th className="p-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[50%]">Producto</th>
+                                                <th className="p-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-[25%]">Lote Mín.</th>
+                                                <th className="p-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-[25%]">Precio</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
@@ -151,6 +159,7 @@ const ClientPriceListPage: React.FC = () => {
                                             {(prods as ListaPrecioItem[]).map(producto => (
                                                 <tr key={producto.productoId}>
                                                     <td className="p-3 align-middle font-medium text-gray-800">{producto.productoNombre}</td>
+                                                    <td className="p-3 text-center align-middle font-semibold text-gray-700">{getLoteMinimo(clientListName)}</td>
                                                     <td className="p-3 text-right align-middle font-bold text-lg text-primary">{formatPrice(producto.precio)}</td>
                                                 </tr>
                                             ))}
