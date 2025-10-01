@@ -31,9 +31,9 @@ import EstadisticasProductos from './pages/EstadisticasProductos';
 // Define roles for each route for clarity
 const routeConfig: { path: string; component: React.ReactElement; roles: AppRole[] }[] = [
     { path: '/', component: <Dashboard />, roles: ['superadmin', 'vendedor', 'administrativo', 'analitico'] },
-    { path: '/estadisticas-productos', component: <EstadisticasProductos />, roles: ['superadmin', 'analitico'] },
     { path: '/ventas', component: <Ventas />, roles: ['superadmin', 'vendedor', 'analitico'] },
     { path: '/productos', component: <Productos />, roles: ['superadmin', 'administrativo', 'vendedor', 'analitico'] },
+    { path: '/estadisticas-productos', component: <EstadisticasProductos />, roles: ['superadmin', 'analitico', 'administrativo'] },
     { path: '/stock/productos', component: <Stock />, roles: ['superadmin', 'administrativo'] },
     { path: '/stock/insumos', component: <StockInsumos />, roles: ['superadmin', 'administrativo'] },
     { path: '/stock/depositos', component: <GestionDepositos />, roles: ['superadmin', 'administrativo'] },

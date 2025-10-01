@@ -22,6 +22,7 @@ export const fetchProductosConStock = async (): Promise<Producto[]> => {
 
         // The RPC likely returns snake_case keys that need to be mapped to the camelCase Producto interface.
         // It's assumed the RPC handles the aggregation of stock and grouping of lots.
+        // FIX: Add mapping for new dynamic pricing fields.
         const transformedProductos: Producto[] = data.map((p: any) => ({
             id: p.id,
             nombre: p.nombre,
@@ -33,6 +34,8 @@ export const fetchProductosConStock = async (): Promise<Producto[]> => {
             imagenUrl: p.imagen_url,
             costoInsumos: p.costo_insumos ?? 0,
             linea: p.linea,
+            cantidadMinimaComercio: p.cantidad_minima_comercio,
+            cantidadMinimaMayorista: p.cantidad_minima_mayorista,
             boxLengthCm: p.box_length_cm,
             boxWidthCm: p.box_width_cm,
             boxHeightCm: p.box_height_cm,
@@ -56,10 +59,11 @@ export const fetchProductosConStock = async (): Promise<Producto[]> => {
             error.message?.includes('Could not find the function');
             
         if (functionNotFound) {
+            // FIX: Update RPC function definition to include new dynamic pricing columns.
             throw {
-                message: "Error de base de datos: La función 'get_productos_con_stock' no existe.",
-                details: "Esta función es esencial para cargar la lista de productos con su stock agregado de todos los depósitos. Sin ella, la aplicación no puede mostrar el inventario.",
-                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria. Esto solucionará el problema de forma permanente.",
+                message: "Error de base de datos: La función 'get_productos_con_stock' no existe o está desactualizada.",
+                details: "Esta función es esencial para cargar la lista de productos con su stock y detalles de precios. La versión actual en la app incluye nuevos campos para precios dinámicos que parecen faltar en su base de datos.",
+                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear o actualizar la función. Esto solucionará el problema de forma permanente.",
                 sql: `CREATE OR REPLACE FUNCTION get_productos_con_stock()
 RETURNS TABLE (
     id uuid,
@@ -72,6 +76,8 @@ RETURNS TABLE (
     imagen_url text,
     costo_insumos numeric,
     linea text,
+    cantidad_minima_comercio integer,
+    cantidad_minima_mayorista integer,
     box_length_cm numeric,
     box_width_cm numeric,
     box_height_cm numeric,
@@ -158,6 +164,8 @@ BEGIN
         p.imagen_url,
         p.costo_insumos,
         p.linea,
+        p.cantidad_minima_comercio,
+        p.cantidad_minima_mayorista,
         p.box_length_cm,
         p.box_width_cm,
         p.box_height_cm,
@@ -182,29 +190,33 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;`
 export const fetchPublicProductsList = async (): Promise<Partial<Producto>[]> => {
     console.log(`[${SERVICE_NAME}] Fetching public products list.`);
     try {
+        // FIX: Select new columns needed for dynamic pricing.
         const { data, error } = await supabase
             .from('productos')
-            .select('id, nombre, descripcion, precio_publico, imagen_url, linea, codigo_barras')
+            .select('id, nombre, descripcion, precio_publico, precio_comercio, precio_mayorista, imagen_url, linea, codigo_barras, cantidad_minima_comercio, cantidad_minima_mayorista')
             .order('nombre', { ascending: true });
 
         if (error) {
             throw error;
         }
 
+        // FIX: Map new columns to the returned object.
         return (data || []).map(p => ({
             id: p.id,
             nombre: p.nombre,
             descripcion: p.descripcion,
             precioPublico: p.precio_publico ?? 0,
+            precioComercio: p.precio_comercio ?? 0,
+            precioMayorista: p.precio_mayorista ?? 0,
             imagenUrl: p.imagen_url,
             linea: p.linea,
             codigoBarras: p.codigo_barras,
+            cantidadMinimaComercio: p.cantidad_minima_comercio,
+            cantidadMinimaMayorista: p.cantidad_minima_mayorista,
         }));
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error fetching public products. Raw error:`, JSON.stringify(error, null, 2));
 
-        // FIX: Changed check from `instanceof TypeError` to a more reliable string check on the message property.
-        // This correctly identifies network errors caused by blocked RLS policies.
         if (error.message?.includes('Failed to fetch')) {
             const enhancedError = {
                 message: "Error de Permisos: La lista pública de productos no se puede mostrar.",
@@ -337,6 +349,7 @@ export const createProducto = async (
         imageUrl = await uploadImage(imageFile);
     }
 
+    // FIX: Add new fields for dynamic pricing to the insert data.
     const newProductData = {
         nombre: productoData.nombre,
         codigo_barras: productoData.codigoBarras || null,
@@ -346,6 +359,8 @@ export const createProducto = async (
         descripcion: productoData.descripcion || null,
         imagen_url: imageUrl,
         linea: productoData.linea || 'General',
+        cantidad_minima_comercio: productoData.cantidadMinimaComercio,
+        cantidad_minima_mayorista: productoData.cantidadMinimaMayorista,
         box_length_cm: productoData.boxLengthCm,
         box_width_cm: productoData.boxWidthCm,
         box_height_cm: productoData.boxHeightCm,
@@ -407,6 +422,7 @@ export const updateProducto = async (
         imageUrl = await uploadImage(imageFile);
     }
 
+    // FIX: Add new fields for dynamic pricing to the update data.
     const updatedProductData = {
         nombre: productoData.nombre,
         codigo_barras: productoData.codigoBarras || null,
@@ -416,6 +432,8 @@ export const updateProducto = async (
         descripcion: productoData.descripcion || null,
         imagen_url: imageUrl,
         linea: productoData.linea,
+        cantidad_minima_comercio: productoData.cantidadMinimaComercio,
+        cantidad_minima_mayorista: productoData.cantidadMinimaMayorista,
         box_length_cm: productoData.boxLengthCm,
         box_width_cm: productoData.boxWidthCm,
         box_height_cm: productoData.boxHeightCm,

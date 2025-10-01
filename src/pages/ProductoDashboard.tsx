@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import { fetchProductoDashboardData } from '../services/productoDashboardService';
 import type { DashboardData } from '../types';
-// FIX: Replace non-existent IconCash with IconCashBanknote and add IconScale which is now available.
 import { IconArrowLeft, IconCashBanknote, IconPackage, IconClock, IconScale } from '../components/Icons';
 import BarChart from '../components/BarChart';
 import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
@@ -100,7 +99,6 @@ const ProductoDashboard: React.FC = () => {
             
              {/* Main KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                {/* FIX: Use IconCashBanknote instead of IconCash. */}
                 <StatCard title="Ingresos Totales" value={formatPrice(totalIngresosProducto)} icon={<IconCashBanknote className="h-6 w-6 text-white" />} color="bg-green-500" />
                 <StatCard title="Stock Total Actual" value={`${stockTotalActual.toLocaleString('es-AR')} u.`} icon={<IconPackage className="h-6 w-6 text-white" />} color="bg-blue-500" />
                 <StatCard title="Última Venta" value={ultimaVentaFecha || 'N/A'} icon={<IconClock className="h-6 w-6 text-white" />} color="bg-violet-500" />

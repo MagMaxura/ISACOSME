@@ -157,6 +157,7 @@ export const fetchTransferencias = async (): Promise<TransferenciaStock[]> => {
         
         const transferenciasData = data as unknown as any[];
         
+        // FIX: Map the `numero_lote` property from the RPC response.
         return (transferenciasData || []).map((t: any) => ({
             id: t.id,
             fecha: new Date(t.fecha).toLocaleString('es-AR'),
@@ -177,6 +178,7 @@ export const fetchTransferencias = async (): Promise<TransferenciaStock[]> => {
         const functionNotFound = error.code === '42883' || error.message?.includes('function get_historial_transferencias does not exist') || error.message?.includes('Could not find the function');
 
         if (functionNotFound || isStructureMismatchError || isColumnMissingError) {
+             // FIX: Update the SQL hint to include the `numero_lote` column and the necessary join.
              throw {
                 message: "Error de base de datos: La función 'get_historial_transferencias' no se encontró o está desactualizada.",
                 details: `El sistema detectó un problema con la función de la base de datos que obtiene el historial. Detalles técnicos: ${error.message}`,

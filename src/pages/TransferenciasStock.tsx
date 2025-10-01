@@ -94,6 +94,7 @@ const TransferenciasStock: React.FC = () => {
     const transferenciasColumns: Column<TransferenciaStock>[] = [
         { header: 'Fecha', accessor: 'fecha' },
         { header: 'Producto', accessor: 'productoNombre' },
+        // FIX: Add numeroLote accessor to align with the updated TransferenciaStock type.
         { header: 'Lote Origen', accessor: 'numeroLote', render: item => item.numeroLote || 'N/A' },
         { header: 'Cantidad', accessor: 'cantidad', render: item => `${item.cantidad} u.` },
         { header: 'Origen', accessor: 'depositoOrigenNombre' },

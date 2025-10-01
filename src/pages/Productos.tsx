@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import PageHeader from '@/components/PageHeader';
-import Table, { Column } from '@/components/Table';
-import { Producto } from '@/types';
-import { IconPackage, IconPlus, IconX, IconCamera, IconPencil, IconTrash, IconChartBar } from '@/components/Icons';
-import { useAuth } from '@/contexts/AuthContext';
-import { fetchProductosConStock, createProducto, updateProducto, deleteProducto } from '@/services/productosService';
-import BarcodeScanner from '@/components/BarcodeScanner';
-import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
+import PageHeader from '../components/PageHeader';
+import Table, { Column } from '../components/Table';
+import { Producto } from '../types';
+import { IconPackage, IconPlus, IconX, IconCamera, IconPencil, IconTrash, IconChartBar } from '../components/Icons';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchProductosConStock, createProducto, updateProducto, deleteProducto } from '../services/productosService';
+import BarcodeScanner from '../components/BarcodeScanner';
+import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
 
 const Productos: React.FC = () => {
     const { profile } = useAuth();
@@ -15,6 +15,7 @@ const Productos: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     
+    // FIX: Add new dynamic pricing fields to the initial state.
     const initialProductoState: Partial<Producto> = {
         nombre: '',
         codigoBarras: '',
@@ -23,6 +24,8 @@ const Productos: React.FC = () => {
         precioMayorista: 0,
         descripcion: '',
         linea: 'General',
+        cantidadMinimaComercio: 3,
+        cantidadMinimaMayorista: 6,
         boxLengthCm: 0,
         boxWidthCm: 0,
         boxHeightCm: 0,
@@ -54,7 +57,7 @@ const Productos: React.FC = () => {
             setProductos(data);
             console.log("[ProductosPage] Data fetched successfully.", data);
         } catch (error: any) {
-            console.error("[ProductosPage] Failed to fetch data:", error);
+            console.error("[ProductosPage] Failed to fetch data:", error.message);
             setError(error);
         } finally {
             setLoading(false);
@@ -72,7 +75,7 @@ const Productos: React.FC = () => {
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        const isNumericField = ['precioPublico', 'precioComercio', 'precioMayorista', 'boxLengthCm', 'boxWidthCm', 'boxHeightCm', 'productWeightKg', 'productsPerBox'].includes(name);
+        const isNumericField = ['precioPublico', 'precioComercio', 'precioMayorista', 'cantidadMinimaComercio', 'cantidadMinimaMayorista', 'boxLengthCm', 'boxWidthCm', 'boxHeightCm', 'productWeightKg', 'productsPerBox'].includes(name);
         setCurrentProducto(prev => ({ ...prev, [name]: isNumericField ? parseFloat(value) || 0 : value }));
     };
 
@@ -88,6 +91,7 @@ const Productos: React.FC = () => {
     
     const handleEdit = (producto: Producto) => {
         setEditingProductoId(producto.id);
+        // FIX: Include new dynamic pricing fields when setting state for an edit.
         setCurrentProducto({
             nombre: producto.nombre,
             codigoBarras: producto.codigoBarras,
@@ -96,6 +100,8 @@ const Productos: React.FC = () => {
             precioMayorista: producto.precioMayorista,
             descripcion: producto.descripcion,
             linea: producto.linea,
+            cantidadMinimaComercio: producto.cantidadMinimaComercio,
+            cantidadMinimaMayorista: producto.cantidadMinimaMayorista,
             boxLengthCm: producto.boxLengthCm,
             boxWidthCm: producto.boxWidthCm,
             boxHeightCm: producto.boxHeightCm,
@@ -121,7 +127,7 @@ const Productos: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentProducto.nombre || (currentProducto.precioPublico ?? 0) <= 0) {
-            setError({ message: "El nombre y un precio público válido son requeridos." });
+            setError({ message: "El nombre y un precio público válido son requeridos."});
             return;
         }
         setIsSubmitting(true);
@@ -164,11 +170,12 @@ const Productos: React.FC = () => {
         { header: 'Stock Total', accessor: 'stockTotal', render: (item) => (
             <span className={item.stockTotal < 50 ? 'text-red-600 font-bold' : 'text-gray-700'}>{item.stockTotal}</span>
         )},
+        // FIX: Update price column to display minimum quantities for dynamic pricing.
         { header: 'Precios (P/C/M)', accessor: 'precioPublico', render: (item) => (
             <div className="text-xs">
                 <div>P: <span className="font-semibold">{formatPrice(item.precioPublico)}</span></div>
-                <div>C: <span className="font-semibold">{formatPrice(item.precioComercio)}</span></div>
-                <div>M: <span className="font-semibold">{formatPrice(item.precioMayorista)}</span></div>
+                <div>C: <span className="font-semibold">{formatPrice(item.precioComercio)}</span> (min. {item.cantidadMinimaComercio || 'N/A'})</div>
+                <div>M: <span className="font-semibold">{formatPrice(item.precioMayorista)}</span> (min. {item.cantidadMinimaMayorista || 'N/A'})</div>
             </div>
         )},
         { header: 'Acciones', accessor: 'id', render: (item) => (
@@ -269,12 +276,21 @@ const Productos: React.FC = () => {
                                     <input type="number" name="precioMayorista" id="precioMayorista" value={currentProducto.precioMayorista || 0} onChange={handleInputChange} min="0" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary" />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* FIX: Add inputs for dynamic pricing minimum quantities. */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                  <div>
                                     <label htmlFor="linea" className="block text-sm font-medium text-gray-700 mb-1">Línea de Producto</label>
                                     <select name="linea" id="linea" value={currentProducto.linea || 'General'} onChange={handleInputChange} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary">
                                         {productLines.map(line => <option key={line} value={line}>{line}</option>)}
                                     </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="cantidadMinimaComercio" className="block text-sm font-medium text-gray-700 mb-1">Cant. Mín. Comercio</label>
+                                    <input type="number" name="cantidadMinimaComercio" id="cantidadMinimaComercio" value={currentProducto.cantidadMinimaComercio || 0} onChange={handleInputChange} min="0" step="1" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary" />
+                                </div>
+                                <div>
+                                    <label htmlFor="cantidadMinimaMayorista" className="block text-sm font-medium text-gray-700 mb-1">Cant. Mín. Mayorista</label>
+                                    <input type="number" name="cantidadMinimaMayorista" id="cantidadMinimaMayorista" value={currentProducto.cantidadMinimaMayorista || 0} onChange={handleInputChange} min="0" step="1" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary" />
                                 </div>
                             </div>
                             <div>

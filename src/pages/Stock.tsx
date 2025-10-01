@@ -188,6 +188,35 @@ const Stock: React.FC = () => {
         loadData();
     }, [loadData]);
 
+    const groupedProducts = useMemo(() => {
+        const lineOrder = ['ULTRAHISNE', 'BODYTAN CARIBEAN', 'SECRET', 'ESSENS', 'General'];
+
+        const grouped = productos.reduce((acc, producto) => {
+            const linea = producto.linea || 'General';
+            if (!acc[linea]) {
+                acc[linea] = [];
+            }
+            acc[linea].push(producto);
+            return acc;
+        }, {} as Record<string, Producto[]>);
+
+        const sortedGroups: { linea: string, productos: Producto[] }[] = [];
+        
+        lineOrder.forEach(line => {
+            if (grouped[line]) {
+                sortedGroups.push({ linea: line, productos: grouped[line] });
+            }
+        });
+
+        Object.keys(grouped).forEach(line => {
+            if (!lineOrder.includes(line)) {
+                sortedGroups.push({ linea: line, productos: grouped[line] });
+            }
+        });
+
+        return sortedGroups;
+    }, [productos]);
+
     const handleModalSuccess = () => {
         setModalContent(null);
         loadData(); // Reload all data to reflect changes
@@ -205,7 +234,6 @@ const Stock: React.FC = () => {
     const loteToEdit = isEditMode ? modalContent : null;
     const productoDeLote = isEditMode ? simpleProductos.find(p => productos.find(sp => sp.id === p.id)?.lotes.some(l => l.id === loteToEdit.id)) : undefined;
 
-
     return (
         <div>
             <PageHeader title="Stock de Productos Terminados">
@@ -222,74 +250,86 @@ const Stock: React.FC = () => {
             
             <DatabaseErrorDisplay error={error} />
 
-            <div className="bg-surface rounded-lg shadow overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="w-12"></th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Producto</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Código de Barras</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Stock Total</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {loading && <tr><td colSpan={4} className="text-center py-8">Cargando...</td></tr>}
-                  {!loading && productos.map(item => (
-                    <React.Fragment key={item.id}>
-                      <tr className="hover:bg-gray-50">
-                        <td className="px-4 py-4">
-                          <button onClick={() => toggleRow(item.id)} className="text-gray-500 hover:text-primary">
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform ${expandedRows[item.id] ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-                          </button>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{item.nombre}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{item.codigoBarras || 'N/A'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
-                           <span className={item.stockTotal < 50 ? 'text-red-600' : 'text-green-700'}>
-                             {item.stockTotal} u.
-                           </span>
-                        </td>
-                      </tr>
-                      {expandedRows[item.id] && (
-                        <tr>
-                          <td colSpan={4} className="p-0">
-                            <div className="p-4 bg-violet-50">
-                               <h4 className="font-semibold text-sm mb-2 pl-2">Desglose de Stock por Depósito</h4>
-                               {item.stockPorDeposito.length > 0 ? (
-                                <div className="space-y-3">
-                                  {item.stockPorDeposito.map(deposito => (
-                                      <div key={deposito.depositoId} className="bg-white p-3 rounded-md shadow-sm">
-                                          <div className="flex justify-between items-center">
-                                              <span className="font-bold text-primary">{deposito.depositoNombre}</span>
-                                              <span className="text-sm font-semibold">{deposito.stock} u.</span>
-                                          </div>
-                                          <ul className="text-xs space-y-2 mt-2 pl-2 border-l-2 border-gray-200">
-                                            {deposito.lotes.map(l => (
-                                                <li key={l.id} className="flex items-center justify-between whitespace-nowrap gap-x-4">
-                                                   <div>
-                                                     Lote <span className="font-mono bg-gray-100 px-1 rounded">{l.numero_lote}</span>: {l.cantidad_actual} / {l.cantidad_inicial} u. (Vence: {l.fecha_vencimiento ? new Date(l.fecha_vencimiento).toLocaleDateString('es-AR') : 'N/A'})
-                                                   </div>
-                                                   {canManage && (
-                                                       <button onClick={() => setModalContent(l)} className="text-blue-500 hover:text-blue-700" title="Editar Producción">
-                                                           <IconPencil className="h-4 w-4" />
-                                                       </button>
-                                                   )}
-                                                </li>
-                                            ))}
-                                          </ul>
-                                      </div>
-                                  ))}
-                                </div>
-                               ) : <p className="text-sm text-gray-500 pl-2">Sin stock en ningún depósito.</p>}
+            {loading ? (
+                <div className="bg-surface rounded-lg shadow p-8 text-center text-gray-500"><p>Cargando...</p></div>
+            ) : productos.length === 0 ? (
+                <div className="bg-surface rounded-lg shadow p-8 text-center text-gray-500"><p>No se encontraron productos con stock.</p></div>
+            ) : (
+                <div className="space-y-8">
+                    {groupedProducts.map(({ linea, productos: productosDeLinea }) => (
+                        <div key={linea}>
+                            <h3 className="text-xl font-bold text-on-surface mb-3 p-3 bg-violet-50 rounded-t-lg border-b-2 border-primary">{linea}</h3>
+                            <div className="bg-surface rounded-b-lg shadow overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="w-12"></th>
+                                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Producto</th>
+                                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Código de Barras</th>
+                                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Stock Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {productosDeLinea.map(item => (
+                                            <React.Fragment key={item.id}>
+                                                <tr className="hover:bg-gray-50">
+                                                    <td className="px-4 py-4">
+                                                        <button onClick={() => toggleRow(item.id)} className="text-gray-500 hover:text-primary">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform ${expandedRows[item.id] ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                                                        </button>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{item.nombre}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{item.codigoBarras || 'N/A'}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
+                                                        <span className={item.stockTotal < 50 ? 'text-red-600' : 'text-green-700'}>
+                                                            {item.stockTotal} u.
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                                {expandedRows[item.id] && (
+                                                    <tr>
+                                                        <td colSpan={4} className="p-0">
+                                                            <div className="p-4 bg-gray-50">
+                                                                <h4 className="font-semibold text-sm mb-2 pl-2">Desglose de Stock por Depósito</h4>
+                                                                {item.stockPorDeposito.length > 0 ? (
+                                                                    <div className="space-y-3">
+                                                                        {item.stockPorDeposito.map(deposito => (
+                                                                            <div key={deposito.depositoId} className="bg-white p-3 rounded-md shadow-sm">
+                                                                                <div className="flex justify-between items-center">
+                                                                                    <span className="font-bold text-primary">{deposito.depositoNombre}</span>
+                                                                                    <span className="text-sm font-semibold">{deposito.stock} u.</span>
+                                                                                </div>
+                                                                                <ul className="text-xs space-y-2 mt-2 pl-2 border-l-2 border-gray-200">
+                                                                                    {deposito.lotes.map(l => (
+                                                                                        <li key={l.id} className="flex items-center justify-between whitespace-nowrap gap-x-4">
+                                                                                            <div>
+                                                                                                Lote <span className="font-mono bg-gray-100 px-1 rounded">{l.numero_lote}</span>: {l.cantidad_actual} / {l.cantidad_inicial} u. (Vence: {l.fecha_vencimiento ? new Date(l.fecha_vencimiento).toLocaleDateString('es-AR') : 'N/A'})
+                                                                                            </div>
+                                                                                            {canManage && (
+                                                                                                <button onClick={() => setModalContent(l)} className="text-blue-500 hover:text-blue-700" title="Editar Producción">
+                                                                                                    <IconPencil className="h-4 w-4" />
+                                                                                                </button>
+                                                                                            )}
+                                                                                        </li>
+                                                                                    ))}
+                                                                                </ul>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : <p className="text-sm text-gray-500 pl-2">Sin stock en ningún depósito.</p>}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
 
 
             {!!modalContent && (

@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Producto } from '@/types';
-import { fetchProductosConStock } from '@/services/productosService';
-import { createListaConProductos } from '@/services/preciosService';
-import { IconPackage, IconDeviceFloppy, IconX } from '@/components/Icons';
-import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
+import { Producto } from '../types';
+import { fetchProductosConStock } from '../services/productosService';
+import { createListaConProductos } from '../services/preciosService';
+import { IconPackage, IconDeviceFloppy, IconX } from '../components/Icons';
+import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
 
 type ListaType = 'CLIENTE' | 'COMERCIO' | 'MAYORISTA';
 
-const getDefaultLoteMinimo = (listaType: ListaType): number => {
+const getDefaultLoteMinimo = (listaType: ListaType, producto: Producto): number => {
     switch (listaType) {
-        case 'MAYORISTA': return 6;
-        case 'COMERCIO': return 3;
+        // FIX: Add default values to prevent errors if properties are null/undefined.
+        case 'MAYORISTA': return producto.cantidadMinimaMayorista || 6;
+        case 'COMERCIO': return producto.cantidadMinimaComercio || 3;
         case 'CLIENTE':
         default:
             return 1;
@@ -142,7 +143,6 @@ const Precios: React.FC = () => {
         setError(null);
         try {
             const productosParaGuardar = productos.map(p => ({
-// FIX: Changed 'producto_id' to 'productoId' to match the expected function signature and resolve the TypeScript error.
                 productoId: p.id,
                 precio: getPrecioForSelectedList(p)
             }));
@@ -242,7 +242,7 @@ const Precios: React.FC = () => {
                                 <tbody className="divide-y divide-gray-200">
                                     {(prods as Producto[]).map(producto => {
                                         const precioUnitario = getPrecioForSelectedList(producto);
-                                        const defaultLote = getDefaultLoteMinimo(listaSeleccionada);
+                                        const defaultLote = getDefaultLoteMinimo(listaSeleccionada, producto);
                                         const currentLote = editedLotes[producto.id] ?? defaultLote;
                                         const compraTotal = precioUnitario * currentLote;
                                         return (

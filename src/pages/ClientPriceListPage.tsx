@@ -2,14 +2,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import ClientHeader from '@/components/ClientHeader';
 import { supabase } from '@/supabase';
-import { ListaPrecioItem } from '@/types';
+import { Producto } from '@/types';
 import { fetchProductosDeLista } from '@/services/preciosService';
 import { fetchProductosConStock } from '@/services/productosService';
-import { IconPackage } from '@/components/Icons';
+import { IconShoppingCart } from '@/components/Icons';
+
+interface ClientProduct extends Producto {
+    basePrice: number;
+}
 
 const ClientPriceListPage: React.FC = () => {
     const { user } = useAuth();
-    const [priceList, setPriceList] = useState<ListaPrecioItem[]>([]);
+    const [products, setProducts] = useState<ClientProduct[]>([]);
+    const [quantities, setQuantities] = useState<Record<string, number>>({});
     const [clientListName, setClientListName] = useState<string | undefined>(undefined);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any | null>(null);
@@ -21,116 +26,97 @@ const ClientPriceListPage: React.FC = () => {
                 setLoading(false);
                 return;
             }
-
             setLoading(true);
             setError(null);
             try {
-                // 1. Fetch all products with their default public prices. This serves as our base list.
                 const allProducts = await fetchProductosConStock();
-
-                // 2. Find the client record to see if they have a specific price list.
                 const { data: cliente, error: clientError } = await supabase
                     .from('clientes')
                     .select('lista_precio_id, listas_de_precios(nombre)')
                     .eq('email', user.email)
                     .single();
 
-                if (clientError && clientError.code !== 'PGRST116') { // Ignore "No rows found"
-                    throw clientError;
-                }
-                
-                // When joining on a foreign key, Supabase returns the joined table as an object.
+                if (clientError && clientError.code !== 'PGRST116') throw clientError;
+
                 setClientListName((cliente?.listas_de_precios as any)?.nombre || 'Lista de Precios Pública');
                 
-                let finalPriceList: ListaPrecioItem[];
-
-                // 3. If the client has an assigned price list, fetch it and merge.
+                let finalProducts: ClientProduct[];
                 if (cliente?.lista_precio_id) {
                     const clientPriceListItems = await fetchProductosDeLista(cliente.lista_precio_id);
-                    const clientPriceMap = new Map<string, number>();
-                    clientPriceListItems.forEach(item => {
-                        // Ensure we only map valid prices
-                        if (typeof item.precio === 'number') {
-                            clientPriceMap.set(item.productoId, item.precio);
-                        }
-                    });
-
-                    // Create the final list by iterating through all products.
-                    // Use the price from the client's list if it exists, otherwise fall back to the public price.
-                    finalPriceList = allProducts.map(p => ({
-                        productoId: p.id,
-                        productoNombre: p.nombre,
-                        linea: p.linea,
-                        precio: clientPriceMap.has(p.id) ? clientPriceMap.get(p.id)! : p.precioPublico,
+                    const clientPriceMap = new Map(clientPriceListItems.map(item => [item.productoId, item.precio]));
+                    finalProducts = allProducts.map(p => ({
+                        ...p,
+                        basePrice: clientPriceMap.get(p.id) ?? p.precioPublico,
                     }));
-
                 } else {
-                    // 4. If no specific list is assigned, the final list is simply all products with their public prices.
-                    finalPriceList = allProducts.map(p => ({
-                        productoId: p.id,
-                        productoNombre: p.nombre,
-                        linea: p.linea,
-                        precio: p.precioPublico,
+                    finalProducts = allProducts.map(p => ({
+                        ...p,
+                        basePrice: p.precioPublico,
                     }));
                 }
-                
-                setPriceList(finalPriceList);
-
+                setProducts(finalProducts);
             } catch (err: any) {
-                setError(err); // Pass the full error object
+                setError(err);
             } finally {
                 setLoading(false);
             }
         };
-
         loadClientData();
     }, [user]);
-
-    const getLoteMinimo = (listName?: string): number => {
-        if (!listName) return 1;
-        const lowerCaseName = listName.toLowerCase();
-        if (lowerCaseName.includes('mayorista')) return 6;
-        if (lowerCaseName.includes('comercio')) return 3;
-        return 1;
+    
+    const getDynamicPrice = (product: ClientProduct, quantity: number) => {
+        // FIX: Destructure properties now available on the ClientProduct type.
+        const { basePrice, precioComercio, precioMayorista, cantidadMinimaComercio, cantidadMinimaMayorista } = product;
+        const minComercio = cantidadMinimaComercio ?? Infinity;
+        const minMayorista = cantidadMinimaMayorista ?? Infinity;
+        if (quantity >= minMayorista && precioMayorista > 0) return precioMayorista;
+        if (quantity >= minComercio && precioComercio > 0) return precioComercio;
+        return basePrice;
     };
+
+    const handleQuantityChange = (productId: string, value: string) => {
+        const newQuantity = parseInt(value, 10);
+        setQuantities(prev => ({
+            ...prev,
+            [productId]: isNaN(newQuantity) || newQuantity < 0 ? 0 : newQuantity,
+        }));
+    };
+
+    // FIX: Replaced `Object.entries` with `Object.keys` to correctly infer types and resolve calculation errors.
+    const { orderItems, subtotal } = useMemo(() => {
+        const items = Object.keys(quantities)
+            .filter(productId => quantities[productId] > 0)
+            .map(productId => {
+                const product = products.find(p => p.id === productId);
+                if (!product) return null;
+                const qty = quantities[productId];
+                const price = getDynamicPrice(product, qty);
+                return { ...product, quantity: qty, currentPrice: price, lineTotal: price * qty };
+            })
+            .filter((item): item is NonNullable<typeof item> => item !== null);
+        const sub = items.reduce((acc, item) => acc + (item?.lineTotal || 0), 0);
+        return { orderItems: items, subtotal: sub };
+    }, [quantities, products]);
+
 
     const groupedProducts = useMemo(() => {
         const lineOrder = ['ULTRAHISNE', 'BODYTAN CARIBEAN', 'SECRET', 'ESSENS', 'General'];
-        
-        const grouped = priceList.reduce((acc, producto) => {
-            const linea = producto.linea || 'General';
-            if (!acc[linea]) {
-                acc[linea] = [];
-            }
-            acc[linea].push(producto);
+        const grouped = products.reduce((acc, p) => {
+            const linea = p.linea || 'General';
+            if (!acc[linea]) acc[linea] = [];
+            acc[linea].push(p);
             return acc;
-        }, {} as Record<string, ListaPrecioItem[]>);
-
-        const sortedGroup: Record<string, ListaPrecioItem[]> = {};
-        for (const line of lineOrder) {
-            if (grouped[line]) {
-                sortedGroup[line] = grouped[line];
-            }
-        }
-        for (const line in grouped) {
-            if (!sortedGroup[line]) {
-                sortedGroup[line] = grouped[line];
-            }
-        }
+        }, {} as Record<string, ClientProduct[]>);
+        
+        const sortedGroup: Record<string, ClientProduct[]> = {};
+        lineOrder.forEach(line => { if (grouped[line]) sortedGroup[line] = grouped[line]; });
+        Object.keys(grouped).forEach(line => { if (!sortedGroup[line]) sortedGroup[line] = grouped[line]; });
         return sortedGroup;
-    }, [priceList]);
-    
-    const formatPrice = (price: number) => {
-        return `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    };
+    }, [products]);
 
-    const lineaColors: Record<string, string> = {
-        'ULTRAHISNE': 'bg-orange-500',
-        'BODYTAN CARIBEAN': 'bg-yellow-800',
-        'SECRET': 'bg-gray-800',
-        'ESSENS': 'bg-blue-300',
-        'General': 'bg-gray-500',
-    };
+    const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    
+    const lineaColors: Record<string, string> = { 'ULTRAHISNE': 'bg-orange-500', 'BODYTAN CARIBEAN': 'bg-yellow-800', 'SECRET': 'bg-gray-800', 'ESSENS': 'bg-blue-300', 'General': 'bg-gray-500' };
 
     return (
         <div className="min-h-screen bg-gray-100">
@@ -139,38 +125,72 @@ const ClientPriceListPage: React.FC = () => {
                 {loading && <div className="text-center py-10">Cargando tu lista de precios...</div>}
                 {error && <div className="bg-red-100 text-red-700 p-4 rounded-md">{error.message || "Ocurrió un error al cargar los datos."}</div>}
                 {!loading && !error && (
-                     <div className="max-w-7xl mx-auto">
-                        {Object.entries(groupedProducts).map(([linea, prods]) => (
-                            <div key={linea} className="mb-10 bg-white shadow-lg rounded-lg overflow-hidden">
-                                <div className={`p-4 text-white text-center ${lineaColors[linea] || 'bg-gray-500'}`}>
-                                    <h2 className="text-2xl font-bold tracking-wider uppercase">{linea}</h2>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-gray-50">
-                                            <tr>
-                                                <th className="p-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[50%]">Producto</th>
-                                                <th className="p-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-[25%]">Lote Mín.</th>
-                                                <th className="p-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-[25%]">Precio</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-200">
-                                            {/* Cast 'prods' to 'ListaPrecioItem[]' because Object.entries widens the value type to 'unknown'. */}
-                                            {(prods as ListaPrecioItem[]).map(producto => (
-                                                <tr key={producto.productoId}>
-                                                    <td className="p-3 align-middle font-medium text-gray-800">{producto.productoNombre}</td>
-                                                    <td className="p-3 text-center align-middle font-semibold text-gray-700">{getLoteMinimo(clientListName)}</td>
-                                                    <td className="p-3 text-right align-middle font-bold text-lg text-primary">{formatPrice(producto.precio)}</td>
+                    <div className="flex flex-col lg:flex-row gap-8">
+                        <div className="lg:w-2/3">
+                            {Object.entries(groupedProducts).map(([linea, prods]) => (
+                                <div key={linea} className="mb-10 bg-white shadow-lg rounded-lg overflow-hidden">
+                                    <div className={`p-4 text-white text-center ${lineaColors[linea] || 'bg-gray-500'}`}><h2 className="text-2xl font-bold tracking-wider uppercase">{linea}</h2></div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="th-style w-[45%]">Producto</th>
+                                                    <th className="th-style w-[15%]">Cantidad</th>
+                                                    <th className="th-style text-center w-[20%]">Precio Unit.</th>
+                                                    <th className="th-style text-right w-[20%]">Total</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-200">
+                                                {(prods as ClientProduct[]).map(product => {
+                                                    const quantity = quantities[product.id] || 0;
+                                                    const currentPrice = getDynamicPrice(product, quantity);
+                                                    const lineTotal = currentPrice * quantity;
+                                                    return (
+                                                        <tr key={product.id}>
+                                                            <td className="p-3 align-middle font-medium text-gray-800">{product.nombre}</td>
+                                                            <td className="p-3 align-middle">
+                                                                <input type="number" value={quantity} onChange={e => handleQuantityChange(product.id, e.target.value)} min="0" className="w-20 text-center font-semibold text-gray-800 border-2 border-gray-200 rounded-md p-2 focus:ring-primary focus:border-primary transition" />
+                                                            </td>
+                                                            <td className="p-3 text-center align-middle font-semibold text-gray-700">{formatPrice(currentPrice)}</td>
+                                                            <td className="p-3 text-right align-middle font-bold text-lg text-primary">{formatPrice(lineTotal)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
+                            ))}
+                        </div>
+                        <div className="lg:w-1/3">
+                            <div className="sticky top-8 bg-white p-6 rounded-lg shadow-lg">
+                                <h3 className="text-2xl font-bold text-gray-800 mb-4 flex items-center"><IconShoppingCart className="h-6 w-6 mr-2 text-primary"/> Resumen de Pedido</h3>
+                                <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
+                                    {orderItems.length > 0 ? orderItems.map(item => item && (
+                                        <div key={item.id} className="flex justify-between items-center text-sm border-b pb-1">
+                                            <div>
+                                                <p className="font-semibold text-gray-700">{item.nombre}</p>
+                                                <p className="text-gray-500">{item.quantity} u. x {formatPrice(item.currentPrice)}</p>
+                                            </div>
+                                            <p className="font-semibold">{formatPrice(item.lineTotal)}</p>
+                                        </div>
+                                    )) : <p className="text-gray-500 text-center py-4">Agrega productos a tu pedido.</p>}
+                                </div>
+                                <div className="mt-4 pt-4 border-t-2 border-dashed">
+                                    <div className="flex justify-between font-bold text-2xl text-gray-800">
+                                        <span>Subtotal:</span>
+                                        <span>{formatPrice(subtotal)}</span>
+                                    </div>
+                                </div>
+                                <button onClick={() => alert('¡Funcionalidad de envío de pedidos próximamente!')} disabled={orderItems.length === 0} className="w-full mt-6 bg-primary text-white py-3 rounded-lg shadow-md hover:bg-primary-dark transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-lg">
+                                    Realizar Pedido
+                                </button>
                             </div>
-                        ))}
+                        </div>
                     </div>
                 )}
             </main>
+             <style>{`.th-style { padding: 0.75rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: #4B5563; text-transform: uppercase; letter-spacing: 0.05em; }`}</style>
         </div>
     );
 };

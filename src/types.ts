@@ -72,6 +72,9 @@ export interface Producto {
   imagenUrl: string | null;
   costoInsumos: number;
   linea: string | null;
+  // FIX: Add dynamic pricing fields.
+  cantidadMinimaComercio?: number | null;
+  cantidadMinimaMayorista?: number | null;
   // COMEX fields
   boxLengthCm?: number | null;
   boxWidthCm?: number | null;
@@ -238,7 +241,8 @@ export interface TransferenciaStock {
     cantidad: number;
     usuarioEmail: string;
     notas: string | null;
-    numeroLote: string | null;
+    // FIX: Add lot number for transfer history.
+    numeroLote?: string | null;
 }
 
 // Type for COMEX access requests
@@ -251,4 +255,16 @@ export interface AccessRequest {
     country: string;
     message: string | null;
     status: 'pending' | 'approved' | 'rejected';
+}
+
+// Types for Product Statistics Page
+export interface ProductoEstadistica {
+  id: string;
+  nombre: string;
+  ventasMesActual: number;
+  ventasTotales: number;
+  costoTotalUnitario: number;
+  gananciaPublico: number;
+  gananciaComercio: number;
+  gananciaMayorista: number;
 }

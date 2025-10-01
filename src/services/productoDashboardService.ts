@@ -1,5 +1,4 @@
 import { supabase } from '../supabase';
-// FIX: Import DashboardData from the shared types file to ensure consistency.
 import { Producto, StockPorDeposito, DashboardData, InsumoConCosto } from '../types';
 import { fetchProductosConStock } from './productosService';
 

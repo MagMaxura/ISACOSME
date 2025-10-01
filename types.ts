@@ -72,6 +72,9 @@ export interface Producto {
   imagenUrl: string | null;
   costoInsumos: number;
   linea: string | null;
+  // FIX: Add dynamic pricing fields.
+  cantidadMinimaComercio?: number | null;
+  cantidadMinimaMayorista?: number | null;
   // COMEX fields
   boxLengthCm?: number | null;
   boxWidthCm?: number | null;
