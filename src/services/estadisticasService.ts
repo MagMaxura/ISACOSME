@@ -11,9 +11,9 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
             // Handle function not found error
              if (error.message?.includes('function get_product_statistics does not exist')) {
                 throw {
-                    message: "La función 'get_product_statistics' no existe en la base de datos.",
-                    details: "Esta función es necesaria para calcular y mostrar las estadísticas de ventas y ganancias por producto.",
-                    hint: "Un administrador debe ejecutar el script SQL proporcionado para crear esta función.",
+                    message: "La función 'get_product_statistics' no existe o está desactualizada.",
+                    details: "Esta función es necesaria para calcular las estadísticas. La versión actual en la app incluye nuevos campos para la ganancia unitaria.",
+                    hint: "Un administrador debe ejecutar el script SQL proporcionado para crear o actualizar esta función.",
                     sql: `CREATE OR REPLACE FUNCTION get_product_statistics()
 RETURNS TABLE (
     id uuid,
@@ -21,9 +21,12 @@ RETURNS TABLE (
     ventas_mes_actual bigint,
     ventas_totales bigint,
     costo_total_unitario numeric,
-    ganancia_publico numeric,
-    ganancia_comercio numeric,
-    ganancia_mayorista numeric
+    ganancia_total_publico numeric,
+    ganancia_total_comercio numeric,
+    ganancia_total_mayorista numeric,
+    ganancia_unitaria_publico numeric,
+    ganancia_unitaria_comercio numeric,
+    ganancia_unitaria_mayorista numeric
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -49,10 +52,13 @@ BEGIN
         p.nombre,
         COALESCE(sa.month_sold, 0)::bigint,
         COALESCE(sa.total_sold, 0)::bigint,
-        (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))::numeric,
-        (p.precio_publico - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0),
-        (p.precio_comercio - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0),
-        (p.precio_mayorista - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0)
+        (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))::numeric AS costo_total_unitario,
+        (p.precio_publico - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_publico,
+        (p.precio_comercio - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_comercio,
+        (p.precio_mayorista - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_mayorista,
+        (p.precio_publico - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_publico,
+        (p.precio_comercio - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_comercio,
+        (p.precio_mayorista - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_mayorista
     FROM
         public.productos p
     LEFT JOIN
@@ -74,9 +80,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;`
             ventasMesActual: item.ventas_mes_actual,
             ventasTotales: item.ventas_totales,
             costoTotalUnitario: item.costo_total_unitario,
-            gananciaPublico: item.ganancia_publico,
-            gananciaComercio: item.ganancia_comercio,
-            gananciaMayorista: item.ganancia_mayorista,
+            gananciaTotalPublico: item.ganancia_total_publico,
+            gananciaTotalComercio: item.ganancia_total_comercio,
+            gananciaTotalMayorista: item.ganancia_total_mayorista,
+            gananciaUnitariaPublico: item.ganancia_unitaria_publico,
+            gananciaUnitariaComercio: item.ganancia_unitaria_comercio,
+            gananciaUnitariaMayorista: item.ganancia_unitaria_mayorista,
         }));
 
     } catch (error: any) {

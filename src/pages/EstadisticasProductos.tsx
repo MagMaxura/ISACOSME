@@ -34,9 +34,9 @@ const EstadisticasProductos: React.FC = () => {
         { header: 'Ventas (Mes)', accessor: 'ventasMesActual', render: (item) => `${item.ventasMesActual} u.` },
         { header: 'Ventas (Total)', accessor: 'ventasTotales', render: (item) => `${item.ventasTotales} u.` },
         { header: 'Costo Unitario', accessor: 'costoTotalUnitario', render: (item) => formatPrice(item.costoTotalUnitario) },
-        { header: 'Ganancia (Público)', accessor: 'gananciaPublico', render: (item) => <span className="font-semibold text-green-700">{formatPrice(item.gananciaPublico)}</span> },
-        { header: 'Ganancia (Comercio)', accessor: 'gananciaComercio', render: (item) => <span className="font-semibold text-green-600">{formatPrice(item.gananciaComercio)}</span> },
-        { header: 'Ganancia (Mayorista)', accessor: 'gananciaMayorista', render: (item) => <span className="font-semibold text-green-500">{formatPrice(item.gananciaMayorista)}</span> },
+        { header: 'Ganancia Unitaria (Público)', accessor: 'gananciaUnitariaPublico', render: (item) => <span className="font-semibold text-green-700">{formatPrice(item.gananciaUnitariaPublico)}</span> },
+        { header: 'Ganancia Unitaria (Comercio)', accessor: 'gananciaUnitariaComercio', render: (item) => <span className="font-semibold text-green-600">{formatPrice(item.gananciaUnitariaComercio)}</span> },
+        { header: 'Ganancia Unitaria (Mayorista)', accessor: 'gananciaUnitariaMayorista', render: (item) => <span className="font-semibold text-green-500">{formatPrice(item.gananciaUnitariaMayorista)}</span> },
     ];
 
     const filteredStats = useMemo(() =>
@@ -65,7 +65,7 @@ const EstadisticasProductos: React.FC = () => {
             <Table columns={columns} data={filteredStats} isLoading={loading} />
             
             <p className="text-xs text-gray-500 mt-4">
-                Nota: Las ganancias son teóricas y se calculan multiplicando la ganancia por unidad de cada categoría de precio por el total de unidades vendidas. No reflejan la ganancia real basada en los precios de venta individuales. El costo unitario se basa en el costo de insumos más el costo de laboratorio del último lote producido.
+                Nota: Las ganancias unitarias son teóricas y se calculan como la diferencia entre el precio de lista de cada categoría y el costo unitario total. El costo unitario se basa en el costo de insumos más el costo de laboratorio del último lote producido.
             </p>
         </div>
     );
