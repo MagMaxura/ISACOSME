@@ -92,12 +92,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 details: "Su cuenta de autenticación existe, pero no tiene un registro de perfil correspondiente en la base de datos (tabla 'profiles'). Esto suele ocurrir si el usuario se registró antes de que el disparador de base de datos (trigger) 'handle_new_user' estuviera configurado correctamente.",
                 hint: `SOLUCIÓN PARA ADMINISTRADORES: Vaya al 'Table Editor' en su dashboard de Supabase. Seleccione la tabla 'profiles' y añada manualmente una fila. Use el ID '${userId}' para la columna 'id' y asigne los roles correctos (ej: ['superadmin']) en la columna 'roles'.`
             });
-        } else if (err.message && err.message.includes('Failed to fetch')) {
-             console.warn('[AuthContext:fetchProfile] A "Failed to fetch" error occurred, likely masking a database RLS recursion error.');
+        } else if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('infinite recursion'))) {
+             console.warn('[AuthContext:fetchProfile] A "Failed to fetch" or "infinite recursion" error occurred.');
             setError({
-                message: "Error de Red Ocultando un Error de Recursión de Base de Datos.",
-                details: "El error 'Failed to fetch' es un síntoma de un problema más profundo en el servidor. La base de datos está fallando al ejecutar su solicitud debido a una 'recursión infinita' en sus Políticas de Seguridad a Nivel de Fila (RLS). Esto sucede cuando una política en la tabla 'profiles' intenta leer de la misma tabla para verificar un permiso, creando un bucle sin fin que bloquea el servidor.",
-                hint: "SOLUCIÓN PARA ADMINISTRADORES: La única solución es corregir las políticas en la base de datos. Se necesita un nuevo script SQL que use una técnica más robusta ('SET LOCAL ROLE') para forzar el bypass de RLS y romper el bucle. Por favor, ejecute el script SQL que se le proporcionará para solucionar este problema de raíz."
+                message: "Error de Recursión en Políticas de Seguridad de la Base de Datos.",
+                details: "La base de datos está fallando al ejecutar su solicitud debido a una 'recursión infinita' en sus Políticas de Seguridad a Nivel de Fila (RLS). Esto sucede cuando una política en la tabla 'profiles' intenta leer de la misma tabla para verificar un permiso, creando un bucle sin fin que bloquea el servidor.",
+                hint: "SOLUCIÓN PARA ADMINISTRADORES: Ejecute el siguiente script SQL en su editor de SQL de Supabase para redefinir las políticas de seguridad de la tabla 'profiles' de forma segura y romper el bucle recursivo.",
+                sql: `-- This script fixes the "infinite recursion" error in Row Level Security (RLS) policies on the 'profiles' table.
+
+-- Step 1: Drop potentially problematic existing policies.
+-- Replace with your actual policy names if they are different.
+DROP POLICY IF EXISTS "Users can view their own profile." ON public.profiles;
+DROP POLICY IF EXISTS "Superadmins can view all profiles." ON public.profiles;
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.profiles;
+
+-- Step 2: Create a secure helper function to check roles.
+-- This function runs with elevated privileges (SECURITY DEFINER) to bypass RLS, thus breaking the recursion loop.
+CREATE OR REPLACE FUNCTION user_has_role(role_to_check TEXT)
+RETURNS BOOLEAN AS $$
+DECLARE
+  has_role BOOLEAN;
+BEGIN
+  SELECT role_to_check = ANY(roles)
+  INTO has_role
+  FROM public.profiles
+  WHERE id = auth.uid();
+  RETURN COALESCE(has_role, FALSE);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Step 3: Re-create the policies using the secure helper function.
+
+-- Policy 1: Authenticated users can see their own profile.
+CREATE POLICY "Users can view their own profile." ON public.profiles
+FOR SELECT
+TO authenticated
+USING (auth.uid() = id);
+
+-- Policy 2: Users with the 'superadmin' role can see ALL profiles.
+CREATE POLICY "Superadmins can view all profiles." ON public.profiles
+FOR SELECT
+TO authenticated
+USING (user_has_role('superadmin'));`
             });
             setProfile(null);
         } else {

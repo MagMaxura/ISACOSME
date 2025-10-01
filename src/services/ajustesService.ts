@@ -31,6 +31,42 @@ export const fetchUmbrales = async (): Promise<Umbrales> => {
 
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error fetching thresholds:`, error);
+
+        if (error.message?.includes('infinite recursion')) {
+            throw {
+                message: "Error de Recursión en Políticas de Seguridad de la Base de Datos.",
+                details: `Se detectó un bucle infinito en una política de seguridad de la tabla 'profiles'. Esto ocurre cuando una política, para decidir si concede permiso, necesita leer de la misma tabla 'profiles', creando un ciclo sin fin que el servidor detiene.`,
+                hint: "SOLUCIÓN PARA ADMINISTRADORES: Ejecute el siguiente script SQL en su editor de SQL de Supabase para redefinir las políticas de seguridad de forma segura y romper el bucle.",
+                sql: `-- This script fixes the "infinite recursion" error in Row Level Security (RLS) policies on the 'profiles' table.
+
+-- Step 1: Drop potentially problematic existing policies.
+DROP POLICY IF EXISTS "Users can view their own profile." ON public.profiles;
+DROP POLICY IF EXISTS "Superadmins can view all profiles." ON public.profiles;
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.profiles;
+
+-- Step 2: Create a secure helper function to check roles.
+CREATE OR REPLACE FUNCTION user_has_role(role_to_check TEXT)
+RETURNS BOOLEAN AS $$
+DECLARE
+  has_role BOOLEAN;
+BEGIN
+  SELECT role_to_check = ANY(roles)
+  INTO has_role
+  FROM public.profiles
+  WHERE id = auth.uid();
+  RETURN COALESCE(has_role, FALSE);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Step 3: Re-create the policies using the secure helper function.
+CREATE POLICY "Users can view their own profile." ON public.profiles
+FOR SELECT TO authenticated USING (auth.uid() = id);
+
+CREATE POLICY "Superadmins can view all profiles." ON public.profiles
+FOR SELECT TO authenticated USING (user_has_role('superadmin'));`
+            };
+        }
+
         if (error.message?.includes('relation "public.ajustes_sistema" does not exist') || error.message?.includes("Could not find the table 'public.ajustes_sistema'")) {
             throw {
                 message: "La tabla 'ajustes_sistema' no existe en la base de datos.",
