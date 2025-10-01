@@ -115,6 +115,8 @@ export interface Cliente {
   fechaRegistro: string;
   // Joined field for display
   listaPrecioNombre?: string;
+  // FIX: Add 'totalComprado' property to resolve TypeScript errors in Clientes.tsx.
+  totalComprado?: number;
 }
 
 export interface VentaItem {

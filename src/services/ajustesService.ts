@@ -31,30 +31,37 @@ export const fetchUmbrales = async (): Promise<Umbrales> => {
 
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error fetching thresholds:`, error);
-        if (error.message?.includes('relation "public.ajustes_sistema" does not exist')) {
+        if (error.message?.includes('relation "public.ajustes_sistema" does not exist') || error.message?.includes("Could not find the table 'public.ajustes_sistema'")) {
             throw {
                 message: "La tabla 'ajustes_sistema' no existe en la base de datos.",
-                details: "Esta tabla es necesaria para guardar la configuración del sistema, como los umbrales de precios.",
+                details: "Esta tabla es necesaria para guardar la configuración del sistema, como los umbrales de precios para la categorización automática de clientes.",
                 hint: "Un administrador debe ejecutar el siguiente script SQL para crear la tabla y las funciones asociadas.",
                 sql: `
--- 1. Create the settings table
-CREATE TABLE public.ajustes_sistema (
+-- 1. Create the settings table idempotently
+CREATE TABLE IF NOT EXISTS public.ajustes_sistema (
     clave TEXT PRIMARY KEY,
     valor JSONB NOT NULL
 );
+
+-- 2. Enable RLS
 ALTER TABLE public.ajustes_sistema ENABLE ROW LEVEL SECURITY;
+
+-- 3. Recreate policies to avoid "already exists" errors
+DROP POLICY IF EXISTS "Superadmins can manage settings" ON public.ajustes_sistema;
 CREATE POLICY "Superadmins can manage settings" ON public.ajustes_sistema
 FOR ALL USING (auth.uid() IN (SELECT id FROM profiles WHERE 'superadmin' = ANY(roles)));
+
+DROP POLICY IF EXISTS "Authenticated users can read settings" ON public.ajustes_sistema;
 CREATE POLICY "Authenticated users can read settings" ON public.ajustes_sistema
 FOR SELECT TO authenticated USING (true);
 
--- 2. Seed default values
+-- 4. Seed default values safely
 INSERT INTO public.ajustes_sistema (clave, valor) VALUES
-('UMBRAL_COMERCIO', '150000'),
-('UMBRAL_MAYORISTA', '500000')
+('UMBRAL_COMERCIO', to_jsonb(150000)),
+('UMBRAL_MAYORISTA', to_jsonb(500000))
 ON CONFLICT(clave) DO NOTHING;
 
--- 3. Create the function to auto-upgrade clients
+-- 5. Create or replace the function to auto-upgrade clients
 CREATE OR REPLACE FUNCTION actualizar_categoria_cliente(p_cliente_id uuid)
 RETURNS void AS $$
 DECLARE
@@ -65,9 +72,9 @@ DECLARE
     lista_mayorista_id uuid;
     cliente_actual clientes%ROWTYPE;
 BEGIN
-    -- Get thresholds from settings, ensuring they are treated as numbers
-    SELECT (valor->>0)::numeric INTO umbral_comercio FROM ajustes_sistema WHERE clave = 'UMBRAL_COMERCIO';
-    SELECT (valor->>0)::numeric INTO umbral_mayorista FROM ajustes_sistema WHERE clave = 'UMBRAL_MAYORISTA';
+    -- Get thresholds from settings
+    SELECT valor::numeric INTO umbral_comercio FROM ajustes_sistema WHERE clave = 'UMBRAL_COMERCIO';
+    SELECT valor::numeric INTO umbral_mayorista FROM ajustes_sistema WHERE clave = 'UMBRAL_MAYORISTA';
 
     -- Get price list IDs
     SELECT id INTO lista_comercio_id FROM listas_de_precios WHERE lower(nombre) = 'comercio';
