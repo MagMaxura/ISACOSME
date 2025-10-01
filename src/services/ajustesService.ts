@@ -35,35 +35,62 @@ export const fetchUmbrales = async (): Promise<Umbrales> => {
         if (error.message?.includes('infinite recursion')) {
             throw {
                 message: "Error de Recursión en Políticas de Seguridad de la Base de Datos.",
-                details: `Se detectó un bucle infinito en una política de seguridad de la tabla 'profiles'. Esto ocurre cuando una política, para decidir si concede permiso, necesita leer de la misma tabla 'profiles', creando un ciclo sin fin que el servidor detiene.`,
-                hint: "SOLUCIÓN PARA ADMINISTRADORES: Ejecute el siguiente script SQL en su editor de SQL de Supabase para redefinir las políticas de seguridad de forma segura y romper el bucle.",
-                sql: `-- This script fixes the "infinite recursion" error in Row Level Security (RLS) policies on the 'profiles' table.
+                details: `Se detectó un bucle infinito en una política de seguridad. Esto ocurre cuando una política (probablemente en la tabla 'ajustes_sistema') necesita leer de la tabla 'profiles' para verificar permisos, creando un ciclo sin fin que el servidor detiene.`,
+                hint: "SOLUCIÓN PARA ADMINISTRADORES: Ejecute este script SQL completo en su editor de Supabase. Arregla las políticas en TODAS las tablas relevantes para romper el bucle recursivo de forma definitiva.",
+                sql: `-- Este script soluciona los errores persistentes de "recursión infinita"
+-- asegurando que TODAS las políticas que verifican roles de administrador
+-- usen una función auxiliar segura.
 
--- Step 1: Drop potentially problematic existing policies.
-DROP POLICY IF EXISTS "Users can view their own profile." ON public.profiles;
-DROP POLICY IF EXISTS "Superadmins can view all profiles." ON public.profiles;
-DROP POLICY IF EXISTS "Enable read access for all users" ON public.profiles;
-
--- Step 2: Create a secure helper function to check roles.
-CREATE OR REPLACE FUNCTION user_has_role(role_to_check TEXT)
-RETURNS BOOLEAN AS $$
+-- Paso 1: Asegurarse de que la función segura para verificar roles exista.
+-- Esta función es la clave para romper el bucle de recursión.
+CREATE OR REPLACE FUNCTION public.user_has_role(role_to_check text)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
 DECLARE
   has_role BOOLEAN;
 BEGIN
+  -- Esta consulta se ejecuta con los permisos del creador de la función,
+  -- evitando las políticas RLS del usuario actual y previniendo la recursión.
   SELECT role_to_check = ANY(roles)
   INTO has_role
   FROM public.profiles
   WHERE id = auth.uid();
   RETURN COALESCE(has_role, FALSE);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$function$;
 
--- Step 3: Re-create the policies using the secure helper function.
+-- Paso 2: Corregir las políticas en la tabla 'ajustes_sistema'.
+-- Esta es la tabla que está causando el error actual.
+
+-- Elimina la política antigua y problemática que consulta directamente la tabla 'profiles'.
+DROP POLICY IF EXISTS "Superadmins can manage settings" ON public.ajustes_sistema;
+
+-- Vuelve a crear la política de gestión, pero esta vez usando la función segura.
+CREATE POLICY "Superadmins can manage settings" ON public.ajustes_sistema
+FOR ALL
+TO authenticated
+USING (user_has_role('superadmin'));
+-- Nota: La política de lectura para todos los usuarios autenticados no es problemática y se mantiene.
+
+
+-- Paso 3: Volver a aplicar las políticas correctas en la tabla 'profiles' por si acaso.
+-- Esto asegura que toda la configuración de seguridad sea consistente y robusta.
+DROP POLICY IF EXISTS "Users can view their own profile." ON public.profiles;
+DROP POLICY IF EXISTS "Superadmins can view all profiles." ON public.profiles;
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.profiles;
+
 CREATE POLICY "Users can view their own profile." ON public.profiles
-FOR SELECT TO authenticated USING (auth.uid() = id);
+FOR SELECT
+TO authenticated
+USING (auth.uid() = id);
 
 CREATE POLICY "Superadmins can view all profiles." ON public.profiles
-FOR SELECT TO authenticated USING (user_has_role('superadmin'));`
+FOR SELECT
+TO authenticated
+USING (user_has_role('superadmin'));
+`
             };
         }
 
