@@ -53,12 +53,12 @@ BEGIN
         COALESCE(sa.month_sold, 0)::bigint,
         COALESCE(sa.total_sold, 0)::bigint,
         (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))::numeric AS costo_total_unitario,
-        (p.precio_publico - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_publico,
-        (p.precio_comercio - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_comercio,
-        (p.precio_mayorista - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_mayorista,
-        (p.precio_publico - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_publico,
-        (p.precio_comercio - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_comercio,
-        (p.precio_mayorista - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_mayorista
+        (COALESCE(p.precio_publico, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_publico,
+        (COALESCE(p.precio_comercio, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_comercio,
+        (COALESCE(p.precio_mayorista, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_mayorista,
+        (COALESCE(p.precio_publico, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_publico,
+        (COALESCE(p.precio_comercio, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_comercio,
+        (COALESCE(p.precio_mayorista, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_mayorista
     FROM
         public.productos p
     LEFT JOIN
@@ -77,15 +77,15 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;`
         return (data || []).map((item: any) => ({
             id: item.id,
             nombre: item.nombre,
-            ventasMesActual: item.ventas_mes_actual,
-            ventasTotales: item.ventas_totales,
-            costoTotalUnitario: item.costo_total_unitario,
-            gananciaTotalPublico: item.ganancia_total_publico,
-            gananciaTotalComercio: item.ganancia_total_comercio,
-            gananciaTotalMayorista: item.ganancia_total_mayorista,
-            gananciaUnitariaPublico: item.ganancia_unitaria_publico,
-            gananciaUnitariaComercio: item.ganancia_unitaria_comercio,
-            gananciaUnitariaMayorista: item.ganancia_unitaria_mayorista,
+            ventasMesActual: item.ventas_mes_actual ?? 0,
+            ventasTotales: item.ventas_totales ?? 0,
+            costoTotalUnitario: item.costo_total_unitario ?? 0,
+            gananciaTotalPublico: item.ganancia_total_publico ?? 0,
+            gananciaTotalComercio: item.ganancia_total_comercio ?? 0,
+            gananciaTotalMayorista: item.ganancia_total_mayorista ?? 0,
+            gananciaUnitariaPublico: item.ganancia_unitaria_publico ?? 0,
+            gananciaUnitariaComercio: item.ganancia_unitaria_comercio ?? 0,
+            gananciaUnitariaMayorista: item.ganancia_unitaria_mayorista ?? 0,
         }));
 
     } catch (error: any) {
