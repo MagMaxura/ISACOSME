@@ -6,6 +6,7 @@ import { IconPlus, IconX, IconPencil, IconTrash, IconBrandWhatsapp } from '@/com
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchClientes, createCliente, updateCliente, deleteCliente } from '@/services/clientesService';
 import { fetchListasDePrecios } from '@/services/preciosService';
+import { fetchUmbrales, Umbrales } from '@/services/ajustesService';
 import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
 // --- Cliente Modal Component ---
@@ -210,6 +211,7 @@ const Clientes: React.FC = () => {
     const { profile } = useAuth();
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [listasDePrecios, setListasDePrecios] = useState<ListMeta[]>([]);
+    const [umbrales, setUmbrales] = useState<Umbrales>({ comercio: 0, mayorista: 0 });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -222,12 +224,14 @@ const Clientes: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const [clientesData, listasData] = await Promise.all([
+            const [clientesData, listasData, umbralesData] = await Promise.all([
                 fetchClientes(),
-                fetchListasDePrecios()
+                fetchListasDePrecios(),
+                fetchUmbrales()
             ]);
             setClientes(clientesData);
             setListasDePrecios(listasData);
+            setUmbrales(umbralesData);
         } catch (err: any) {
             setError(err);
         } finally {
@@ -266,12 +270,29 @@ const Clientes: React.FC = () => {
         }
     };
     
+    const getCategory = (total: number): { name: string; color: string } => {
+        if (total >= umbrales.mayorista) return { name: 'Oro', color: 'bg-yellow-400 text-yellow-800' };
+        if (total >= umbrales.comercio) return { name: 'Plata', color: 'bg-gray-300 text-gray-800' };
+        return { name: 'Bronce', color: 'bg-yellow-600 text-white' };
+    };
+    
     const columns: Column<Cliente>[] = [
         { header: 'Comercio', accessor: 'nombre', render: (item) => <span className="font-semibold">{item.nombre}</span> },
+        {
+            header: 'Categoría',
+            accessor: 'totalComprado',
+            render: (item) => {
+                const category = getCategory(item.totalComprado || 0);
+                return <span className={`px-2 py-1 text-xs font-semibold rounded-full ${category.color}`}>{category.name}</span>;
+            }
+        },
+        {
+            header: 'Total Comprado',
+            accessor: 'totalComprado',
+            render: (item) => `$${(item.totalComprado || 0).toLocaleString('es-AR')}`
+        },
         { header: 'Email', accessor: 'email', render: (item) => item.email || 'N/A' },
         { header: 'Teléfono', accessor: 'telefono', render: (item) => item.telefono || 'N/A' },
-        { header: 'Rubro', accessor: 'rubro', render: (item) => item.rubro || 'N/A' },
-        { header: 'Descripción', accessor: 'descripcion', render: (item) => <p className="text-xs max-w-xs whitespace-normal">{item.descripcion || 'N/A'}</p> },
         { header: 'Lista de Precios', accessor: 'listaPrecioNombre' },
         { header: 'Acciones', accessor: 'id', render: (item) => (
             canManage && (

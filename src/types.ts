@@ -115,6 +115,8 @@ export interface Cliente {
   fechaRegistro: string;
   // Joined field for display
   listaPrecioNombre?: string;
+  // FIX: Add total purchased amount to fix type errors in Clientes.tsx.
+  totalComprado?: number;
 }
 
 export interface VentaItem {
@@ -241,7 +243,7 @@ export interface TransferenciaStock {
     cantidad: number;
     usuarioEmail: string;
     notas: string | null;
-    // FIX: Add lot number for transfer history.
+    // FIX: Add numeroLote to fix type errors in TransferenciasStock.tsx.
     numeroLote?: string | null;
 }
 
