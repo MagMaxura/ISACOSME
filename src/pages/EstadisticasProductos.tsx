@@ -29,14 +29,25 @@ const EstadisticasProductos: React.FC = () => {
         loadStats();
     }, []);
     
+    const ProfitCell: React.FC<{ profit: number; cost: number }> = ({ profit, cost }) => {
+        const percentage = cost > 0 ? (profit / cost) * 100 : 0;
+        const colorClass = profit >= 0 ? 'text-green-600' : 'text-red-600';
+
+        return (
+            <span className={`font-semibold ${colorClass}`}>
+                {formatPrice(profit)} ({percentage.toFixed(1)}%)
+            </span>
+        );
+    };
+
     const columns: Column<ProductoEstadistica>[] = [
         { header: 'Producto', accessor: 'nombre', render: (item) => <span className="font-semibold">{item.nombre}</span> },
         { header: 'Ventas (Mes)', accessor: 'ventasMesActual', render: (item) => `${item.ventasMesActual} u.` },
         { header: 'Ventas (Total)', accessor: 'ventasTotales', render: (item) => `${item.ventasTotales} u.` },
         { header: 'Costo Unitario', accessor: 'costoTotalUnitario', render: (item) => formatPrice(item.costoTotalUnitario) },
-        { header: 'Ganancia Unitaria (Público)', accessor: 'gananciaUnitariaPublico', render: (item) => <span className="font-semibold text-green-700">{formatPrice(item.gananciaUnitariaPublico)}</span> },
-        { header: 'Ganancia Unitaria (Comercio)', accessor: 'gananciaUnitariaComercio', render: (item) => <span className="font-semibold text-green-600">{formatPrice(item.gananciaUnitariaComercio)}</span> },
-        { header: 'Ganancia Unitaria (Mayorista)', accessor: 'gananciaUnitariaMayorista', render: (item) => <span className="font-semibold text-green-500">{formatPrice(item.gananciaUnitariaMayorista)}</span> },
+        { header: 'Ganancia Unitaria (Público)', accessor: 'gananciaUnitariaPublico', render: (item) => <ProfitCell profit={item.gananciaUnitariaPublico} cost={item.costoTotalUnitario} /> },
+        { header: 'Ganancia Unitaria (Comercio)', accessor: 'gananciaUnitariaComercio', render: (item) => <ProfitCell profit={item.gananciaUnitariaComercio} cost={item.costoTotalUnitario} /> },
+        { header: 'Ganancia Unitaria (Mayorista)', accessor: 'gananciaUnitariaMayorista', render: (item) => <ProfitCell profit={item.gananciaUnitariaMayorista} cost={item.costoTotalUnitario} /> },
     ];
 
     const filteredStats = useMemo(() =>
@@ -65,7 +76,7 @@ const EstadisticasProductos: React.FC = () => {
             <Table columns={columns} data={filteredStats} isLoading={loading} />
             
             <p className="text-xs text-gray-500 mt-4">
-                Nota: Las ganancias unitarias son teóricas y se calculan como la diferencia entre el precio de lista de cada categoría y el costo unitario total. El costo unitario se basa en el costo de insumos más el costo de laboratorio del último lote producido.
+                Nota: La ganancia unitaria es la diferencia entre el precio de lista y el costo unitario total. El costo unitario se basa en el costo de insumos más el costo de laboratorio del último lote producido. El porcentaje de ganancia se calcula sobre el costo.
             </p>
         </div>
     );

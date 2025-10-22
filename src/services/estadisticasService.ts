@@ -12,7 +12,7 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
              if (error.message?.includes('function get_product_statistics does not exist')) {
                 throw {
                     message: "La función 'get_product_statistics' no existe o está desactualizada.",
-                    details: "Esta función es necesaria para calcular las estadísticas. La versión actual en la app incluye nuevos campos para la ganancia unitaria.",
+                    details: "Esta función es necesaria para calcular las estadísticas de rentabilidad de los productos.",
                     hint: "Un administrador debe ejecutar el script SQL proporcionado para crear o actualizar esta función.",
                     sql: `CREATE OR REPLACE FUNCTION get_product_statistics()
 RETURNS TABLE (
@@ -21,9 +21,6 @@ RETURNS TABLE (
     ventas_mes_actual bigint,
     ventas_totales bigint,
     costo_total_unitario numeric,
-    ganancia_total_publico numeric,
-    ganancia_total_comercio numeric,
-    ganancia_total_mayorista numeric,
     ganancia_unitaria_publico numeric,
     ganancia_unitaria_comercio numeric,
     ganancia_unitaria_mayorista numeric
@@ -50,12 +47,9 @@ BEGIN
     SELECT
         p.id,
         p.nombre,
-        COALESCE(sa.month_sold, 0)::bigint,
-        COALESCE(sa.total_sold, 0)::bigint,
+        COALESCE(sa.month_sold, 0)::bigint AS ventas_mes_actual,
+        COALESCE(sa.total_sold, 0)::bigint AS ventas_totales,
         (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))::numeric AS costo_total_unitario,
-        (COALESCE(p.precio_publico, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_publico,
-        (COALESCE(p.precio_comercio, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_comercio,
-        (COALESCE(p.precio_mayorista, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))) * COALESCE(sa.total_sold, 0) AS ganancia_total_mayorista,
         (COALESCE(p.precio_publico, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_publico,
         (COALESCE(p.precio_comercio, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_comercio,
         (COALESCE(p.precio_mayorista, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_mayorista
@@ -80,9 +74,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;`
             ventasMesActual: item.ventas_mes_actual ?? 0,
             ventasTotales: item.ventas_totales ?? 0,
             costoTotalUnitario: item.costo_total_unitario ?? 0,
-            gananciaTotalPublico: item.ganancia_total_publico ?? 0,
-            gananciaTotalComercio: item.ganancia_total_comercio ?? 0,
-            gananciaTotalMayorista: item.ganancia_total_mayorista ?? 0,
+            // These total profit fields are no longer returned by the updated RPC,
+            // but we keep them in the mapping to satisfy the type, though they will be 0.
+            // The UI will use the unit profit fields instead.
+            gananciaTotalPublico: 0, 
+            gananciaTotalComercio: 0,
+            gananciaTotalMayorista: 0,
             gananciaUnitariaPublico: item.ganancia_unitaria_publico ?? 0,
             gananciaUnitariaComercio: item.ganancia_unitaria_comercio ?? 0,
             gananciaUnitariaMayorista: item.ganancia_unitaria_mayorista ?? 0,

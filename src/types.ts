@@ -61,6 +61,11 @@ export interface StockPorDeposito {
     lotes: Lote[];
 }
 
+export interface GaleriaImagen {
+  id: string;
+  url: string;
+}
+
 export interface Producto {
   id: string;
   codigoBarras: string | null;
@@ -72,7 +77,6 @@ export interface Producto {
   imagenUrl: string | null;
   costoInsumos: number;
   linea: string | null;
-  // FIX: Add dynamic pricing fields.
   cantidadMinimaComercio?: number | null;
   cantidadMinimaMayorista?: number | null;
   // COMEX fields
@@ -87,6 +91,7 @@ export interface Producto {
   lotes: Lote[]; // All lots for the product
   stockPorDeposito: StockPorDeposito[]; // Detailed stock breakdown
   insumos: ProductoInsumo[];
+  imagenesGaleria: GaleriaImagen[];
 }
 
 // A simplified version for selections
