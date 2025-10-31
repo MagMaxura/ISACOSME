@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from '../supabase';
 import { OrderItem } from '@/components/CheckoutModal';
 
 const SERVICE_NAME = 'MercadoPagoService';
@@ -18,7 +18,7 @@ interface PayerInfo {
  * Creates a Mercado Pago payment preference by invoking a Supabase Edge Function.
  * This is the secure way to handle payments, as the access token is never exposed to the client.
  *
- * @param {OrderItem[]} orderItems - The items in the user's cart.
+ * @param {OrderItem[]} orderItems - The user's cart.
  * @param {PayerInfo} payerInfo - The guest user's contact and shipping information.
  * @returns {Promise<string>} The init_point URL from Mercado Pago to redirect the user to.
  */
@@ -40,8 +40,6 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
         surname: payerInfo.surname,
         email: payerInfo.email,
         phone: {
-            // Mercado Pago requires area_code and number separately.
-            // We'll make a simple assumption here. This should be improved with a proper phone number parser if needed.
             area_code: "54",
             number: payerInfo.phone,
         },
@@ -58,9 +56,8 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
 
     try {
         // 3. Invoke the Supabase Edge Function
-        // The function 'create-mercadopago-preference' must be deployed in your Supabase project.
-        // It should take `{ items, payer }` as the body and return `{ init_point: '...' }`.
-        const { data, error } = await supabase.functions.invoke('create-mercadopago-preference', {
+        // The function name is changed to match the deployed function from the user's image.
+        const { data, error } = await supabase.functions.invoke('mercadopago-proxy', {
             body: { items: mpItems, payer: mpPayer },
         });
 
@@ -69,13 +66,20 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             if (error.message.includes('Function not found')) {
                  throw new Error('La función de pago en el servidor no está disponible. Contacta al administrador.');
             }
+            // Try to parse the function's error message if available
+            try {
+                const functionError = JSON.parse(error.context.text);
+                if(functionError.error) throw new Error(functionError.error);
+            } catch(e) {
+                // Do nothing if parsing fails, throw original error
+            }
             throw new Error(`Error al contactar el servicio de pago: ${error.message}`);
         }
 
         // 4. Validate the response and return the payment URL
         if (!data || !data.init_point) {
             console.error(`[${SERVICE_NAME}] Invalid response from payment function:`, data);
-            throw new Error('El servicio de pago no devolvió un link válido. Intenta de nuevo más tarde.');
+            throw new Error(data.error || 'El servicio de pago no devolvió un link válido. Intenta de nuevo más tarde.');
         }
         
         console.log(`[${SERVICE_NAME}] Successfully created preference. Redirecting to Mercado Pago.`);
