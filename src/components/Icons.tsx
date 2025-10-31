@@ -155,3 +155,31 @@ export const IconScale: React.FC<IconProps> = (props) => (
         <path d="M21 12l-3 -6l-3 6a3 3 0 0 0 6 0" />
     </svg>
 );
+
+export const IconMercadoPago: React.FC<IconProps> = (props) => (
+    <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+        <path d="M24.8354 28.3243C22.2575 29.4795 19.5298 29.206 17.5843 27.6186C16.8924 27.0694 16.3218 26.3775 15.9392 25.5786C15.8286 25.3289 16.0374 25.0792 16.3071 25.1741C18.2326 25.866 20.3201 25.6922 22.086 24.6062C24.3828 23.2205 25.1724 20.6726 24.1814 18.3958C23.7065 17.3098 22.7824 16.4873 21.6587 16.0847C21.369 15.9741 21.2741 15.6031 21.4829 15.3943C21.8439 15.0333 22.2465 14.7327 22.6808 14.483C24.8172 13.2578 27.4137 13.5622 29.2173 15.1179C31.5241 16.9922 32.0131 20.1438 30.567 22.7416C29.627 24.4172 27.9727 25.6842 26.0671 26.2434C26.0067 26.2634 25.9463 26.2833 25.8859 26.3033L24.8354 28.3243Z" fill="currentColor"/>
+    </svg>
+);
+
+// FIX: Add missing IconLayoutGrid for use in PublicPriceListPage.
+export const IconLayoutGrid: React.FC<IconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <rect x="3" y="3" width="7" height="7"></rect>
+        <rect x="14" y="3" width="7" height="7"></rect>
+        <rect x="14" y="14" width="7" height="7"></rect>
+        <rect x="3" y="14" width="7" height="7"></rect>
+    </svg>
+);
+
+// FIX: Add missing IconList for use in PublicPriceListPage.
+export const IconList: React.FC<IconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <line x1="8" y1="6" x2="21" y2="6"></line>
+        <line x1="8" y1="12" x2="21" y2="12"></line>
+        <line x1="8" y1="18" x2="21" y2="18"></line>
+        <line x1="3" y1="6" x2="3.01" y2="6"></line>
+        <line x1="3" y1="12" x2="3.01" y2="12"></line>
+        <line x1="3" y1="18" x2="3.01" y2="18"></line>
+    </svg>
+);

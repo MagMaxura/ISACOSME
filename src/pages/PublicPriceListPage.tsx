@@ -3,7 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Producto } from '@/types';
 import { fetchPublicProductsList } from '@/services/productosService';
-import { IconPackage, IconShoppingCart } from '@/components/Icons';
+import { IconPackage, IconShoppingCart, IconList, IconLayoutGrid } from '@/components/Icons';
+import CheckoutModal from '@/components/CheckoutModal';
+import { OrderItem } from '@/components/CheckoutModal';
 
 const PublicErrorDisplay = ({ error }: { error: any }) => {
     if (!error) return null;
@@ -39,6 +41,8 @@ const PublicPriceListPage: React.FC = () => {
     const [quantities, setQuantities] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any | null>(null);
+    const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     
     // Login form state (only used for public view)
     const [email, setEmail] = useState('');
@@ -46,7 +50,6 @@ const PublicPriceListPage: React.FC = () => {
     const [loginError, setLoginError] = useState<string | null>(null);
     const [loginLoading, setLoginLoading] = useState(false);
     const { login } = useAuth();
-    const navigate = useNavigate();
 
     const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -55,7 +58,6 @@ const PublicPriceListPage: React.FC = () => {
         try {
             const { error } = await login(email, password);
             if (error) throw error;
-            // On successful login, AuthProvider will re-render App.tsx and navigate away.
         } catch (err: any) {
             setLoginError(err.message || 'Credenciales incorrectas.');
         } finally {
@@ -97,15 +99,22 @@ const PublicPriceListPage: React.FC = () => {
     };
 
     const { orderItems, subtotal } = useMemo(() => {
-        const items = Object.keys(quantities)
+        const items: OrderItem[] = Object.keys(quantities)
             .filter(productId => quantities[productId] > 0)
             .map(productId => {
                 const qty = quantities[productId];
                 const product = productos.find(p => p.id === productId);
                 if (!product) return null;
                 const price = getDynamicPrice(product, qty);
-                return { ...product, quantity: qty, currentPrice: price, lineTotal: price * qty };
+                return { 
+                  id: product.id!, 
+                  nombre: product.nombre!, 
+                  quantity: qty, 
+                  unitPrice: price,
+                  lineTotal: price * qty
+                };
             }).filter((item): item is NonNullable<typeof item> => item !== null);
+
         const sub = items.reduce((acc, item) => acc + (item?.lineTotal || 0), 0);
         return { orderItems: items, subtotal: sub };
     }, [quantities, productos]);
@@ -129,86 +138,154 @@ const PublicPriceListPage: React.FC = () => {
     
     // --- Reusable content component ---
     const PriceListContent = (
-        <div className="flex flex-col lg:flex-row gap-8">
-            <div className="lg:w-2/3">
-                <h2 className="text-3xl font-bold text-center text-gray-700 mb-8">Lista de Precios al Público</h2>
-                {loading && <div className="text-center py-10">Cargando lista de precios...</div>}
-                {error && <PublicErrorDisplay error={error} />}
-                {!loading && !error && Object.entries(groupedProducts).map(([linea, prods]) => (
-                    <div key={linea} className="mb-10 bg-white shadow-lg rounded-lg overflow-hidden">
-                        <div className={`p-4 text-white text-center ${lineaColors[linea] || 'bg-gray-500'}`}>
-                            <h3 className="text-2xl font-bold tracking-wider uppercase">{linea}</h3>
-                        </div>
-                        
-                        {/* Desktop Header */}
-                        <div className="hidden md:flex bg-gray-50 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                            <div className="p-3 flex-1">Producto</div>
-                            <div className="p-3 w-28 text-center">Cantidad</div>
-                            <div className="p-3 w-32 text-center">Precio Unit.</div>
-                            <div className="p-3 w-32 text-right">Total</div>
-                        </div>
-
-                        <div className="divide-y divide-gray-200">
-                            {(prods as Partial<Producto>[]).map(product => {
-                                const quantity = quantities[product.id!] || 0;
-                                const currentPrice = getDynamicPrice(product, quantity);
-                                const lineTotal = currentPrice * quantity;
-                                return (
-                                <div key={product.id} className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 p-4">
-                                    {/* Product Info (takes up available space) */}
-                                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                                        {product.imagenUrl ? 
-                                            <img src={product.imagenUrl} alt={product.nombre} className="h-16 w-16 object-contain flex-shrink-0" /> : 
-                                            <div className="h-16 w-16 bg-gray-100 flex items-center justify-center rounded flex-shrink-0"><IconPackage className="h-8 w-8 text-gray-400" /></div>
-                                        }
-                                        <div className="flex-grow">
-                                            <p className="font-semibold text-gray-800">{product.nombre}</p>
-                                            <p className="text-gray-600 text-xs">{product.descripcion}</p>
-                                        </div>
-                                    </div>
-            
-                                    {/* Pricing & Actions */}
-                                    <div className="flex w-full md:w-auto items-center justify-between md:justify-end gap-2 md:gap-4 shrink-0 mt-4 md:mt-0">
-                                        <div className="w-28 text-center">
-                                            <label className="text-xs text-gray-500 font-semibold md:hidden">Cantidad</label>
-                                            <input type="number" value={quantity} onChange={e => handleQuantityChange(product.id!, e.target.value)} min="0" className="w-24 text-center font-semibold text-gray-800 border-2 border-gray-200 rounded-md p-2 focus:ring-primary focus:border-primary transition" />
-                                        </div>
-                                        <div className="w-32 text-center">
-                                            <label className="text-xs text-gray-500 font-semibold md:hidden">Precio Unit.</label>
-                                            <p className="font-semibold p-2">{formatPrice(currentPrice)}</p>
-                                        </div>
-                                        <div className="w-32 text-right">
-                                             <label className="text-xs text-gray-500 font-semibold md:hidden">Total</label>
-                                            <p className="font-bold text-lg text-primary p-2">{formatPrice(lineTotal)}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )})}
+        <>
+            <div className="flex flex-col lg:flex-row gap-8">
+                <div className="lg:w-2/3">
+                    <div className="flex justify-between items-center mb-8">
+                        <h2 className="text-3xl font-bold text-gray-700">Lista de Precios al Público</h2>
+                        <div className="flex items-center gap-1 p-1 bg-gray-200 rounded-lg">
+                            <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow' : 'text-gray-500 hover:bg-gray-300'}`} aria-label="Vista de lista">
+                                <IconList className="h-5 w-5" />
+                            </button>
+                            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow' : 'text-gray-500 hover:bg-gray-300'}`} aria-label="Vista de grilla">
+                                <IconLayoutGrid className="h-5 w-5" />
+                            </button>
                         </div>
                     </div>
-                ))}
-            </div>
-            <div className="lg:w-1/3">
-                <div className="sticky top-24 bg-white p-6 rounded-lg shadow-lg">
-                     <h3 className="text-2xl font-bold text-gray-800 mb-4 flex items-center"><IconShoppingCart className="h-6 w-6 mr-2 text-primary"/> Tu Pedido</h3>
-                     <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
-                         {orderItems.length > 0 ? orderItems.map(item => item && (
-                             <div key={item.id} className="flex justify-between items-center text-sm border-b pb-1">
-                                 <div><p className="font-semibold text-gray-700">{item.nombre}</p><p className="text-gray-500">{item.quantity} u. x {formatPrice(item.currentPrice)}</p></div>
-                                 <p className="font-semibold">{formatPrice(item.lineTotal)}</p>
-                             </div>
-                         )) : <p className="text-gray-500 text-center py-4">Añade productos para ver tu resumen.</p>}
-                     </div>
-                     <div className="mt-4 pt-4 border-t-2 border-dashed">
-                         <div className="flex justify-between font-bold text-2xl text-gray-800"><span>Subtotal:</span><span>{formatPrice(subtotal)}</span></div>
-                     </div>
-                     <button onClick={() => navigate('/register')} disabled={orderItems.length === 0} className="w-full mt-6 bg-secondary text-white py-3 rounded-lg shadow-md hover:bg-secondary-dark transition-colors disabled:bg-gray-400 font-semibold text-lg">
-                         Finalizar Pedido
-                     </button>
-                      <p className="text-xs text-center text-gray-500 mt-2">Debes registrarte para completar tu compra.</p>
+
+                    {loading && <div className="text-center py-10">Cargando lista de precios...</div>}
+                    {error && <PublicErrorDisplay error={error} />}
+
+                    {!loading && !error && (
+                        <div className="space-y-10">
+                            {Object.entries(groupedProducts).map(([linea, prods]) => (
+                                <div key={linea}>
+                                    <div className={`p-4 text-white text-center rounded-t-lg ${lineaColors[linea] || 'bg-gray-500'}`}>
+                                        <h3 className="text-2xl font-bold tracking-wider uppercase">{linea}</h3>
+                                    </div>
+                                    
+                                    {viewMode === 'list' ? (
+                                        <div className="bg-white shadow-lg rounded-b-lg overflow-hidden">
+                                            <div className="hidden md:flex bg-gray-50 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                                <div className="p-3 flex-1">Producto</div>
+                                                <div className="p-3 w-28 text-center">Cantidad</div>
+                                                <div className="p-3 w-32 text-center">Precio Unit.</div>
+                                                <div className="p-3 w-32 text-right">Total</div>
+                                            </div>
+                                            <div className="divide-y divide-gray-200">
+                                                {(prods as Partial<Producto>[]).map(product => {
+                                                    const quantity = quantities[product.id!] || 0;
+                                                    const currentPrice = getDynamicPrice(product, quantity);
+                                                    const lineTotal = currentPrice * quantity;
+                                                    return (
+                                                        <div key={product.id} className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 p-4">
+                                                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                                {product.imagenUrl ? <img src={product.imagenUrl} alt={product.nombre} className="h-16 w-16 object-contain flex-shrink-0" /> : <div className="h-16 w-16 bg-gray-100 flex items-center justify-center rounded flex-shrink-0"><IconPackage className="h-8 w-8 text-gray-400" /></div>}
+                                                                <div className="flex-grow">
+                                                                    <p className="font-semibold text-gray-800">{product.nombre}</p>
+                                                                    <p className="text-gray-600 text-xs">{product.descripcion}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex w-full md:w-auto items-center justify-between md:justify-end gap-2 md:gap-4 shrink-0 mt-4 md:mt-0">
+                                                                <div className="w-28 text-center">
+                                                                    <label className="text-xs text-gray-500 font-semibold md:hidden">Cantidad</label>
+                                                                    <input type="number" value={quantity} onChange={e => handleQuantityChange(product.id!, e.target.value)} min="0" className="w-24 text-center font-semibold text-gray-800 border-2 border-gray-200 rounded-md p-2 focus:ring-primary focus:border-primary transition" />
+                                                                </div>
+                                                                <div className="w-32 text-center">
+                                                                    <label className="text-xs text-gray-500 font-semibold md:hidden">Precio Unit.</label>
+                                                                    <p className="font-semibold p-2">{formatPrice(currentPrice)}</p>
+                                                                </div>
+                                                                <div className="w-32 text-right">
+                                                                    <label className="text-xs text-gray-500 font-semibold md:hidden">Total</label>
+                                                                    <p className="font-bold text-lg text-primary p-2">{formatPrice(lineTotal)}</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    ) : ( // GRID VIEW
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 pt-6">
+                                            {(prods as Partial<Producto>[]).map(product => {
+                                                const quantity = quantities[product.id!] || 0;
+                                                const currentPrice = getDynamicPrice(product, quantity);
+                                                const lineTotal = currentPrice * quantity;
+                                                return (
+                                                    <div key={product.id} className="bg-white shadow-lg rounded-lg overflow-hidden flex flex-col">
+                                                        <div className="h-48 flex items-center justify-center p-4 bg-gray-50">
+                                                            {product.imagenUrl ? 
+                                                                <img src={product.imagenUrl} alt={product.nombre} className="max-h-full max-w-full object-contain" /> : 
+                                                                <IconPackage className="h-16 w-16 text-gray-300" />
+                                                            }
+                                                        </div>
+                                                        <div className="p-4 flex flex-col flex-grow">
+                                                            <h4 className="font-semibold text-gray-800 text-lg">{product.nombre}</h4>
+                                                            <p className="text-gray-600 text-xs mt-1 flex-grow">{product.descripcion}</p>
+                                                            
+                                                            <div className="mt-4 pt-4 border-t">
+                                                                <div className="flex justify-between items-center mb-3">
+                                                                    <label htmlFor={`quantity-grid-${product.id}`} className="text-sm font-medium text-gray-700">Cantidad:</label>
+                                                                    <input 
+                                                                        id={`quantity-grid-${product.id}`}
+                                                                        type="number" 
+                                                                        value={quantity} 
+                                                                        onChange={e => handleQuantityChange(product.id!, e.target.value)} 
+                                                                        min="0" 
+                                                                        className="w-20 text-center font-semibold text-gray-800 border-2 border-gray-200 rounded-md p-2 focus:ring-primary focus:border-primary transition" 
+                                                                    />
+                                                                </div>
+                                                                <div className="flex justify-between items-center text-sm">
+                                                                    <span className="text-gray-500">Precio Unit.:</span>
+                                                                    <span className="font-semibold">{formatPrice(currentPrice)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center mt-2 text-lg">
+                                                                    <span className="font-bold text-gray-800">Total:</span>
+                                                                    <span className="font-bold text-primary">{formatPrice(lineTotal)}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="lg:w-1/3">
+                    <div className="sticky top-24 bg-white p-6 rounded-lg shadow-lg">
+                         <h3 className="text-2xl font-bold text-gray-800 mb-4 flex items-center"><IconShoppingCart className="h-6 w-6 mr-2 text-primary"/> Tu Pedido</h3>
+                         <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
+                             {orderItems.length > 0 ? orderItems.map(item => item && (
+                                 <div key={item.id} className="flex justify-between items-center text-sm border-b pb-1">
+                                     <div><p className="font-semibold text-gray-700">{item.nombre}</p><p className="text-gray-500">{item.quantity} u. x {formatPrice(item.unitPrice)}</p></div>
+                                     <p className="font-semibold">{formatPrice(item.lineTotal)}</p>
+                                 </div>
+                             )) : <p className="text-gray-500 text-center py-4">Añade productos para ver tu resumen.</p>}
+                         </div>
+                         <div className="mt-4 pt-4 border-t-2 border-dashed">
+                             <div className="flex justify-between font-bold text-2xl text-gray-800"><span>Subtotal:</span><span>{formatPrice(subtotal)}</span></div>
+                         </div>
+                         <button onClick={() => setIsCheckoutOpen(true)} disabled={orderItems.length === 0} className="w-full mt-6 bg-secondary text-white py-3 rounded-lg shadow-md hover:bg-secondary-dark transition-colors disabled:bg-gray-400 font-semibold text-lg">
+                             Finalizar Pedido
+                         </button>
+                          <p className="text-xs text-center text-gray-500 mt-2">Completa tus datos en el siguiente paso para pagar.</p>
+                    </div>
                 </div>
             </div>
-        </div>
+             {isCheckoutOpen && (
+                <CheckoutModal 
+                    isOpen={isCheckoutOpen}
+                    onClose={() => setIsCheckoutOpen(false)}
+                    orderItems={orderItems}
+                    subtotal={subtotal}
+                />
+            )}
+        </>
     );
 
     // --- Conditional Rendering based on auth state ---

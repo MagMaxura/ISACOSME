@@ -27,6 +27,8 @@ import Comex from './pages/Comex';
 import ComexRequestPage from './pages/ComexRequestPage';
 import ComexPendingPage from './pages/ComexPendingPage';
 import EstadisticasProductos from './pages/EstadisticasProductos';
+import PaymentSuccessPage from './pages/PaymentSuccessPage';
+import PaymentFailurePage from './pages/PaymentFailurePage';
 
 // Define roles for each route for clarity
 const routeConfig: { path: string; component: React.ReactElement; roles: AppRole[] }[] = [
@@ -65,6 +67,8 @@ const App: React.FC = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/lista-publica" element={<PublicPriceListPage />} />
           <Route path="/solicitud-comex" element={<ComexRequestPage />} />
+          <Route path="/payment-success" element={<PaymentSuccessPage />} />
+          <Route path="/payment-failure" element={<PaymentFailurePage />} />
           <Route path="*" element={<Navigate to="/lista-publica" />} />
         </Routes>
       </HashRouter>
