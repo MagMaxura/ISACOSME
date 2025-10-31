@@ -12,7 +12,7 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
              if (error.message?.includes('function get_product_statistics does not exist')) {
                 throw {
                     message: "La función 'get_product_statistics' no existe o está desactualizada.",
-                    details: "Esta función es necesaria para calcular las estadísticas de rentabilidad de los productos.",
+                    details: "Esta función es necesaria para calcular las estadísticas de rentabilidad de los productos. La versión actual en la app calcula los costos en tiempo real para mayor precisión.",
                     hint: "Un administrador debe ejecutar el script SQL proporcionado para crear o actualizar esta función.",
                     sql: `CREATE OR REPLACE FUNCTION get_product_statistics()
 RETURNS TABLE (
@@ -29,6 +29,7 @@ BEGIN
     RETURN QUERY
     WITH
     sales_agg AS (
+        -- Correctly aggregates sales data per product.
         SELECT
             vi.producto_id,
             SUM(vi.cantidad) AS total_sold,
@@ -38,27 +39,41 @@ BEGIN
         GROUP BY vi.producto_id
     ),
     recent_lab_cost AS (
+        -- Correctly gets the per-unit lab cost from the most recent production lot.
         SELECT DISTINCT ON (producto_id)
             producto_id,
             costo_laboratorio
         FROM public.lotes
         ORDER BY producto_id, created_at DESC
+    ),
+    insumo_costs_agg AS (
+        -- NEW: Calculate the current total insumo cost for each product in real-time.
+        SELECT
+            pi.producto_id,
+            SUM(pi.cantidad * i.costo) as total_insumo_cost
+        FROM public.productos_insumos pi
+        JOIN public.insumos i ON pi.insumo_id = i.id
+        GROUP BY pi.producto_id
     )
     SELECT
         p.id,
         p.nombre,
         COALESCE(sa.month_sold, 0)::bigint AS ventas_mes_actual,
         COALESCE(sa.total_sold, 0)::bigint AS ventas_totales,
-        (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0))::numeric AS costo_total_unitario,
-        (COALESCE(p.precio_publico, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_publico,
-        (COALESCE(p.precio_comercio, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_comercio,
-        (COALESCE(p.precio_mayorista, 0) - (COALESCE(p.costo_insumos,0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_mayorista
+        -- Corrected cost calculation: Use the dynamically calculated insumo cost + the recent lab cost.
+        (COALESCE(ica.total_insumo_cost, 0) + COALESCE(rlc.costo_laboratorio, 0))::numeric AS costo_total_unitario,
+        -- Corrected profit calculations using the new accurate total cost.
+        (COALESCE(p.precio_publico, 0) - (COALESCE(ica.total_insumo_cost, 0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_publico,
+        (COALESCE(p.precio_comercio, 0) - (COALESCE(ica.total_insumo_cost, 0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_comercio,
+        (COALESCE(p.precio_mayorista, 0) - (COALESCE(ica.total_insumo_cost, 0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_mayorista
     FROM
         public.productos p
     LEFT JOIN
         sales_agg sa ON p.id = sa.producto_id
     LEFT JOIN
         recent_lab_cost rlc ON p.id = rlc.producto_id
+    LEFT JOIN
+        insumo_costs_agg ica ON p.id = ica.producto_id
     ORDER BY
         p.nombre;
 END;
