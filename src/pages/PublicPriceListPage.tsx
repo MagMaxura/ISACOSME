@@ -177,6 +177,13 @@ const PublicPriceListPage: React.FC = () => {
                                                     const quantity = quantities[product.id!] || 0;
                                                     const currentPrice = getDynamicPrice(product, quantity);
                                                     const lineTotal = currentPrice * quantity;
+                                                    
+                                                    const publicPrice = product.precioPublico || 0;
+                                                    let discountPercent = 0;
+                                                    if (publicPrice > 0 && currentPrice < publicPrice) {
+                                                        discountPercent = ((publicPrice - currentPrice) / publicPrice) * 100;
+                                                    }
+
                                                     return (
                                                         <div key={product.id} className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 p-4">
                                                             <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -193,7 +200,14 @@ const PublicPriceListPage: React.FC = () => {
                                                                 </div>
                                                                 <div className="w-32 text-center">
                                                                     <label className="text-xs text-gray-500 font-semibold md:hidden">Precio Unit.</label>
-                                                                    <p className="font-semibold p-2">{formatPrice(currentPrice)}</p>
+                                                                    <div className="font-semibold p-2 flex items-center justify-center gap-1">
+                                                                        <span>{formatPrice(currentPrice)}</span>
+                                                                        {discountPercent > 0 && (
+                                                                            <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full" title={`Descuento por comprar ${quantity} o más unidades.`}>
+                                                                                -{discountPercent.toFixed(0)}%
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                                 <div className="w-32 text-right">
                                                                     <label className="text-xs text-gray-500 font-semibold md:hidden">Total</label>
@@ -211,6 +225,13 @@ const PublicPriceListPage: React.FC = () => {
                                                 const quantity = quantities[product.id!] || 0;
                                                 const currentPrice = getDynamicPrice(product, quantity);
                                                 const lineTotal = currentPrice * quantity;
+
+                                                const publicPrice = product.precioPublico || 0;
+                                                let discountPercent = 0;
+                                                if (publicPrice > 0 && currentPrice < publicPrice) {
+                                                    discountPercent = ((publicPrice - currentPrice) / publicPrice) * 100;
+                                                }
+
                                                 return (
                                                     <div key={product.id} className="bg-white shadow-lg rounded-lg overflow-hidden flex flex-col">
                                                         <div className="h-48 flex items-center justify-center p-4 bg-gray-50">
@@ -237,7 +258,14 @@ const PublicPriceListPage: React.FC = () => {
                                                                 </div>
                                                                 <div className="flex justify-between items-center text-sm">
                                                                     <span className="text-gray-500">Precio Unit.:</span>
-                                                                    <span className="font-semibold">{formatPrice(currentPrice)}</span>
+                                                                    <div className="font-semibold flex items-center gap-1">
+                                                                        <span>{formatPrice(currentPrice)}</span>
+                                                                        {discountPercent > 0 && (
+                                                                            <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full" title={`Descuento por comprar ${quantity} o más unidades.`}>
+                                                                                -{discountPercent.toFixed(0)}%
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                                 <div className="flex justify-between items-center mt-2 text-lg">
                                                                     <span className="font-bold text-gray-800">Total:</span>
