@@ -269,12 +269,12 @@ export interface ProductoEstadistica {
   id: string;
   nombre: string;
   ventasMesActual: number;
-  ventasTotales: number;
+  ventasAñoActual: number;
   costoTotalUnitario: number;
   precioPublico: number;
   precioComercio: number;
   precioMayorista: number;
-  gananciaUnitariaPublico: number;
-  gananciaUnitariaComercio: number;
-  gananciaUnitariaMayorista: number;
+  stockTotal: number;
+  tasaRotacion: number;
+  tasaVentasPromedio: number;
 }
