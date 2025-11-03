@@ -4,109 +4,108 @@ import { ProductoEstadistica } from '../types';
 const SERVICE_NAME = 'EstadisticasService';
 
 export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> => {
-    console.log(`[${SERVICE_NAME}] Fetching product statistics via RPC 'get_product_statistics_detailed'.`);
+    console.log(`[${SERVICE_NAME}] Fetching data for client-side statistics calculation.`);
     try {
-        const { data, error } = await supabase.rpc('get_product_statistics_detailed');
-        if (error) {
-            // Handle function not found error
-             if (error.message?.includes('function get_product_statistics_detailed does not exist')) {
-                throw {
-                    message: "La función 'get_product_statistics_detailed' no existe o está desactualizada.",
-                    details: "Esta función es necesaria para calcular las estadísticas de rentabilidad de los productos. La versión actual en la app calcula los costos en tiempo real y devuelve los precios para su edición.",
-                    hint: "Un administrador debe ejecutar el script SQL proporcionado para crear o actualizar esta función.",
-                    sql: `CREATE OR REPLACE FUNCTION get_product_statistics_detailed()
-RETURNS TABLE (
-    id uuid,
-    nombre text,
-    ventas_mes_actual bigint,
-    ventas_año_actual bigint,
-    costo_total_unitario numeric,
-    precio_publico numeric,
-    precio_comercio numeric,
-    precio_mayorista numeric,
-    stock_total bigint,
-    tasa_rotacion numeric,
-    tasa_ventas_promedio numeric
-) AS $$
-BEGIN
-    RETURN QUERY
-    WITH
-    sales_agg AS (
-        -- Aggregates sales data for different periods
-        SELECT
-            vi.producto_id,
-            SUM(CASE WHEN v.fecha >= date_trunc('month', CURRENT_DATE) THEN vi.cantidad ELSE 0 END) AS month_sold,
-            SUM(CASE WHEN v.fecha >= date_trunc('year', CURRENT_DATE) THEN vi.cantidad ELSE 0 END) AS year_sold,
-            SUM(CASE WHEN v.fecha >= (CURRENT_DATE - INTERVAL '90 days') THEN vi.cantidad ELSE 0 END) AS last_90_days_sold,
-            SUM(CASE WHEN v.fecha >= (CURRENT_DATE - INTERVAL '1 year') THEN vi.cantidad ELSE 0 END) AS last_12_months_sold
-        FROM public.venta_items vi
-        JOIN public.ventas v ON vi.venta_id = v.id
-        GROUP BY vi.producto_id
-    ),
-    cost_agg AS (
-        -- Calculates total unit cost from the most recent lab cost and current insumo costs
-        SELECT
-            p.id AS producto_id,
-            (
-                COALESCE((SELECT SUM(pi.cantidad * i.costo) FROM public.productos_insumos pi JOIN public.insumos i ON pi.insumo_id = i.id WHERE pi.producto_id = p.id), 0) +
-                COALESCE((SELECT rlc.costo_laboratorio FROM public.lotes rlc WHERE rlc.producto_id = p.id ORDER BY rlc.created_at DESC LIMIT 1), 0)
-            ) AS total_unit_cost
-        FROM public.productos p
-    ),
-    stock_agg AS (
-        -- Aggregates current total stock
-        SELECT
-            l.producto_id,
-            SUM(l.cantidad_actual) AS total_stock
-        FROM public.lotes l
-        GROUP BY l.producto_id
-    )
-    SELECT
-        p.id,
-        p.nombre,
-        COALESCE(sa.month_sold, 0)::bigint,
-        COALESCE(sa.year_sold, 0)::bigint,
-        COALESCE(ca.total_unit_cost, 0)::numeric,
-        p.precio_publico,
-        p.precio_comercio,
-        p.precio_mayorista,
-        COALESCE(sta.total_stock, 0)::bigint,
-        -- Inventory Turnover (Last 12 months sales / Current Stock)
-        CASE
-            WHEN COALESCE(sta.total_stock, 0) > 0 THEN (COALESCE(sa.last_12_months_sold, 0) / sta.total_stock::numeric)
-            ELSE 0
-        END::numeric,
-        -- Average Sales Rate (Units per month, based on last 90 days)
-        (COALESCE(sa.last_90_days_sold, 0) / 3.0)::numeric
-    FROM
-        public.productos p
-    LEFT JOIN sales_agg sa ON p.id = sa.producto_id
-    LEFT JOIN cost_agg ca ON p.id = ca.producto_id
-    LEFT JOIN stock_agg sta ON p.id = sta.producto_id
-    ORDER BY p.nombre;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;`
-                }
+        // 1. Fetch all necessary raw data in parallel
+        const [
+            { data: productos, error: productosError },
+            { data: ventaItems, error: ventaItemsError },
+            { data: lotes, error: lotesError },
+            { data: insumos, error: insumosError },
+            { data: productosInsumos, error: productosInsumosError },
+        ] = await Promise.all([
+            supabase.from('productos').select('id, nombre, precio_publico, precio_comercio, precio_mayorista'),
+            supabase.from('venta_items').select('producto_id, cantidad, ventas!inner(fecha)'),
+            supabase.from('lotes').select('producto_id, cantidad_actual, costo_laboratorio, created_at'),
+            supabase.from('insumos').select('id, costo'),
+            supabase.from('productos_insumos').select('producto_id, insumo_id, cantidad')
+        ]);
+
+        // Error handling for each fetch
+        if (productosError) throw productosError;
+        if (ventaItemsError) throw ventaItemsError;
+        if (lotesError) throw lotesError;
+        if (insumosError) throw insumosError;
+        if (productosInsumosError) throw productosInsumosError;
+
+        // --- Data Preparation ---
+        // Create maps for efficient lookups
+        const insumosCostMap = new Map(insumos.map(i => [i.id, i.costo]));
+
+        const productInsumosMap = new Map<string, { insumo_id: string; cantidad: number }[]>();
+        for (const pi of productosInsumos) {
+            if (!productInsumosMap.has(pi.producto_id)) {
+                productInsumosMap.set(pi.producto_id, []);
             }
-            throw error;
+            productInsumosMap.get(pi.producto_id)!.push({ insumo_id: pi.insumo_id, cantidad: pi.cantidad });
         }
+
+        const stats: ProductoEstadistica[] = productos.map(p => {
+            // --- Sales Calculations ---
+            const productSales = ventaItems.filter(vi => vi.producto_id === p.id);
+            let ventasMesActual = 0;
+            let ventasAñoActual = 0;
+            let last90DaysSold = 0;
+            let last12MonthsSold = 0;
+
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const startOfYear = new Date(now.getFullYear(), 0, 1);
+            const ninetyDaysAgo = new Date(new Date().setDate(now.getDate() - 90));
+            const twelveMonthsAgo = new Date(new Date().setFullYear(now.getFullYear() - 1));
+
+            for (const sale of productSales) {
+                // Supabase returns date strings in ISO 8601 format
+                const saleDate = new Date((sale.ventas as any).fecha);
+                if (saleDate >= startOfMonth) ventasMesActual += sale.cantidad;
+                if (saleDate >= startOfYear) ventasAñoActual += sale.cantidad;
+                if (saleDate >= ninetyDaysAgo) last90DaysSold += sale.cantidad;
+                if (saleDate >= twelveMonthsAgo) last12MonthsSold += sale.cantidad;
+            }
+
+            // --- Cost Calculation ---
+            const relatedInsumos = productInsumosMap.get(p.id) || [];
+            const insumosCost = relatedInsumos.reduce((acc, current) => {
+                const cost = insumosCostMap.get(current.insumo_id) || 0;
+                return acc + (cost * current.cantidad);
+            }, 0);
+
+            const productLotes = lotes
+                .filter(l => l.producto_id === p.id)
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            
+            const costoLaboratorioReciente = productLotes.length > 0 ? productLotes[0].costo_laboratorio : 0;
+            const costoTotalUnitario = insumosCost + costoLaboratorioReciente;
+
+            // --- Stock Calculation ---
+            // FIX: Ensure 'lote.cantidad_actual' is treated as a number to prevent TS2532 and runtime errors.
+            const stockTotal = productLotes.reduce((acc, lote) => acc + (lote.cantidad_actual || 0), 0);
+
+            // --- Advanced Stats ---
+            const tasaRotacion = stockTotal > 0 ? (last12MonthsSold / stockTotal) : 0;
+            const tasaVentasPromedio = last90DaysSold / 3.0;
+
+            return {
+                id: p.id,
+                nombre: p.nombre,
+                ventasMesActual: ventasMesActual,
+                ventasAñoActual: ventasAñoActual,
+                costoTotalUnitario: costoTotalUnitario,
+                precioPublico: p.precio_publico,
+                precioComercio: p.precio_comercio,
+                precioMayorista: p.precio_mayorista,
+                stockTotal: stockTotal,
+                tasaRotacion: tasaRotacion,
+                tasaVentasPromedio: tasaVentasPromedio,
+            };
+        });
         
-        return (data || []).map((item: any) => ({
-            id: item.id,
-            nombre: item.nombre,
-            ventasMesActual: item.ventas_mes_actual ?? 0,
-            ventasAñoActual: item.ventas_año_actual ?? 0,
-            costoTotalUnitario: item.costo_total_unitario ?? 0,
-            precioPublico: item.precio_publico ?? 0,
-            precioComercio: item.precio_comercio ?? 0,
-            precioMayorista: item.precio_mayorista ?? 0,
-            stockTotal: item.stock_total ?? 0,
-            tasaRotacion: item.tasa_rotacion ?? 0,
-            tasaVentasPromedio: item.tasa_ventas_promedio ?? 0,
-        }));
+        console.log(`[${SERVICE_NAME}] Successfully calculated statistics for ${stats.length} products on the client-side.`);
+        return stats.sort((a,b) => a.nombre.localeCompare(b.nombre));
 
     } catch (error: any) {
-        console.error(`[${SERVICE_NAME}] Error fetching product statistics:`, error);
-        throw error;
+        console.error(`[${SERVICE_NAME}] Error calculating product statistics on client-side:`, error);
+        // Provide a generic but useful error, since the RPC one is no longer relevant.
+        throw new Error(`No se pudieron cargar los datos para las estadísticas. Error: ${error.message}`);
     }
 };
