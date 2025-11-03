@@ -271,9 +271,9 @@ export interface ProductoEstadistica {
   ventasMesActual: number;
   ventasTotales: number;
   costoTotalUnitario: number;
-  gananciaTotalPublico: number;
-  gananciaTotalComercio: number;
-  gananciaTotalMayorista: number;
+  precioPublico: number;
+  precioComercio: number;
+  precioMayorista: number;
   gananciaUnitariaPublico: number;
   gananciaUnitariaComercio: number;
   gananciaUnitariaMayorista: number;

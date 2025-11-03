@@ -12,7 +12,7 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
              if (error.message?.includes('function get_product_statistics does not exist')) {
                 throw {
                     message: "La función 'get_product_statistics' no existe o está desactualizada.",
-                    details: "Esta función es necesaria para calcular las estadísticas de rentabilidad de los productos. La versión actual en la app calcula los costos en tiempo real para mayor precisión.",
+                    details: "Esta función es necesaria para calcular las estadísticas de rentabilidad de los productos. La versión actual en la app calcula los costos en tiempo real y devuelve los precios para su edición.",
                     hint: "Un administrador debe ejecutar el script SQL proporcionado para crear o actualizar esta función.",
                     sql: `CREATE OR REPLACE FUNCTION get_product_statistics()
 RETURNS TABLE (
@@ -21,6 +21,9 @@ RETURNS TABLE (
     ventas_mes_actual bigint,
     ventas_totales bigint,
     costo_total_unitario numeric,
+    precio_publico numeric,
+    precio_comercio numeric,
+    precio_mayorista numeric,
     ganancia_unitaria_publico numeric,
     ganancia_unitaria_comercio numeric,
     ganancia_unitaria_mayorista numeric
@@ -29,7 +32,7 @@ BEGIN
     RETURN QUERY
     WITH
     sales_agg AS (
-        -- Correctly aggregates sales data per product.
+        -- Aggregates sales data per product
         SELECT
             vi.producto_id,
             SUM(vi.cantidad) AS total_sold,
@@ -39,7 +42,7 @@ BEGIN
         GROUP BY vi.producto_id
     ),
     recent_lab_cost AS (
-        -- Correctly gets the per-unit lab cost from the most recent production lot.
+        -- Gets the per-unit lab cost from the most recent production lot
         SELECT DISTINCT ON (producto_id)
             producto_id,
             costo_laboratorio
@@ -47,7 +50,7 @@ BEGIN
         ORDER BY producto_id, created_at DESC
     ),
     insumo_costs_agg AS (
-        -- NEW: Calculate the current total insumo cost for each product in real-time.
+        -- Calculate the current total insumo cost for each product in real-time
         SELECT
             pi.producto_id,
             SUM(pi.cantidad * i.costo) as total_insumo_cost
@@ -60,9 +63,10 @@ BEGIN
         p.nombre,
         COALESCE(sa.month_sold, 0)::bigint AS ventas_mes_actual,
         COALESCE(sa.total_sold, 0)::bigint AS ventas_totales,
-        -- Corrected cost calculation: Use the dynamically calculated insumo cost + the recent lab cost.
         (COALESCE(ica.total_insumo_cost, 0) + COALESCE(rlc.costo_laboratorio, 0))::numeric AS costo_total_unitario,
-        -- Corrected profit calculations using the new accurate total cost.
+        p.precio_publico,
+        p.precio_comercio,
+        p.precio_mayorista,
         (COALESCE(p.precio_publico, 0) - (COALESCE(ica.total_insumo_cost, 0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_publico,
         (COALESCE(p.precio_comercio, 0) - (COALESCE(ica.total_insumo_cost, 0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_comercio,
         (COALESCE(p.precio_mayorista, 0) - (COALESCE(ica.total_insumo_cost, 0) + COALESCE(rlc.costo_laboratorio, 0)))::numeric AS ganancia_unitaria_mayorista
@@ -89,12 +93,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;`
             ventasMesActual: item.ventas_mes_actual ?? 0,
             ventasTotales: item.ventas_totales ?? 0,
             costoTotalUnitario: item.costo_total_unitario ?? 0,
-            // These total profit fields are no longer returned by the updated RPC,
-            // but we keep them in the mapping to satisfy the type, though they will be 0.
-            // The UI will use the unit profit fields instead.
-            gananciaTotalPublico: 0, 
-            gananciaTotalComercio: 0,
-            gananciaTotalMayorista: 0,
+            precioPublico: item.precio_publico ?? 0,
+            precioComercio: item.precio_comercio ?? 0,
+            precioMayorista: item.precio_mayorista ?? 0,
             gananciaUnitariaPublico: item.ganancia_unitaria_publico ?? 0,
             gananciaUnitariaComercio: item.ganancia_unitaria_comercio ?? 0,
             gananciaUnitariaMayorista: item.ganancia_unitaria_mayorista ?? 0,

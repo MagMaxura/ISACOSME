@@ -461,6 +461,31 @@ export const updateProducto = async (
     return fullProduct.find(p => p.id === updatedData.id)!;
 };
 
+export const updateProductoPrecios = async (
+    productoId: string,
+    precios: {
+        precioPublico: number;
+        precioComercio: number;
+        precioMayorista: number;
+    }
+): Promise<void> => {
+    console.log(`[${SERVICE_NAME}] Updating prices for product ID: ${productoId}`);
+    const { error } = await supabase
+        .from('productos')
+        .update({
+            precio_publico: precios.precioPublico,
+            precio_comercio: precios.precioComercio,
+            precio_mayorista: precios.precioMayorista,
+        })
+        .eq('id', productoId);
+
+    if (error) {
+        console.error(`[${SERVICE_NAME}] Database price update failed:`, error.message);
+        throw new Error(`Error al actualizar los precios: ${error?.message}`);
+    }
+    console.log(`[${SERVICE_NAME}] Prices updated successfully for product ID: ${productoId}`);
+};
+
 export const deleteProducto = async (productoId: string): Promise<void> => {
     console.log(`[${SERVICE_NAME}] Attempting to delete product ID: ${productoId}`);
 
