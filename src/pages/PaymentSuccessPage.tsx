@@ -6,15 +6,14 @@ const PaymentSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
 
   // --- Integración con WhatsApp ---
-  // TODO: Reemplaza este número con el WhatsApp de tu negocio (incluyendo código de país, sin '+' ni espacios)
-  const whatsappNumber = '5491123456789'; 
+  const whatsappNumber = '5493417192294'; 
 
   // Obtenemos los detalles del pago desde la URL para dar contexto
   const paymentId = searchParams.get('payment_id');
   const merchantOrderId = searchParams.get('merchant_order_id');
 
   // Creamos el mensaje pre-cargado
-  const baseMessage = `¡Hola! Acabo de realizar una compra en Isabella de la Perla y tengo una consulta.`;
+  const baseMessage = `¡Hola! Acabo de completar mi compra en Isabella de la Perla. Quería avisar para que gestionen mi paquete.`;
   const orderDetails = paymentId ? ` Mi número de pago es ${paymentId}.` : merchantOrderId ? ` Mi ID de orden es ${merchantOrderId}.` : '';
   const fullMessage = baseMessage + orderDetails;
 
@@ -29,13 +28,15 @@ const PaymentSuccessPage: React.FC = () => {
         </div>
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-3">¡Pago Exitoso!</h2>
         <p className="text-gray-600 mb-6">
-          Gracias por tu compra. Hemos recibido tu pago y tu pedido está siendo procesado. 
-          Recibirás un correo electrónico con los detalles de tu compra y la información de seguimiento una vez que sea despachado.
+          ¡Gracias por tu compra! Tu pago ha sido procesado correctamente.
         </p>
 
         {/* Nueva sección de contacto */}
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <p className="text-gray-700 mb-4">¿Tienes alguna duda sobre tu pedido?</p>
+        <div className="mt-8 pt-6 border-t border-gray-200 bg-yellow-50 p-6 rounded-lg">
+          <p className="text-gray-800 font-semibold mb-4">¡Paso final e importante!</p>
+          <p className="text-gray-700 mb-4">
+            Para agilizar el armado de tu paquete, por favor envíanos un mensaje por WhatsApp con la información de tu pago completado. Así, daremos aviso para que se gestione tu envío a la brevedad.
+          </p>
           <a 
             href={whatsappUrl}
             target="_blank"
@@ -43,13 +44,13 @@ const PaymentSuccessPage: React.FC = () => {
             className="inline-flex items-center justify-center bg-green-500 text-white font-semibold px-6 py-3 rounded-lg shadow-md hover:bg-green-600 transition-colors w-full sm:w-auto"
           >
             <IconBrandWhatsapp className="h-6 w-6 mr-2" />
-            Contactar por WhatsApp
+            Avisar por WhatsApp
           </a>
         </div>
 
         <Link 
           to="/lista-publica" 
-          className="inline-block mt-6 text-sm text-gray-600 hover:text-primary transition-colors"
+          className="inline-block mt-8 text-sm text-gray-600 hover:text-primary transition-colors"
         >
           o Volver a la tienda
         </Link>
