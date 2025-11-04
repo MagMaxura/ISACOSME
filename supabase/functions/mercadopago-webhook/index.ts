@@ -1,6 +1,6 @@
 // supabase/functions/mercadopago-webhook/index.ts
 
-// FIX: Declare Deno to prevent TypeScript errors in a non-Deno environment.
+// Declare Deno to prevent TypeScript errors in a non-Deno environment.
 declare const Deno: any;
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -9,7 +9,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 console.log('Mercado Pago Webhook function initialized');
 
 // Helper to format currency
-const formatPrice = (price: number) => {
+const formatPrice = (price: number): string => {
   return `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
@@ -60,7 +60,7 @@ const createEmailHtml = (paymentDetails: any): string => {
       <h2 style="border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 24px;">Dirección de Envío</h2>
       <p>
         ${shipping?.street_name || 'No especificado'} ${shipping?.street_number || ''}<br>
-        ${shipping?.zip_code || ''} ${shipping?.city_name || ''}<br>
+        ${shipping?.zip_code || ''}, ${shipping?.city_name || ''}<br>
         ${shipping?.state_name || ''}
       </p>
     </div>
@@ -75,9 +75,10 @@ serve(async (req) => {
   try {
     const body = await req.json();
 
-    // Mercado Pago sends a 'ping' sometimes, which we can ignore.
+    // We only care about payment updates for sending the confirmation email.
     if (body.action !== 'payment.updated') {
       console.log('Received non-payment.updated webhook, ignoring.');
+      // It's important to return a 200 OK so Mercado Pago doesn't retry.
       return new Response('Webhook received and ignored.', { status: 200 });
     }
 
@@ -118,7 +119,7 @@ serve(async (req) => {
           'Authorization': `Bearer ${resendApiKey}`,
         },
         body: JSON.stringify({
-          from: 'Ventas Online <ventas@isabelladelaperla.com>', // IMPORTANT: Must be a verified domain in Resend
+          from: 'Ventas Online <ventas@isabelladelaperla.com>', // IMPORTANT: Replace with your verified domain in Resend
           to: [orderPrepEmail],
           subject: `Nuevo Pedido Aprobado - Orden #${paymentDetails.id}`,
           html: emailHtml,

@@ -1,6 +1,6 @@
 // supabase/functions/mercadopago-proxy/index.ts
 
-// FIX: Declare Deno to prevent TypeScript errors in a non-Deno environment.
+// Declare Deno to prevent TypeScript errors in a non-Deno environment.
 declare const Deno: any;
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -9,7 +9,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 console.log('Mercado Pago Proxy function initialized');
 
 serve(async (req) => {
-  // This is needed if you're planning to invoke your function from a browser.
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -21,26 +21,31 @@ serve(async (req) => {
       throw new Error('Missing items or payer information in the request body.');
     }
 
+    // Securely get environment variables from Supabase dashboard
     const accessToken = Deno.env.get('MP_ACCESS_TOKEN');
-    if (!accessToken) {
-      throw new Error('Missing Mercado Pago Access Token in environment variables.');
-    }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+
+    if (!accessToken) throw new Error('Missing MP_ACCESS_TOKEN in environment variables.');
+    if (!supabaseUrl) throw new Error('Missing SUPABASE_URL in environment variables.');
     
-    // Get the base URL of the Supabase function deployment to construct the webhook URL
-    const functionUrl = req.headers.get('x-forwarded-proto') + '://' + req.headers.get('x-forwarded-host') + '/functions/v1/';
+    // Dynamically construct the webhook notification URL from request headers.
+    // This is more robust than hardcoding and works across different environments.
+    const proto = req.headers.get('x-forwarded-proto');
+    const host = req.headers.get('x-forwarded-host');
+    const notification_url = `${proto}://${host}/functions/v1/mercadopago-webhook`;
 
     const preference = {
       items: items,
       payer: payer,
       back_urls: {
-        success: `${Deno.env.get('SUPABASE_URL')}/#/payment-success`,
-        failure: `${Deno.env.get('SUPABASE_URL')}/#/payment-failure`,
-        pending: `${Deno.env.get('SUPABASE_URL')}/#/payment-failure`,
+        success: `${supabaseUrl}/#/payment-success`,
+        failure: `${supabaseUrl}/#/payment-failure`,
+        pending: `${supabaseUrl}/#/payment-failure`,
       },
       auto_return: 'approved',
-      // This is the crucial part: it tells Mercado Pago where to send a notification (webhook)
-      // when the payment status changes (e.g., from 'pending' to 'approved').
-      notification_url: `${functionUrl}mercadopago-webhook`,
+      // This tells Mercado Pago where to send a server-to-server notification (webhook)
+      // when the payment status changes.
+      notification_url: notification_url,
     };
 
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
