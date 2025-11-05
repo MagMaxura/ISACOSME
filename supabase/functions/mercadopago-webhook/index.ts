@@ -67,18 +67,19 @@ const createEmailHtml = (paymentDetails: any): string => {
   `;
 };
 
+// The 'serve' function now includes `{ verify: false }` to disable JWT verification,
+// making the webhook endpoint public and accessible to Mercado Pago.
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    // Mercado Pago now sends notifications based on `topic`, so we check that instead of `action`.
     const body = await req.json();
 
-    // We only care about payment updates for sending the confirmation email.
-    if (body.action !== 'payment.updated') {
-      console.log('Received non-payment.updated webhook, ignoring.');
-      // It's important to return a 200 OK so Mercado Pago doesn't retry.
+    if (body.topic !== 'payment' && body.type !== 'payment') {
+      console.log(`Received webhook of type '${body.topic || body.type}', ignoring.`);
       return new Response('Webhook received and ignored.', { status: 200 });
     }
 
@@ -119,7 +120,7 @@ serve(async (req) => {
           'Authorization': `Bearer ${resendApiKey}`,
         },
         body: JSON.stringify({
-          from: 'Ventas Online <ventas@isabelladelaperla.com>', // IMPORTANT: Replace with your verified domain in Resend
+          from: 'Ventas Online <onboarding@resend.dev>', // IMPORTANT: Replace with your verified domain in Resend
           to: [orderPrepEmail],
           subject: `Nuevo Pedido Aprobado - Orden #${paymentDetails.id}`,
           html: emailHtml,
@@ -147,4 +148,4 @@ serve(async (req) => {
       status: 500, // Use 500 for server-side errors
     });
   }
-});
+}, { verify: false }); // This option disables JWT verification, making the function public.
