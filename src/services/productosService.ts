@@ -46,6 +46,8 @@ export const fetchProductosConStock = async (): Promise<Producto[]> => {
             lotes: p.lotes || [],
             stockPorDeposito: p.stock_por_deposito || [],
             insumos: [], // This was empty in the original function as well.
+            // FIX: Add 'imagenesGaleria' to satisfy the updated Producto interface and fix type errors in consuming components.
+            imagenesGaleria: p.imagenes_galeria || [],
         }));
 
         return transformedProductos;

@@ -5,45 +5,51 @@ declare const Deno: any;
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
+// Inlined from _shared/cors.ts to fix bundling error
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Proxy function initialized (v3 - with shipments)');
+console.log('Mercado Pago Proxy function initialized (v6 - guest checkout fix)');
 
 /**
  * Parses a full Argentinian phone number string into an area code and local number.
- * This is a best-effort parser to fix common formatting issues.
+ * This is a robust parser to fix common formatting issues.
  * @param phoneString The full phone number string from the user.
  * @returns An object with { area_code, number }.
  */
 function parseArgentinianPhoneNumber(phoneString: string): { area_code: string; number: string } {
-    let cleanNumber = (phoneString || '').replace(/\D/g, ''); // Remove all non-digits
+    let cleanNumber = (phoneString || '').replace(/\D/g, ''); // 1. Remove all non-digits
 
-    // Remove country code if present (+54)
+    // 2. Remove country code
     if (cleanNumber.startsWith('54')) {
         cleanNumber = cleanNumber.substring(2);
     }
 
-    // Remove mobile prefix '9' if present after country code
+    // 3. Remove mobile '9' prefix
     if (cleanNumber.startsWith('9')) {
         cleanNumber = cleanNumber.substring(1);
     }
     
-    // Remove leading '0' for landlines (e.g., 011 -> 11)
+    // 4. Remove leading '0' for landlines (e.g., 011 -> 11) - this can happen after stripping 549
     if (cleanNumber.startsWith('0')) {
         cleanNumber = cleanNumber.substring(1);
     }
 
-    // Common area codes in Argentina have 2, 3, or 4 digits.
-    // We check from longest to shortest to avoid ambiguity.
-    const areaCodeLengths = [4, 3, 2]; 
+    // 5. Identify area code (2, 3, or 4 digits) and remove legacy '15' prefix
+    const areaCodeLengths = [4, 3, 2];
     for (const length of areaCodeLengths) {
         if (cleanNumber.length > length) {
             const potentialAreaCode = cleanNumber.substring(0, length);
-            const potentialNumber = cleanNumber.substring(length);
-            // Heuristic: A valid local number is typically 6 to 8 digits long.
+            let potentialNumber = cleanNumber.substring(length);
+
+            // Handle legacy '15' mobile prefix
+            if (potentialNumber.startsWith('15')) {
+                potentialNumber = potentialNumber.substring(2);
+            }
+            
+            // A local number is usually 6-8 digits.
             if (potentialNumber.length >= 6 && potentialNumber.length <= 8) {
                 console.log(`Phone parsed: ${phoneString} -> area_code=${potentialAreaCode}, number=${potentialNumber}`);
                 return { area_code: potentialAreaCode, number: potentialNumber };
@@ -51,9 +57,16 @@ function parseArgentinianPhoneNumber(phoneString: string): { area_code: string; 
         }
     }
 
-    // Fallback: if no area code could be determined, return the number as is.
-    // This might still fail but is better than sending incorrect data.
-    console.warn(`Could not determine area code for phone: ${phoneString}. Using fallback.`);
+    // Fallback: This is risky. Log a warning.
+    console.warn(`Could not reliably determine area code for phone: ${phoneString}. Returning best guess.`);
+    // If number is long, assume the last 8 digits are the number.
+    if (cleanNumber.length > 8) {
+         const number = cleanNumber.slice(-8);
+         const area_code = cleanNumber.slice(0, -8);
+         return { area_code, number };
+    }
+    
+    // Last resort
     return { area_code: '', number: cleanNumber };
 }
 
@@ -80,7 +93,7 @@ serve(async (req) => {
     // --- Data Sanitization & Validation ---
     const parsedPhone = parseArgentinianPhoneNumber(rawPayer.phone?.number || '');
     const cleanDni = String(rawPayer.identification?.number || '').replace(/\D/g, '');
-    const streetNumber = Number(rawPayer.address?.street_number);
+    const streetNumber = parseInt(rawPayer.address?.street_number, 10);
     if (isNaN(streetNumber) || streetNumber <= 0) {
        throw new Error(`El número de calle "${rawPayer.address?.street_number}" no es válido. Debe ser un número mayor que cero.`);
     }
@@ -109,18 +122,13 @@ serve(async (req) => {
               zip_code: rawPayer.address?.zip_code,
           },
       },
-      // **CRITICAL FIX:** Add the shipments object. Mercado Pago often requires this
-      // for physical goods, and its absence can cause generic payment processing errors.
       shipments: {
         receiver_address: {
           zip_code: rawPayer.address?.zip_code,
           street_name: rawPayer.address?.street_name,
           street_number: streetNumber,
-          // You can add floor and apartment if you collect them in your form
-          // floor: "",
-          // apartment: ""
         },
-        mode: "not_specified", // "not_specified" is a safe default
+        mode: "not_specified",
       },
       back_urls: {
         success: `${supabaseUrl}/#/payment-success`,
@@ -129,6 +137,8 @@ serve(async (req) => {
       },
       auto_return: 'approved',
       notification_url: notification_url,
+      statement_descriptor: "ISABELLA DE LA PERLA",
+      // The 'purpose' key is removed to allow guest checkout
     };
     
     console.log('Sending SANITIZED preference to Mercado Pago:', JSON.stringify(preference, null, 2));
@@ -146,7 +156,6 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error('Mercado Pago API error:', JSON.stringify(data, null, 2));
-      // Provide a more specific error if possible
       const errorMessage = data.cause?.[0]?.description || data.message || 'Failed to create preference.';
       throw new Error(errorMessage);
     }
