@@ -78,8 +78,8 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
             const costoTotalUnitario = insumosCost + costoLaboratorioReciente;
 
             // --- Stock Calculation ---
-            // FIX: Ensure 'lote.cantidad_actual' is treated as a number to prevent TS2532 and runtime errors by explicitly casting it with Number().
-            const stockTotal = productLotes.reduce((acc, lote) => acc + Number(lote.cantidad_actual || 0), 0);
+            // FIX: Ensure 'lote.cantidad_actual' is treated as a number to prevent TS2532 and runtime errors by explicitly casting it with Number() or providing a fallback.
+            const stockTotal = productLotes.reduce((acc, lote) => acc + (lote.cantidad_actual || 0), 0);
 
             // --- Advanced Stats ---
             const tasaRotacion = stockTotal > 0 ? (last12MonthsSold / stockTotal) : 0;
