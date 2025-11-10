@@ -11,7 +11,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Proxy function initialized (v17 - Stricter street_number validation)');
+console.log('Mercado Pago Proxy function initialized (v18 - Nested object parsing)');
 
 /**
  * Parses an Argentinian phone number into an area code and local number.
@@ -110,9 +110,9 @@ serve(async (req) => {
     if (!accessToken) throw new Error('Missing MP_ACCESS_TOKEN env variable.');
     
     // --- Data Sanitization & Validation ---
-    const parsedPhone = parseArgentinianPhoneNumber(rawPayer.phone || '');
+    const parsedPhone = parseArgentinianPhoneNumber(rawPayer.phone?.number || '');
 
-    const rawIdNumber = String(rawPayer.dni || '');
+    const rawIdNumber = String(rawPayer.identification?.number || '');
     const cleanIdNumber = rawIdNumber.replace(/\D/g, '');
     let idType = 'DNI';
     if (cleanIdNumber.length === 11) {
@@ -121,7 +121,7 @@ serve(async (req) => {
     console.log(`[Proxy] Inferred ID type as ${idType} for number ${cleanIdNumber}`);
     
     // **CRITICAL VALIDATION** for street number. Must be a positive number.
-    const streetNumber = parseInt(rawPayer.street_number, 10);
+    const streetNumber = parseInt(rawPayer.address?.street_number, 10);
     if (isNaN(streetNumber) || streetNumber <= 0) {
         throw new Error('El número de calle es inválido. Debe ser un número positivo.');
     }
@@ -145,9 +145,9 @@ serve(async (req) => {
               number: cleanIdNumber,
           },
           address: {
-            street_name: rawPayer.street_name,
+            street_name: rawPayer.address?.street_name,
             street_number: streetNumber, // Send the validated, parsed number
-            zip_code: rawPayer.zip_code,
+            zip_code: rawPayer.address?.zip_code,
           }
       },
       back_urls: {

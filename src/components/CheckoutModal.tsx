@@ -46,7 +46,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     if (!/^\d+$/.test(value)) error = 'Solo se admiten números.';
                     break;
                 case 'street_number':
-                    if (!/^\d+$/.test(value)) error = 'Solo números. No usar "s/n" o letras.';
+                    if (!/^[1-9]\d*$/.test(value)) error = 'Debe ser un número positivo. No usar "s/n" o letras.';
                     break;
                 case 'email':
                     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) error = 'Formato de email inválido.';
