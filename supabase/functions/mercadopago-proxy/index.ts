@@ -11,7 +11,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Proxy function initialized (v7 - phone parsing fix)');
+console.log('Mercado Pago Proxy function initialized (v8 - app URL fix)');
 
 /**
  * Parses a full Argentinian phone number string into an area code and local number,
@@ -101,10 +101,9 @@ serve(async (req) => {
     }
 
     const accessToken = Deno.env.get('MP_ACCESS_TOKEN');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const appUrl = 'https://www.isabelladelaperla.app';
 
     if (!accessToken) throw new Error('Missing MP_ACCESS_TOKEN env variable.');
-    if (!supabaseUrl) throw new Error('Missing SUPABASE_URL env variable.');
     
     // --- Data Sanitization & Validation ---
     const parsedPhone = parseArgentinianPhoneNumber(rawPayer.phone?.number || '');
@@ -150,9 +149,9 @@ serve(async (req) => {
         mode: "not_specified",
       },
       back_urls: {
-        success: `${supabaseUrl}/#/payment-success`,
-        failure: `${supabaseUrl}/#/payment-failure`,
-        pending: `${supabaseUrl}/#/payment-failure`,
+        success: `${appUrl}/#/payment-success`,
+        failure: `${appUrl}/#/payment-failure`,
+        pending: `${appUrl}/#/payment-failure`,
       },
       auto_return: 'approved',
       notification_url: notification_url,
