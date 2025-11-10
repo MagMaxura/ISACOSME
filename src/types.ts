@@ -61,7 +61,7 @@ export interface StockPorDeposito {
     lotes: Lote[];
 }
 
-// FIX: Add GaleriaImagen interface to define the structure for product gallery images.
+// FIX: Add GaleriaImagen interface to be used for the product image gallery.
 export interface GaleriaImagen {
   id: string;
   url: string;
@@ -92,7 +92,7 @@ export interface Producto {
   lotes: Lote[]; // All lots for the product
   stockPorDeposito: StockPorDeposito[]; // Detailed stock breakdown
   insumos: ProductoInsumo[];
-  // FIX: Add 'imagenesGaleria' to the Producto interface to resolve type error in ProductGalleryModal.
+  // FIX: Add the 'imagenesGaleria' property to the Producto interface to fix a type error in ProductGalleryModal.tsx.
   imagenesGaleria: GaleriaImagen[];
 }
 

@@ -164,7 +164,7 @@ export const IconMercadoPago: React.FC<IconProps> = (props) => (
     </svg>
 );
 
-// FIX: Add missing IconLayoutGrid and IconList components to resolve import errors.
+// FIX: Add IconLayoutGrid and IconList components to fix missing export errors in PublicPriceListPage.
 export const IconLayoutGrid: React.FC<IconProps> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
         <rect x="3" y="3" width="7" height="7"></rect>

@@ -11,63 +11,79 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Proxy function initialized (v6 - guest checkout fix)');
+console.log('Mercado Pago Proxy function initialized (v7 - phone parsing fix)');
 
 /**
- * Parses a full Argentinian phone number string into an area code and local number.
- * This is a robust parser to fix common formatting issues.
+ * Parses a full Argentinian phone number string into an area code and local number,
+ * handling mobile prefixes ('9') correctly for the Mercado Pago API.
  * @param phoneString The full phone number string from the user.
  * @returns An object with { area_code, number }.
  */
 function parseArgentinianPhoneNumber(phoneString: string): { area_code: string; number: string } {
-    let cleanNumber = (phoneString || '').replace(/\D/g, ''); // 1. Remove all non-digits
+    console.log(`[PhoneParser v7] Attempting to parse: "${phoneString}"`);
+    let cleanNumber = (phoneString || '').replace(/\D/g, '');
 
-    // 2. Remove country code
+    // 1. Strip country code
     if (cleanNumber.startsWith('54')) {
         cleanNumber = cleanNumber.substring(2);
     }
-
-    // 3. Remove mobile '9' prefix
-    if (cleanNumber.startsWith('9')) {
+    
+    // 2. Identify if it's a mobile number (starts with 9) and temporarily remove the '9'
+    const isMobile = cleanNumber.startsWith('9');
+    if (isMobile) {
         cleanNumber = cleanNumber.substring(1);
     }
     
-    // 4. Remove leading '0' for landlines (e.g., 011 -> 11) - this can happen after stripping 549
+    // 3. Strip leading 0 for landlines (e.g., from '011...')
     if (cleanNumber.startsWith('0')) {
-        cleanNumber = cleanNumber.substring(1);
+      cleanNumber = cleanNumber.substring(1);
     }
+    
+    let area_code = '';
+    let number = '';
 
-    // 5. Identify area code (2, 3, or 4 digits) and remove legacy '15' prefix
-    const areaCodeLengths = [4, 3, 2];
+    // 4. Try to split area code and number, checking shorter ACs first
+    const areaCodeLengths = [2, 3, 4]; // Corrected order
     for (const length of areaCodeLengths) {
         if (cleanNumber.length > length) {
             const potentialAreaCode = cleanNumber.substring(0, length);
             let potentialNumber = cleanNumber.substring(length);
-
-            // Handle legacy '15' mobile prefix
-            if (potentialNumber.startsWith('15')) {
-                potentialNumber = potentialNumber.substring(2);
-            }
             
-            // A local number is usually 6-8 digits.
-            if (potentialNumber.length >= 6 && potentialNumber.length <= 8) {
-                console.log(`Phone parsed: ${phoneString} -> area_code=${potentialAreaCode}, number=${potentialNumber}`);
-                return { area_code: potentialAreaCode, number: potentialNumber };
+            // Standard check: is the result a 10-digit number? (AC + Number)
+            // Or a reasonable length for local numbers.
+            if ((potentialAreaCode.length + potentialNumber.length === 10) || (potentialNumber.length >= 6 && potentialNumber.length <= 8)) {
+                 area_code = potentialAreaCode;
+                 number = potentialNumber;
+                 break; // Found a good match, stop searching
             }
         }
     }
-
-    // Fallback: This is risky. Log a warning.
-    console.warn(`Could not reliably determine area code for phone: ${phoneString}. Returning best guess.`);
-    // If number is long, assume the last 8 digits are the number.
-    if (cleanNumber.length > 8) {
-         const number = cleanNumber.slice(-8);
-         const area_code = cleanNumber.slice(0, -8);
-         return { area_code, number };
+    
+    // 5. If splitting failed, use fallback logic
+    if (!area_code && cleanNumber.length >= 8) {
+        console.warn(`[PhoneParser v7] Could not determine area code for "${cleanNumber}". Using fallback logic.`);
+        if (cleanNumber.length > 8) { // e.g., for '1122334455', AC is '11', number is '22334455'
+            number = cleanNumber.slice(-8);
+            area_code = cleanNumber.slice(0, -8);
+        } else {
+            number = cleanNumber; // Assume no area code for shorter numbers
+        }
+    } else if (!area_code) {
+        number = cleanNumber;
     }
     
-    // Last resort
-    return { area_code: '', number: cleanNumber };
+    // The legacy '15' prefix is for mobile phones but is not used in the API.
+    if (number.startsWith('15')) {
+        number = number.substring(2);
+    }
+
+    // 6. Prepend the '9' back to the local number if it was a mobile
+    if (isMobile) {
+        number = '9' + number;
+    }
+
+    console.log(`[PhoneParser v7] Parsed result -> area_code=${area_code}, number=${number}`);
+    return { area_code, number };
 }
 
 
@@ -94,8 +110,11 @@ serve(async (req) => {
     const parsedPhone = parseArgentinianPhoneNumber(rawPayer.phone?.number || '');
     const cleanDni = String(rawPayer.identification?.number || '').replace(/\D/g, '');
     const streetNumber = parseInt(rawPayer.address?.street_number, 10);
+
     if (isNaN(streetNumber) || streetNumber <= 0) {
-       throw new Error(`El número de calle "${rawPayer.address?.street_number}" no es válido. Debe ser un número mayor que cero.`);
+       const userMessage = `El número de calle "${rawPayer.address?.street_number}" no es válido. Debe ser un número mayor que cero.`;
+       console.error(`Validation Error: ${userMessage}`);
+       throw new Error(userMessage);
     }
 
     const proto = req.headers.get('x-forwarded-proto');

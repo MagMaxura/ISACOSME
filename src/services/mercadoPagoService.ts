@@ -34,22 +34,32 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
         currency_id: 'ARS', // Assuming Argentine Pesos
     }));
 
+    // Infer Identification Type (DNI vs CUIT) based on length
+    const cleanIdNumber = (payerInfo.dni || '').replace(/\D/g, '');
+    let idType = 'DNI';
+    // CUIT/CUIL numbers in Argentina have 11 digits.
+    if (cleanIdNumber.length === 11) {
+        idType = 'CUIT';
+    }
+    console.log(`[${SERVICE_NAME}] Inferred identification type as ${idType} for number ${cleanIdNumber}`);
+
     // 2. Format payer info
     const mpPayer = {
         name: payerInfo.name,
         surname: payerInfo.surname,
         email: payerInfo.email,
         phone: {
-            area_code: "54",
+            // The server-side function will parse the area code and number from this string.
+            // This is more robust than trying to parse it on the client.
             number: payerInfo.phone,
         },
         identification: {
-            type: "DNI",
-            number: payerInfo.dni,
+            type: idType,
+            number: cleanIdNumber,
         },
         address: {
             street_name: payerInfo.street_name,
-            street_number: parseInt(payerInfo.street_number, 10),
+            street_number: payerInfo.street_number, // Send as string, server will parse
             zip_code: payerInfo.zip_code,
         },
     };
