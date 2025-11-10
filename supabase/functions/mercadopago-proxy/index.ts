@@ -11,7 +11,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Proxy function initialized (v16 - Re-added address with strict validation)');
+console.log('Mercado Pago Proxy function initialized (v17 - Stricter street_number validation)');
 
 /**
  * Parses an Argentinian phone number into an area code and local number.
@@ -120,10 +120,10 @@ serve(async (req) => {
     }
     console.log(`[Proxy] Inferred ID type as ${idType} for number ${cleanIdNumber}`);
     
-    // **CRITICAL VALIDATION** for street number. Must be a number.
+    // **CRITICAL VALIDATION** for street number. Must be a positive number.
     const streetNumber = parseInt(rawPayer.street_number, 10);
-    if (isNaN(streetNumber)) {
-        throw new Error('El número de calle es inválido. Debe contener solo dígitos, sin letras o caracteres especiales como "s/n".');
+    if (isNaN(streetNumber) || streetNumber <= 0) {
+        throw new Error('El número de calle es inválido. Debe ser un número positivo.');
     }
 
     const proto = req.headers.get('x-forwarded-proto');

@@ -62,16 +62,20 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
 
         if (error) {
             console.error(`[${SERVICE_NAME}] Supabase function invocation failed:`, error);
-            if (error.message.includes('Function not found')) {
-                 throw new Error('La función de pago en el servidor no está disponible. Contacta al administrador.');
+             // `error.context` is the Response object on FunctionsHttpError
+            if ((error as any).context) {
+                try {
+                    const functionError = await (error as any).context.json();
+                    if (functionError.error) {
+                        // Throw a new error with the specific message from the function
+                        throw new Error(functionError.error);
+                    }
+                } catch (e) {
+                    console.error(`[${SERVICE_NAME}] Could not parse JSON error from function context`, e);
+                }
             }
-            // Try to parse the function's error message if available
-            try {
-                const functionError = JSON.parse(error.context.text);
-                if(functionError.error) throw new Error(functionError.error);
-            } catch(e) {
-                // Do nothing if parsing fails, throw original error
-            }
+            
+            // Fallback error message
             throw new Error(`Error al contactar el servicio de pago: ${error.message}`);
         }
 
