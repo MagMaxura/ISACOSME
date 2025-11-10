@@ -112,6 +112,15 @@ export const fetchProductoDashboardData = async (productoId: string): Promise<an
             lotes: [],
             stockPorDeposito: [],
             insumos: [],
+            // FIX: Add missing properties to match the 'Producto' interface.
+            imagenesGaleria: productoData.imagenes_galeria || [],
+            cantidadMinimaComercio: productoData.cantidad_minima_comercio,
+            cantidadMinimaMayorista: productoData.cantidad_minima_mayorista,
+            boxLengthCm: productoData.box_length_cm,
+            boxWidthCm: productoData.box_width_cm,
+            boxHeightCm: productoData.box_height_cm,
+            productWeightKg: productoData.product_weight_kg,
+            productsPerBox: productoData.products_per_box,
         };
 
         console.log(`[${SERVICE_NAME}] Successfully processed dashboard data for '${producto.nombre}'.`);
