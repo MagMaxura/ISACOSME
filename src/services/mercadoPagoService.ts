@@ -34,28 +34,18 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
         currency_id: 'ARS', // Assuming Argentine Pesos
     }));
 
-    // Infer Identification Type (DNI vs CUIT) based on length
-    const cleanIdNumber = (payerInfo.dni || '').replace(/\D/g, '');
-    let idType = 'DNI';
-    // CUIT/CUIL numbers in Argentina have 11 digits.
-    if (cleanIdNumber.length === 11) {
-        idType = 'CUIT';
-    }
-    console.log(`[${SERVICE_NAME}] Inferred identification type as ${idType} for number ${cleanIdNumber}`);
-
-    // 2. Format payer info
+    // 2. Format payer info - The server will now handle cleaning and type inference for identification.
     const mpPayer = {
         name: payerInfo.name,
         surname: payerInfo.surname,
         email: payerInfo.email,
         phone: {
             // The server-side function will parse the area code and number from this string.
-            // This is more robust than trying to parse it on the client.
             number: payerInfo.phone,
         },
         identification: {
-            type: idType,
-            number: cleanIdNumber,
+            // Send the raw number; the server will clean it and determine the type.
+            number: payerInfo.dni,
         },
         address: {
             street_name: payerInfo.street_name,
@@ -66,7 +56,6 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
 
     try {
         // 3. Invoke the Supabase Edge Function
-        // The function name is changed to match the deployed function from the user's image.
         const { data, error } = await supabase.functions.invoke('mercadopago-proxy', {
             body: { items: mpItems, payer: mpPayer },
         });

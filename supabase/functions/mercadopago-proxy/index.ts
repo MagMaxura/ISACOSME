@@ -11,7 +11,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Proxy function initialized (v8 - app URL fix)');
+console.log('Mercado Pago Proxy function initialized (v9 - server-side ID type fix)');
 
 /**
  * Parses a full Argentinian phone number string into an area code and local number,
@@ -107,7 +107,16 @@ serve(async (req) => {
     
     // --- Data Sanitization & Validation ---
     const parsedPhone = parseArgentinianPhoneNumber(rawPayer.phone?.number || '');
-    const cleanDni = String(rawPayer.identification?.number || '').replace(/\D/g, '');
+
+    // Infer Identification Type on the server for robustness
+    const rawIdNumber = String(rawPayer.identification?.number || '');
+    const cleanIdNumber = rawIdNumber.replace(/\D/g, '');
+    let idType = 'DNI';
+    if (cleanIdNumber.length === 11) {
+        idType = 'CUIT';
+    }
+    console.log(`[Proxy] Inferred ID type as ${idType} for number ${cleanIdNumber}`);
+    
     const streetNumber = parseInt(rawPayer.address?.street_number, 10);
 
     if (isNaN(streetNumber) || streetNumber <= 0) {
@@ -131,8 +140,8 @@ serve(async (req) => {
               number: parsedPhone.number,
           },
           identification: {
-              type: rawPayer.identification?.type || 'DNI',
-              number: cleanDni,
+              type: idType,
+              number: cleanIdNumber,
           },
           address: {
               street_name: rawPayer.address?.street_name,
@@ -156,7 +165,6 @@ serve(async (req) => {
       auto_return: 'approved',
       notification_url: notification_url,
       statement_descriptor: "ISABELLA DE LA PERLA",
-      // The 'purpose' key is removed to allow guest checkout
     };
     
     console.log('Sending SANITIZED preference to Mercado Pago:', JSON.stringify(preference, null, 2));
