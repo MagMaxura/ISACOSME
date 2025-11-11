@@ -62,20 +62,22 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
 
         if (error) {
             console.error(`[${SERVICE_NAME}] Supabase function invocation failed:`, error);
-             // `error.context` is the Response object on FunctionsHttpError
-            if ((error as any).context) {
+             
+            // Check if it's an HTTP error with a parsable body from the Edge Function
+            if (error.context && typeof error.context.json === 'function') {
                 try {
-                    const functionError = await (error as any).context.json();
-                    if (functionError.error) {
+                    const functionError = await error.context.json();
+                    if (functionError && functionError.error) {
                         // Throw a new error with the specific message from the function
                         throw new Error(functionError.error);
                     }
                 } catch (e) {
                     console.error(`[${SERVICE_NAME}] Could not parse JSON error from function context`, e);
+                    // Fall through to use the main error message
                 }
             }
             
-            // Fallback error message
+            // For network errors (like ERR_NAME_NOT_RESOLVED) or unparsable HTTP errors, use the main error message.
             throw new Error(`Error al contactar el servicio de pago: ${error.message}`);
         }
 
