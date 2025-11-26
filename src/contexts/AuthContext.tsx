@@ -53,15 +53,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
     }
 
-    // Prevent re-fetching if we already have the profile for this user, unless forced.
-    // `profile` is from the outer scope (closure), so we need to be careful. 
-    // Ideally we use a ref or functional update, but here checking the state in the callback is fine if dependencies are correct.
-    // However, `profile` is not in dependencies to avoid loops. We can check `profile` inside setState or just rely on logic.
-    // Since we want to stop the loop, checking here is best. But `profile` might be stale in useCallback if not in deps.
-    // A safer way is to check if the current profile.id matches userId.
-    
-    // To avoid stale closure issues with `profile`, we will just proceed with fetch if triggered.
-    // The protection is in the `useEffect` dependency and the `setUser` optimization above.
+    // FIX: Do NOT set loading(true) here. This causes the entire App to unmount/remount
+    // showing the "Cargando ERP..." screen whenever the profile is refreshed in the background.
+    // This was causing the CheckoutModal to close (unmount) while typing.
+    // We only want the initial loading state (managed by the useEffects) to block the UI.
     
     setError(null);
     
@@ -101,7 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('[AuthContext:fetchProfile] User profile not found (RPC returned 0 rows).');
             setProfile(null);
             setError({
-                message: `Perfil de usuario no encontrado para ${user?.email}.`,
+                message: `Perfil de usuario no encontrado.`,
                 details: "Su cuenta de autenticación existe, pero no tiene un registro de perfil correspondiente.",
                 hint: `Contacte al administrador.`
             });
@@ -113,32 +108,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     } finally {
         console.log('[AuthContext:fetchProfile] Finished profile fetch attempt.');
+        // Always ensure loading is false after the first fetch attempt finishes
         setLoading(false);
     }
-  }, [userId, user]); // added user to deps for email access in error
+  }, [userId]); 
 
   useEffect(() => {
-    // Only fetch if we have a user ID and (no profile OR profile ID doesn't match user ID)
-    // We can't easily access current `profile` state here without adding it to deps, which causes loop.
-    // But since `userId` changes rarely, fetching on `userId` change is correct.
-    // The repeated fetching observed was likely due to `user` object reference changing on every auth event (like token refresh),
-    // triggering `useEffect` because `[userId]` dependency check involves checking `user` derived value? 
-    // No, `userId` is a string.
-    
-    // The issue was likely `fetchProfile` changing identity if `user` changed reference? 
-    // `fetchProfile` depends on `[userId]`. If `userId` is same string, `fetchProfile` is stable.
-    
-    // Wait, if `user` changes reference, `user?.email` in `fetchProfile` catch block changes.
-    // So `fetchProfile` DOES change reference if `user` is in dependency.
-    
-    // If `onAuthStateChange` fires frequently with new user objects, `fetchProfile` recreates, effect fires.
-    // My fix in `setUser` (checking equality) handles this root cause.
-    
     if (userId) {
         fetchProfile();
     } else {
         setProfile(null);
-        setLoading(false);
+        // Don't set loading false here immediately if we are waiting for session, 
+        // but if userId is null/undefined after auth check, we are done.
+        // The onAuthStateChange handles the initial false setting if no session.
     }
   }, [userId, fetchProfile]);
 

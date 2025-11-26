@@ -75,37 +75,29 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
                 .filter(l => l.producto_id === p.id)
                 .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
             
-            const costoLaboratorioReciente = productLotes.length > 0 ? (Number(productLotes[0].costo_laboratorio) || 0) : 0;
-            const costoTotalUnitario = insumosCost + costoLaboratorioReciente;
-
-            // --- Stock Calculation ---
-            // FIX: Ensure 'lote.cantidad_actual' is treated as a number to prevent TS2532 and runtime errors
-            const stockTotal = productLotes.reduce((acc, lote) => acc + (Number(lote.cantidad_actual) || 0), 0);
-
-            // --- Advanced Stats ---
-            const tasaRotacion = stockTotal > 0 ? (last12MonthsSold / stockTotal) : 0;
-            const tasaVentasPromedio = last90DaysSold / 3.0;
+            const lastLoteCost = productLotes.length > 0 ? Number(productLotes[0].costo_laboratorio) : 0;
+            const stockTotal = productLotes.reduce((sum, l) => sum + l.cantidad_actual, 0);
+            
+            const totalUnitCost = insumosCost + lastLoteCost;
 
             return {
                 id: p.id,
                 nombre: p.nombre,
-                ventasMesActual: ventasMesActual,
-                ventasAñoActual: ventasAñoActual,
-                costoTotalUnitario: costoTotalUnitario,
+                ventasMesActual,
+                ventasAñoActual,
+                costoTotalUnitario: totalUnitCost,
                 precioPublico: p.precio_publico,
                 precioComercio: p.precio_comercio,
                 precioMayorista: p.precio_mayorista,
                 stockTotal: stockTotal,
-                tasaRotacion: tasaRotacion,
-                tasaVentasPromedio: tasaVentasPromedio,
+                tasaRotacion: stockTotal > 0 ? last12MonthsSold / stockTotal : 0,
+                tasaVentasPromedio: last90DaysSold / 3,
             };
         });
         
-        console.log(`[${SERVICE_NAME}] Successfully calculated statistics for ${stats.length} products on the client-side.`);
-        return stats.sort((a,b) => a.nombre.localeCompare(b.nombre));
-
+        return stats;
     } catch (error: any) {
-        console.error(`[${SERVICE_NAME}] Error calculating product statistics on client-side:`, error);
-        throw new Error(`No se pudieron cargar los datos para las estadísticas. Error: ${error.message}`);
+        console.error(`[${SERVICE_NAME}] Error calculating statistics:`, error);
+        throw new Error(`Error al calcular estadísticas: ${error?.message}`);
     }
 };
