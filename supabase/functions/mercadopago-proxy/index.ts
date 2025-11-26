@@ -12,7 +12,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Proxy function initialized (v19 - With External Reference)');
+console.log('Mercado Pago Proxy function initialized (v20 - FIXED External Reference)');
 
 function parseArgentinianPhoneNumber(phoneString: string): { area_code: string; number: string } {
     if (!phoneString || phoneString.trim().length < 8) {
@@ -65,6 +65,8 @@ serve(async (req) => {
   try {
     const { items, payer: rawPayer, external_reference } = await req.json();
 
+    console.log('Received external_reference (Sale ID):', external_reference);
+
     if (!items || !rawPayer) {
       throw new Error('Missing items or payer information.');
     }
@@ -89,7 +91,7 @@ serve(async (req) => {
 
     const preference = {
       items: items,
-      external_reference: external_reference, // LINKING PAYMENT TO ORDER ID
+      external_reference: external_reference, // CRITICAL: THIS MUST BE PASSED
       payer: {
           name: rawPayer.name,
           surname: rawPayer.surname,
@@ -112,6 +114,8 @@ serve(async (req) => {
       statement_descriptor: "ISABELLA DE LA PERLA",
     };
     
+    console.log('Creating preference with external_reference:', preference.external_reference);
+
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {

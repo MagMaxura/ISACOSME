@@ -11,7 +11,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Webhook function initialized (v2 - DB Update)');
+console.log('Mercado Pago Webhook function initialized (v3 - Robust DB Update)');
 
 const formatPrice = (price: number): string => {
   return `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -110,44 +110,49 @@ serve(async (req) => {
     const paymentDetails = await mpResponse.json();
 
     if (paymentDetails.status === 'approved') {
-      console.log(`Payment ${paymentId} approved. Order ID: ${paymentDetails.external_reference}`);
+      console.log(`Payment ${paymentId} approved. Order ID (ext_ref): ${paymentDetails.external_reference}`);
 
-      // 1. Update Database
+      // 1. Update Database (Prioritized)
       if (paymentDetails.external_reference) {
         const { error: dbError } = await supabase
           .from('ventas')
           .update({ 
             estado: 'Pagada', 
-            observaciones: `Pagado vía Mercado Pago (ID: ${paymentId}). ` 
+            observaciones: `Pagado vía Mercado Pago (ID: ${paymentId}).` 
           })
           .eq('id', paymentDetails.external_reference);
           
         if (dbError) {
             console.error('Error updating database:', dbError);
         } else {
-            console.log('Database updated successfully.');
+            console.log('Database updated successfully to Pagada.');
         }
       } else {
-          console.warn('No external_reference (Sale ID) found in payment details.');
+          console.warn('No external_reference (Sale ID) found in payment details. Cannot update DB.');
       }
 
-      // 2. Send Email
+      // 2. Send Email (Secondary, wrapped in try/catch so failure doesn't obscure DB success)
       if (resendApiKey && orderPrepEmail) {
-        const emailHtml = createEmailHtml(paymentDetails);
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${resendApiKey}`,
-          },
-          body: JSON.stringify({
-            from: 'Ventas Online <onboarding@resend.dev>',
-            to: [orderPrepEmail],
-            subject: `Nuevo Pedido Aprobado - Orden #${paymentDetails.external_reference?.substring(0,8) || 'N/A'}`,
-            html: emailHtml,
-          }),
-        });
-        console.log('Email sent.');
+        try {
+            const emailHtml = createEmailHtml(paymentDetails);
+            const emailRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${resendApiKey}`,
+              },
+              body: JSON.stringify({
+                from: 'Ventas Online <onboarding@resend.dev>',
+                to: [orderPrepEmail],
+                subject: `Nuevo Pedido Aprobado - Orden #${paymentDetails.external_reference?.substring(0,8) || 'N/A'}`,
+                html: emailHtml,
+              }),
+            });
+            if (!emailRes.ok) console.error('Resend API Error:', await emailRes.text());
+            else console.log('Email notification sent.');
+        } catch (emailErr) {
+            console.error('Failed to send email:', emailErr);
+        }
       }
     }
 
@@ -155,9 +160,11 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in mercadopago-webhook:', error.message);
+    // Return 200 even on error to prevent MP from retrying indefinitely if it's a logic error
+    // Log the error to Supabase logs for debugging
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
+      status: 200, 
     });
   }
 }, { verify: false });
