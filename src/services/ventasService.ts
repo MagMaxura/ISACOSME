@@ -1,5 +1,8 @@
+
 import { supabase } from '../supabase';
 import { Venta, VentaItem, PuntoDeVenta } from '../types';
+import { fetchProductosConStock } from './productosService';
+import { OrderItem } from '@/components/CheckoutModal';
 
 const SERVICE_NAME = 'VentasService';
 
@@ -14,22 +17,72 @@ export interface VentaToCreate extends Omit<Venta, 'id' | 'clienteNombre' | 'ite
     items: VentaItemParaCrear[];
 }
 
+// --- New Helper Function ---
+export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise<VentaItemParaCrear[]> => {
+    console.log(`[${SERVICE_NAME}] Preparing sale items and assigning lots for ${cartItems.length} products.`);
+    
+    // 1. Fetch fresh stock data for all involved products
+    const allProducts = await fetchProductosConStock();
+    const itemsParaCrear: VentaItemParaCrear[] = [];
+
+    for (const item of cartItems) {
+        const product = allProducts.find(p => p.id === item.id);
+        
+        if (!product) {
+            throw new Error(`Producto "${item.nombre}" no encontrado o ya no está disponible.`);
+        }
+
+        if (product.stockTotal < item.quantity) {
+            throw new Error(`Stock insuficiente para "${item.nombre}". Solicitado: ${item.quantity}, Disponible: ${product.stockTotal}.`);
+        }
+
+        // 2. Find suitable lots (FIFO strategy: oldest expiration first, or oldest created first)
+        // We aggregate all lots from all deposits for the public sale.
+        const allLots = product.stockPorDeposito.flatMap(d => d.lotes)
+            .filter(l => l.cantidad_actual > 0)
+            .sort((a, b) => {
+                // Sort by expiration date (if available), then by creation (simulated by ID or assumed sequence)
+                if (a.fecha_vencimiento && b.fecha_vencimiento) {
+                    return new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime();
+                }
+                return 0; 
+            });
+
+        let cantidadRestante = item.quantity;
+
+        for (const lote of allLots) {
+            if (cantidadRestante <= 0) break;
+
+            const cantidadDeLote = Math.min(cantidadRestante, lote.cantidad_actual);
+            
+            itemsParaCrear.push({
+                productoId: item.id,
+                cantidad: cantidadDeLote,
+                precioUnitario: item.unitPrice,
+                loteId: lote.id,
+            });
+
+            cantidadRestante -= cantidadDeLote;
+        }
+
+        if (cantidadRestante > 0) {
+             throw new Error(`Error de integridad de stock para "${item.nombre}". El stock total reportado no coincide con la suma de lotes disponibles.`);
+        }
+    }
+
+    return itemsParaCrear;
+};
+
 export const fetchVentas = async (): Promise<Venta[]> => {
     console.log(`[${SERVICE_NAME}] Fetching sales data.`);
     
-    // The try/catch wrapper was removed for simplicity. The calling component (`Ventas.tsx`)
-    // already has a robust try/catch block to handle any errors that occur here.
     const { data, error } = await supabase
         .from('ventas')
         .select('*, clientes(nombre), venta_items(cantidad, precio_unitario, productos(nombre))')
         .order('fecha', { ascending: false });
     
     if (error) {
-        // Log the detailed error from Supabase for easier debugging.
         console.error(`[${SERVICE_NAME}] Error fetching sales. Message: ${error.message}. Details: ${error.details || 'N/A'}.`);
-        // Throw the original Supabase error object. This is crucial because it contains
-        // detailed properties like .code, .details, and .hint, which the UI error
-        // component uses to provide a precise diagnosis and solution.
         throw error;
     }
     
@@ -69,15 +122,12 @@ export const fetchVentas = async (): Promise<Venta[]> => {
 export const createVenta = async (ventaData: VentaToCreate): Promise<string> => {
     console.log(`[${SERVICE_NAME}] Creating new sale.`);
     
-    // In a real scenario, this should be a single transaction/RPC call to ensure data integrity.
-    // For now, we perform sequential operations and include cleanup logic on failure.
-    
     let newVentaId: string | null = null;
     try {
         // 1. Insert into 'ventas' table
         const { data: ventaResult, error: ventaError } = await (supabase
             .from('ventas') as any)
-            .insert([ // Insert expects an array, so wrap the object
+            .insert([ 
                 {
                     cliente_id: ventaData.clienteId,
                     fecha: ventaData.fecha,
@@ -114,20 +164,15 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
             .insert(itemsToInsert);
         
         if (itemsError) {
-            // Attempt to clean up the orphaned sale record if item insertion fails
             console.error(`[${SERVICE_NAME}] Failed to insert sale items. Cleaning up sale record ${newVentaId}`);
             await (supabase.from('ventas') as any).delete().eq('id', newVentaId);
             throw itemsError;
         }
 
-        // 3. IMPORTANT: Stock update should be handled by an RPC function for atomicity.
-        // Assuming a trigger on 'venta_items' will handle stock deduction from 'lotes'.
-        console.log(`[${SERVICE_NAME}] Sale ${newVentaId} created. Stock update should be handled by backend logic (e.g., trigger).`);
-
+        console.log(`[${SERVICE_NAME}] Sale ${newVentaId} created.`);
         return newVentaId;
 
     } catch (error: any) {
-        // This general catch block will handle errors from any of the above await calls.
         console.error(`[${SERVICE_NAME}] Error creating sale:`, error);
         throw error;
     }
@@ -164,26 +209,18 @@ export const deleteVenta = async (ventaId: string): Promise<void> => {
             if (functionNotFound) {
                 throw {
                     message: "Error de base de datos: La función 'eliminar_venta_y_restaurar_stock' no existe.",
-                    details: "Esta función es crucial para eliminar una venta de forma segura, ya que garantiza que el stock de los productos vendidos se devuelva a los lotes correspondientes.",
-                    hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria.",
+                    details: "Esta función es crucial para eliminar una venta de forma segura.",
+                    hint: "Ejecuta el script SQL necesario.",
                     sql: `CREATE OR REPLACE FUNCTION eliminar_venta_y_restaurar_stock(p_venta_id uuid)
 RETURNS void AS $$
 DECLARE
     item RECORD;
 BEGIN
-    -- Loop through each item in the sale to restore stock to the correct lot
-    FOR item IN
-        SELECT lote_id, cantidad FROM venta_items WHERE venta_id = p_venta_id
+    FOR item IN SELECT lote_id, cantidad FROM venta_items WHERE venta_id = p_venta_id
     LOOP
-        UPDATE lotes
-        SET cantidad_actual = cantidad_actual + item.cantidad
-        WHERE id = item.lote_id;
+        UPDATE lotes SET cantidad_actual = cantidad_actual + item.cantidad WHERE id = item.lote_id;
     END LOOP;
-
-    -- Delete the sale items
     DELETE FROM venta_items WHERE venta_id = p_venta_id;
-
-    -- Delete the sale itself
     DELETE FROM ventas WHERE id = p_venta_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;`
@@ -193,7 +230,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;`
         }
         console.log(`[${SERVICE_NAME}] Successfully deleted sale ${ventaId} and restored stock.`);
     } catch (error: any) {
-        // The calling component will handle displaying the error.
         throw error;
     }
 };

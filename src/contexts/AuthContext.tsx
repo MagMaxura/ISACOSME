@@ -53,22 +53,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
     }
 
-    // FIX: Do NOT set loading(true) here. This causes the entire App to unmount/remount
-    // showing the "Cargando ERP..." screen whenever the profile is refreshed in the background.
-    // This was causing the CheckoutModal to close (unmount) while typing.
-    // We only want the initial loading state (managed by the useEffects) to block the UI.
+    // CRITICAL FIX: We DO NOT set loading(true) here. 
+    // Setting loading to true triggers the "Cargando ERP..." screen in App.tsx, which unmounts all child components (including modals).
+    // This was causing the "CheckoutModal closes when typing" issue because the profile was being refreshed in the background.
     
     setError(null);
     
     console.log(`[AuthContext:fetchProfile] Fetching profile for user ${userId} via RPC 'get_my_profile'.`);
     try {
-        // Using .single() is idiomatic but throws on 0 rows, so we handle that specific error in the catch block.
         const { data, error: rpcError } = await supabase
             .rpc('get_my_profile')
             .single();
 
         if (rpcError) {
-            // Check for a specific PostgreSQL error code for "function does not exist"
             if (rpcError.code === '42883' || (rpcError.message && rpcError.message.includes('function get_my_profile() does not exist'))) {
                  const enhancedError = {
                      ...rpcError,
@@ -78,10 +75,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                  };
                  throw enhancedError;
             }
-            // For other errors, throw them as is.
             throw rpcError;
         } else if (data) {
-            console.log('[AuthContext:fetchProfile] Profile data received via RPC:', data);
+            console.log('[AuthContext:fetchProfile] Profile data received via RPC.');
             const profileData = data as any;
             setProfile({
                 ...profileData,
@@ -107,8 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
     } finally {
-        console.log('[AuthContext:fetchProfile] Finished profile fetch attempt.');
-        // Always ensure loading is false after the first fetch attempt finishes
+        // We ensure loading is false once the initial fetch is done.
         setLoading(false);
     }
   }, [userId]); 
@@ -116,11 +111,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (userId) {
         fetchProfile();
+    } else if (userId === undefined) {
+        // Waiting for auth check
     } else {
+        // User is null (logged out)
         setProfile(null);
-        // Don't set loading false here immediately if we are waiting for session, 
-        // but if userId is null/undefined after auth check, we are done.
-        // The onAuthStateChange handles the initial false setting if no session.
+        setLoading(false);
     }
   }, [userId, fetchProfile]);
 

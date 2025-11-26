@@ -1,7 +1,9 @@
 
 import React, { useState, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { IconX, IconMercadoPago } from './Icons';
 import { createPreference } from '../services/mercadoPagoService';
+import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
 
 export interface OrderItem {
   id: string;
@@ -28,7 +30,7 @@ interface InputFieldProps {
     required?: boolean;
 }
 
-// Moved outside to prevent re-creation on every render which causes focus loss
+// Defined outside to ensure stable reference across renders
 const InputField: React.FC<InputFieldProps> = ({ name, label, value, onChange, error, type = 'text', required = true }) => (
     <div>
         <label className="label-style">{label}</label>
@@ -38,6 +40,7 @@ const InputField: React.FC<InputFieldProps> = ({ name, label, value, onChange, e
             value={value} 
             onChange={onChange} 
             required={required} 
+            autoComplete="off"
             className={`input-style ${error ? 'border-red-500' : ''}`}
         />
         {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
@@ -58,6 +61,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     const [errors, setErrors] = useState<Record<string, string | null>>({});
     const [loading, setLoading] = useState(false);
     const [apiError, setApiError] = useState<string | null>(null);
+    const [statusMessage, setStatusMessage] = useState<string>('');
 
     if (!isOpen) return null;
 
@@ -73,7 +77,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     if (!/^\d+$/.test(value)) error = 'Solo se admiten números.';
                     break;
                 case 'street_number':
-                    if (!/^[1-9]\d*$/.test(value)) error = 'Debe ser un número positivo. No usar "s/n" o letras.';
+                    if (!/^[1-9]\d*$/.test(value)) error = 'Debe ser un número positivo.';
                     break;
                 case 'email':
                     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) error = 'Formato de email inválido.';
@@ -98,36 +102,66 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     }, [payerInfo, errors]);
     
     const handlePayment = async () => {
-        // Final validation check on submit
+        // Final validation check
         let formIsValid = true;
         for (const key in payerInfo) {
             validateField(key, payerInfo[key as keyof typeof payerInfo]);
-            if (errors[key] !== null && errors[key] !== undefined) {
-                 formIsValid = false;
-            }
+            if (!payerInfo[key as keyof typeof payerInfo]) formIsValid = false;
         }
-
-        if (!isFormValid || !formIsValid) {
-            setApiError("Por favor, corrige los errores en el formulario.");
+        if (!formIsValid || Object.values(errors).some(e => e !== null)) {
+            setApiError("Por favor, completa todos los campos correctamente.");
             return;
         }
 
         setLoading(true);
         setApiError(null);
+        setStatusMessage('Verificando stock y registrando pedido...');
+
         try {
-            const preferenceInitPoint = await createPreference(orderItems, payerInfo);
+            // 1. Prepare items with auto-assigned lots (FIFO) logic
+            const itemsParaVenta = await prepareVentaItemsFromCart(orderItems);
+
+            // 2. Create "Pendiente" Sale in DB to reserve stock and record order
+            const saleData: VentaToCreate = {
+                clienteId: null, // Anonymous/Public client
+                fecha: new Date().toISOString().split('T')[0],
+                tipo: 'Venta',
+                estado: 'Pendiente',
+                items: itemsParaVenta,
+                subtotal: subtotal,
+                iva: 0, // Simplified for public view
+                total: subtotal,
+                observaciones: `Compra Web - Cliente: ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Envío: ${payerInfo.street_name} ${payerInfo.street_number}, CP ${payerInfo.zip_code}`,
+                puntoDeVenta: 'Tienda física', // Default or 'Web'
+            };
+
+            const newSaleId = await createVenta(saleData);
+            console.log("Sale created locally with ID:", newSaleId);
+
+            setStatusMessage('Iniciando pasarela de pago...');
+
+            // 3. Create Preference in Mercado Pago, passing the Sale ID as external_reference
+            const preferenceInitPoint = await createPreference(orderItems, payerInfo, newSaleId);
+            
+            // 4. Redirect
             window.location.href = preferenceInitPoint;
+
         } catch (err: any) {
-            setApiError(err.message || 'No se pudo iniciar el proceso de pago.');
+            console.error("Payment flow error:", err);
+            let msg = err.message || 'Ocurrió un error inesperado.';
+            if (msg.includes('insufficient stock')) msg = 'Stock insuficiente para completar el pedido.';
+            setApiError(msg);
             setLoading(false);
+            setStatusMessage('');
         }
     };
     
     const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-full flex flex-col">
+    // Use React Portal to render modal at document root to prevent z-index/overflow issues within parent containers
+    return ReactDOM.createPortal(
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[9999] p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in">
                 <div className="flex justify-between items-center p-5 border-b">
                     <h3 className="text-2xl font-semibold text-gray-800">Finalizar Compra</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -161,7 +195,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                          <InputField name="zip_code" label="Código Postal" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} />
                     </div>
                     {/* Order Summary */}
-                    <div className="lg:w-1/2 bg-gray-50 p-6 rounded-lg">
+                    <div className="lg:w-1/2 bg-gray-50 p-6 rounded-lg h-fit">
                         <h4 className="text-lg font-semibold text-gray-700 mb-4">Resumen del Pedido</h4>
                          <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                             {orderItems.map(item => (
@@ -174,16 +208,19 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                 </div>
                             ))}
                         </div>
-                        <div className="mt-4 pt-4 border-t-2">
+                        <div className="mt-4 pt-4 border-t-2 border-gray-200">
                             <div className="flex justify-between font-bold text-xl text-gray-800">
                                 <span>Total:</span>
                                 <span>{formatPrice(subtotal)}</span>
                             </div>
                         </div>
+                        
                         {apiError && <div className="mt-4 bg-red-100 text-red-700 p-3 rounded-md text-sm">{apiError}</div>}
+                        {loading && statusMessage && <div className="mt-4 text-blue-600 text-sm text-center font-medium">{statusMessage}</div>}
+
                         <button 
                             onClick={handlePayment} 
-                            disabled={loading || !isFormValid}
+                            disabled={loading}
                             className="w-full mt-6 bg-[#009EE3] text-white py-3 rounded-lg shadow-md hover:bg-[#0089c7] transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-lg flex items-center justify-center"
                         >
                             {loading ? (
@@ -209,8 +246,11 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 .input-style { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); } 
                 .input-style:focus { outline: 2px solid transparent; outline-offset: 2px; border-color: #8a5cf6; }
                 .input-style.border-red-500 { border-color: #EF4444; }
+                @keyframes fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+                .animate-fade-in { animation: fade-in 0.2s ease-out; }
             `}</style>
-        </div>
+        </div>,
+        document.body
     );
 };
 
