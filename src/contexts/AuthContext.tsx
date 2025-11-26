@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 // FIX: Use `import type` for type-only imports for User and AuthError to resolve module errors. Removed unused PostgrestError import.
 import type { User, AuthError } from '@supabase/supabase-js';
@@ -46,8 +47,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
     }
 
-    setLoading(true);
+    // Don't set loading to true here if we already have a profile or it's just a background refresh.
+    // This prevents the UI from unmounting/remounting (flashing) during token refreshes or re-fetches.
+    // We only set loading to false at the end to ensure initial load completes.
     setError(null);
+    
     console.log(`[AuthContext:fetchProfile] Fetching profile for user ${userId} via RPC 'get_my_profile' to bypass RLS recursion.`);
     try {
         // Using .single() is idiomatic but throws on 0 rows, so we handle that specific error in the catch block.
@@ -148,7 +152,7 @@ USING (user_has_role('superadmin'));`
         console.log('[AuthContext:fetchProfile] Finished profile fetch attempt.');
         setLoading(false);
     }
-  }, [userId, user]);
+  }, [userId]); // Removed 'user' object from dependency array to avoid effect loops on reference change
 
   useEffect(() => {
     console.log(`[AuthContext:Effect2] Profile fetch effect triggered for user ID: ${userId}`);

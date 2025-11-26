@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { IconX, IconMercadoPago } from './Icons';
 import { createPreference } from '../services/mercadoPagoService';
@@ -16,6 +17,32 @@ interface CheckoutModalProps {
   orderItems: OrderItem[];
   subtotal: number;
 }
+
+interface InputFieldProps {
+    name: string;
+    label: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    error?: string | null;
+    type?: string;
+    required?: boolean;
+}
+
+// Moved outside to prevent re-creation on every render which causes focus loss
+const InputField: React.FC<InputFieldProps> = ({ name, label, value, onChange, error, type = 'text', required = true }) => (
+    <div>
+        <label className="label-style">{label}</label>
+        <input 
+            type={type} 
+            name={name} 
+            value={value} 
+            onChange={onChange} 
+            required={required} 
+            className={`input-style ${error ? 'border-red-500' : ''}`}
+        />
+        {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+    </div>
+);
 
 const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderItems, subtotal }) => {
     const [payerInfo, setPayerInfo] = useState({
@@ -98,21 +125,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     
     const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    const InputField: React.FC<{name: keyof typeof payerInfo, label: string, type?: string, required?: boolean}> = ({ name, label, type = 'text', required = true }) => (
-        <div>
-            <label className="label-style">{label}</label>
-            <input 
-                type={type} 
-                name={name} 
-                value={payerInfo[name]} 
-                onChange={handleInputChange} 
-                required={required} 
-                className={`input-style ${errors[name] ? 'border-red-500' : ''}`}
-            />
-            {errors[name] && <p className="text-red-500 text-xs mt-1">{errors[name]}</p>}
-        </div>
-    );
-
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-full flex flex-col">
@@ -128,25 +140,25 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     <div className="lg:w-1/2 space-y-4">
                         <h4 className="text-lg font-semibold text-gray-700">Tus Datos</h4>
                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <InputField name="name" label="Nombre" />
-                            <InputField name="surname" label="Apellido" />
+                            <InputField name="name" label="Nombre" value={payerInfo.name} onChange={handleInputChange} error={errors.name} />
+                            <InputField name="surname" label="Apellido" value={payerInfo.surname} onChange={handleInputChange} error={errors.surname} />
                         </div>
-                        <InputField name="email" label="Email" type="email" />
+                        <InputField name="email" label="Email" type="email" value={payerInfo.email} onChange={handleInputChange} error={errors.email} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <InputField name="phone" label="Teléfono" type="tel" />
-                            <InputField name="dni" label="DNI/CUIT" />
+                            <InputField name="phone" label="Teléfono" type="tel" value={payerInfo.phone} onChange={handleInputChange} error={errors.phone} />
+                            <InputField name="dni" label="DNI/CUIT" value={payerInfo.dni} onChange={handleInputChange} error={errors.dni} />
                         </div>
 
                         <h4 className="text-lg font-semibold text-gray-700 pt-4">Dirección de Envío</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="sm:col-span-2">
-                                <InputField name="street_name" label="Calle" />
+                                <InputField name="street_name" label="Calle" value={payerInfo.street_name} onChange={handleInputChange} error={errors.street_name} />
                             </div>
                             <div>
-                                <InputField name="street_number" label="Número" />
+                                <InputField name="street_number" label="Número" value={payerInfo.street_number} onChange={handleInputChange} error={errors.street_number} />
                             </div>
                         </div>
-                         <InputField name="zip_code" label="Código Postal" />
+                         <InputField name="zip_code" label="Código Postal" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} />
                     </div>
                     {/* Order Summary */}
                     <div className="lg:w-1/2 bg-gray-50 p-6 rounded-lg">

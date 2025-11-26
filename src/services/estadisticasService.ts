@@ -66,20 +66,20 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
             // --- Cost Calculation ---
             const relatedInsumos = productInsumosMap.get(p.id) || [];
             const insumosCost = relatedInsumos.reduce((acc, current) => {
-                const cost = insumosCostMap.get(current.insumo_id) || 0;
-                return acc + (cost * current.cantidad);
+                const cost = Number(insumosCostMap.get(current.insumo_id)) || 0;
+                return acc + (cost * (Number(current.cantidad) || 0));
             }, 0);
 
             const productLotes = lotes
                 .filter(l => l.producto_id === p.id)
                 .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
             
-            const costoLaboratorioReciente = productLotes.length > 0 ? productLotes[0].costo_laboratorio : 0;
+            const costoLaboratorioReciente = productLotes.length > 0 ? (Number(productLotes[0].costo_laboratorio) || 0) : 0;
             const costoTotalUnitario = insumosCost + costoLaboratorioReciente;
 
             // --- Stock Calculation ---
             // FIX: Ensure 'lote.cantidad_actual' is treated as a number to prevent TS2532 and runtime errors by explicitly casting it with Number() or providing a fallback.
-            const stockTotal = productLotes.reduce((acc, lote) => acc + (lote.cantidad_actual || 0), 0);
+            const stockTotal = productLotes.reduce((acc, lote) => acc + (Number(lote.cantidad_actual) || 0), 0);
 
             // --- Advanced Stats ---
             const tasaRotacion = stockTotal > 0 ? (last12MonthsSold / stockTotal) : 0;
