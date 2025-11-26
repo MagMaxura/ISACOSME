@@ -1,11 +1,15 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Producto } from '@/types';
 import { fetchPublicProductsList } from '@/services/productosService';
-import { IconPackage, IconShoppingCart, IconList, IconLayoutGrid } from '@/components/Icons';
+import { IconPackage, IconShoppingCart, IconList, IconLayoutGrid, IconTruck } from '@/components/Icons';
 import CheckoutModal from '@/components/CheckoutModal';
 import { OrderItem } from '@/components/CheckoutModal';
+
+const SHIPPING_COST = 9800;
+const FREE_SHIPPING_THRESHOLD = 30000;
 
 const PublicErrorDisplay = ({ error }: { error: any }) => {
     if (!error) return null;
@@ -118,6 +122,17 @@ const PublicPriceListPage: React.FC = () => {
         const sub = items.reduce((acc, item) => acc + (item?.lineTotal || 0), 0);
         return { orderItems: items, subtotal: sub };
     }, [quantities, productos]);
+
+    // Shipping Logic
+    const shippingCost = useMemo(() => {
+        if (subtotal === 0) return 0;
+        return subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
+    }, [subtotal]);
+
+    const total = subtotal + shippingCost;
+    const amountLeftForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal);
+    const freeShippingProgress = Math.min(100, (subtotal / FREE_SHIPPING_THRESHOLD) * 100);
+
 
     const groupedProducts = useMemo(() => {
         const lineOrder = ['ULTRAHISNE', 'BODYTAN CARIBEAN', 'SECRET', 'ESSENS', 'General'];
@@ -287,6 +302,30 @@ const PublicPriceListPage: React.FC = () => {
                 <div className="lg:w-1/3">
                     <div className="sticky top-24 bg-white p-6 rounded-lg shadow-lg">
                          <h3 className="text-2xl font-bold text-gray-800 mb-4 flex items-center"><IconShoppingCart className="h-6 w-6 mr-2 text-primary"/> Tu Pedido</h3>
+                         
+                         {/* Free Shipping Progress Bar */}
+                         <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                            {amountLeftForFreeShipping > 0 ? (
+                                <>
+                                    <div className="flex justify-between text-sm font-semibold text-blue-700 mb-2">
+                                        <span>Envío Gratis</span>
+                                        <span>Faltan {formatPrice(amountLeftForFreeShipping)}</span>
+                                    </div>
+                                    <div className="w-full bg-blue-200 rounded-full h-2.5 mb-2">
+                                        <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${freeShippingProgress}%` }}></div>
+                                    </div>
+                                    <p className="text-xs text-blue-600">
+                                        ¡Agrega más productos para ahorrar <strong>{formatPrice(SHIPPING_COST)}</strong> de envío!
+                                    </p>
+                                </>
+                            ) : (
+                                <div className="flex items-center text-green-600 font-bold animate-pulse">
+                                    <IconTruck className="h-6 w-6 mr-2" />
+                                    ¡Felicidades! Tienes Envío GRATIS
+                                </div>
+                            )}
+                         </div>
+
                          <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
                              {orderItems.length > 0 ? orderItems.map(item => item && (
                                  <div key={item.id} className="flex justify-between items-center text-sm border-b pb-1">
@@ -295,8 +334,17 @@ const PublicPriceListPage: React.FC = () => {
                                  </div>
                              )) : <p className="text-gray-500 text-center py-4">Añade productos para ver tu resumen.</p>}
                          </div>
-                         <div className="mt-4 pt-4 border-t-2 border-dashed">
-                             <div className="flex justify-between font-bold text-2xl text-gray-800"><span>Subtotal:</span><span>{formatPrice(subtotal)}</span></div>
+                         <div className="mt-4 pt-4 border-t-2 border-dashed space-y-2">
+                             <div className="flex justify-between text-gray-600"><span>Subtotal:</span><span>{formatPrice(subtotal)}</span></div>
+                             <div className="flex justify-between text-gray-600">
+                                 <span>Envío:</span>
+                                 {shippingCost === 0 ? (
+                                     <span className="text-green-600 font-bold">Gratis</span>
+                                 ) : (
+                                     <span>{formatPrice(shippingCost)}</span>
+                                 )}
+                             </div>
+                             <div className="flex justify-between font-bold text-2xl text-gray-800 border-t pt-2"><span>Total:</span><span>{formatPrice(total)}</span></div>
                          </div>
                          <button onClick={() => setIsCheckoutOpen(true)} disabled={orderItems.length === 0} className="w-full mt-6 bg-secondary text-white py-3 rounded-lg shadow-md hover:bg-secondary-dark transition-colors disabled:bg-gray-400 font-semibold text-lg">
                              Finalizar Pedido
@@ -311,6 +359,7 @@ const PublicPriceListPage: React.FC = () => {
                     onClose={() => setIsCheckoutOpen(false)}
                     orderItems={orderItems}
                     subtotal={subtotal}
+                    shippingCost={shippingCost}
                 />
             )}
         </>

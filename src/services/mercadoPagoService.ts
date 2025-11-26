@@ -1,3 +1,4 @@
+
 import { supabase } from '../supabase';
 import { OrderItem } from '@/components/CheckoutModal';
 
@@ -20,10 +21,11 @@ interface PayerInfo {
  * @param {OrderItem[]} orderItems - The user's cart.
  * @param {PayerInfo} payerInfo - The guest user's contact and shipping information.
  * @param {string} [externalReference] - The internal Sale ID to link the payment to.
+ * @param {number} [shippingCost] - The shipping cost to be added as a line item.
  * @returns {Promise<string>} The init_point URL from Mercado Pago.
  */
-export const createPreference = async (orderItems: OrderItem[], payerInfo: PayerInfo, externalReference?: string): Promise<string> => {
-    console.log(`[${SERVICE_NAME}] Creating payment preference. Sale ID: ${externalReference}`);
+export const createPreference = async (orderItems: OrderItem[], payerInfo: PayerInfo, externalReference?: string, shippingCost?: number): Promise<string> => {
+    console.log(`[${SERVICE_NAME}] Creating payment preference. Sale ID: ${externalReference}. Shipping: ${shippingCost}`);
     
     // Pre-formatting items to be extra safe
     const mpItems = orderItems.map(item => ({
@@ -33,6 +35,17 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
         unit_price: Number(item.unitPrice.toFixed(2)), // Ensure 2 decimals max
         currency_id: 'ARS', 
     }));
+
+    // Add shipping as a separate item if applicable
+    if (shippingCost && shippingCost > 0) {
+        mpItems.push({
+            id: 'shipping',
+            title: 'Costo de Envío',
+            quantity: 1,
+            unit_price: Number(shippingCost.toFixed(2)),
+            currency_id: 'ARS',
+        });
+    }
 
     const mpPayer = {
         name: payerInfo.name,

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { IconX, IconMercadoPago, IconCheck, IconDeviceFloppy } from './Icons';
@@ -17,6 +18,7 @@ interface CheckoutModalProps {
   onClose: () => void;
   orderItems: OrderItem[];
   subtotal: number;
+  shippingCost?: number;
 }
 
 interface InputFieldProps {
@@ -48,7 +50,7 @@ const InputField: React.FC<InputFieldProps> = ({ name, label, value, onChange, e
     </div>
 );
 
-const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderItems, subtotal }) => {
+const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderItems, subtotal, shippingCost = 0 }) => {
     const [step, setStep] = useState<'form' | 'payment_ready'>('form');
     const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
     
@@ -66,6 +68,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     const [loading, setLoading] = useState(false);
     const [apiError, setApiError] = useState<string | null>(null);
     const [statusMessage, setStatusMessage] = useState<string>('');
+
+    const total = subtotal + shippingCost;
 
     if (!isOpen) return null;
 
@@ -119,6 +123,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
             const itemsParaVenta = await prepareVentaItemsFromCart(orderItems);
 
             // 2. Create Sale in DB
+            // Note: Total includes shipping, subtotal implies products. 
+            // We add shipping info to observations for admin clarity.
+            const shippingNote = shippingCost > 0 ? ` [Incluye Envío: $${shippingCost}]` : ' [Envío Gratis]';
+            
             const saleData: VentaToCreate = {
                 clienteId: null,
                 fecha: new Date().toISOString().split('T')[0],
@@ -127,8 +135,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 items: itemsParaVenta,
                 subtotal: subtotal,
                 iva: 0,
-                total: subtotal,
-                observaciones: `Compra Web - Cliente: ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Envío: ${payerInfo.street_name} ${payerInfo.street_number}, CP ${payerInfo.zip_code}`,
+                total: total, // Save final total including shipping
+                observaciones: `Compra Web${shippingNote} - Cliente: ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Envío: ${payerInfo.street_name} ${payerInfo.street_number}, CP ${payerInfo.zip_code}`,
                 puntoDeVenta: 'Tienda física', 
             };
 
@@ -159,7 +167,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
 
         try {
             // Create Preference in Mercado Pago using the Order ID we just created
-            const preferenceInitPoint = await createPreference(orderItems, payerInfo, createdOrderId);
+            // We pass shipping cost so the backend can add it as a line item
+            const preferenceInitPoint = await createPreference(orderItems, payerInfo, createdOrderId, shippingCost);
             
             // Redirect
             window.location.href = preferenceInitPoint;
@@ -246,10 +255,22 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                 </div>
                             ))}
                         </div>
-                        <div className="mt-4 pt-4 border-t-2 border-gray-200">
-                            <div className="flex justify-between font-bold text-xl text-gray-800">
-                                <span>Total:</span>
+                        <div className="mt-4 pt-4 border-t-2 border-gray-200 space-y-2">
+                            <div className="flex justify-between text-gray-600">
+                                <span>Subtotal:</span>
                                 <span>{formatPrice(subtotal)}</span>
+                            </div>
+                            <div className="flex justify-between text-gray-600">
+                                <span>Costo de Envío:</span>
+                                {shippingCost === 0 ? (
+                                    <span className="text-green-600 font-bold">Gratis</span>
+                                ) : (
+                                    <span>{formatPrice(shippingCost)}</span>
+                                )}
+                            </div>
+                            <div className="flex justify-between font-bold text-xl text-gray-800 border-t pt-2">
+                                <span>Total:</span>
+                                <span>{formatPrice(total)}</span>
                             </div>
                         </div>
                         
