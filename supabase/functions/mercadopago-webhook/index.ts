@@ -1,24 +1,22 @@
+
 // supabase/functions/mercadopago-webhook/index.ts
 
-// Declare Deno to prevent TypeScript errors in a non-Deno environment.
 declare const Deno: any;
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Inlined from _shared/cors.ts to fix bundling error
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Webhook function initialized');
+console.log('Mercado Pago Webhook function initialized (v2 - DB Update)');
 
-// Helper to format currency
 const formatPrice = (price: number): string => {
   return `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-// Helper to create the email HTML body
 const createEmailHtml = (paymentDetails: any): string => {
   const payer = paymentDetails.payer;
   const items = paymentDetails.additional_info.items;
@@ -35,8 +33,9 @@ const createEmailHtml = (paymentDetails: any): string => {
 
   return `
     <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-      <h1 style="color: #333;">Nuevo Pedido Recibido - #${paymentDetails.id}</h1>
-      <p>Se ha recibido y aprobado un nuevo pedido a través de la tienda online.</p>
+      <h1 style="color: #8a5cf6;">Pago Aprobado - Orden #${paymentDetails.external_reference || 'N/A'}</h1>
+      <p>Se ha recibido un pago exitoso a través de Mercado Pago.</p>
+      <p><strong>ID de Pago MP:</strong> ${paymentDetails.id}</p>
       
       <h2 style="border-bottom: 2px solid #eee; padding-bottom: 5px;">Detalles del Pedido</h2>
       <table style="width: 100%; border-collapse: collapse;">
@@ -53,13 +52,12 @@ const createEmailHtml = (paymentDetails: any): string => {
         </tbody>
       </table>
       <p style="text-align: right; font-size: 1.2em; font-weight: bold; margin-top: 16px;">
-        Total del Pedido: ${formatPrice(paymentDetails.transaction_amount)}
+        Total Pagado: ${formatPrice(paymentDetails.transaction_amount)}
       </p>
 
       <h2 style="border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 24px;">Información del Comprador</h2>
       <p><strong>Nombre:</strong> ${payer.first_name || ''} ${payer.last_name || ''}</p>
       <p><strong>Email:</strong> ${payer.email}</p>
-      <p><strong>Teléfono:</strong> ${payer.phone?.area_code || ''} ${payer.phone?.number || ''}</p>
       <p><strong>DNI:</strong> ${payer.identification?.number || 'No especificado'}</p>
       
       <h2 style="border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 24px;">Dirección de Envío</h2>
@@ -72,85 +70,94 @@ const createEmailHtml = (paymentDetails: any): string => {
   `;
 };
 
-// The 'serve' function now includes `{ verify: false }` to disable JWT verification,
-// making the webhook endpoint public and accessible to Mercado Pago.
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // Mercado Pago now sends notifications based on `topic`, so we check that instead of `action`.
     const body = await req.json();
 
-    if (body.topic !== 'payment' && body.type !== 'payment') {
-      console.log(`Received webhook of type '${body.topic || body.type}', ignoring.`);
-      return new Response('Webhook received and ignored.', { status: 200 });
+    // Check for 'payment' topic or 'payment.created'/'payment.updated' actions
+    if (body.topic !== 'payment' && body.type !== 'payment' && body.action !== 'payment.created' && body.action !== 'payment.updated') {
+      return new Response('Ignored', { status: 200 });
     }
 
-    const paymentId = body.data.id;
-    console.log(`Received update for payment ID: ${paymentId}`);
+    const paymentId = body.data?.id || body.data?.id; 
+    if (!paymentId) return new Response('No payment ID found', { status: 200 });
 
-    // --- Get secrets ---
+    console.log(`Processing payment ID: ${paymentId}`);
+
     const accessToken = Deno.env.get('MP_ACCESS_TOKEN');
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     const orderPrepEmail = Deno.env.get('ORDER_PREP_EMAIL');
+    
+    // Initialize Supabase Admin Client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (!accessToken || !resendApiKey || !orderPrepEmail) {
-      throw new Error('Missing environment variables for Mercado Pago or Resend.');
-    }
+    if (!accessToken) throw new Error('Missing MP_ACCESS_TOKEN.');
 
-    // --- Fetch full payment details from Mercado Pago ---
+    // Fetch payment details from Mercado Pago
     const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
+      headers: { 'Authorization': `Bearer ${accessToken}` },
     });
 
     if (!mpResponse.ok) {
-      throw new Error(`Failed to fetch payment details from Mercado Pago. Status: ${mpResponse.status}`);
+      throw new Error(`Failed to fetch payment details. Status: ${mpResponse.status}`);
     }
     const paymentDetails = await mpResponse.json();
 
-    // --- Check if payment is approved and send email ---
     if (paymentDetails.status === 'approved') {
-      console.log(`Payment ${paymentId} is approved. Sending notification email.`);
-      
-      const emailHtml = createEmailHtml(paymentDetails);
+      console.log(`Payment ${paymentId} approved. Order ID: ${paymentDetails.external_reference}`);
 
-      const resendResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${resendApiKey}`,
-        },
-        body: JSON.stringify({
-          from: 'Ventas Online <onboarding@resend.dev>', // IMPORTANT: Replace with your verified domain in Resend
-          to: [orderPrepEmail],
-          subject: `Nuevo Pedido Aprobado - Orden #${paymentDetails.id}`,
-          html: emailHtml,
-        }),
-      });
-
-      if (!resendResponse.ok) {
-        const errorData = await resendResponse.json();
-        console.error('Failed to send email via Resend:', errorData);
-        throw new Error('Payment was approved, but failed to send the notification email.');
+      // 1. Update Database
+      if (paymentDetails.external_reference) {
+        const { error: dbError } = await supabase
+          .from('ventas')
+          .update({ 
+            estado: 'Pagada', 
+            observaciones: `Pagado vía Mercado Pago (ID: ${paymentId}). ` 
+          })
+          .eq('id', paymentDetails.external_reference);
+          
+        if (dbError) {
+            console.error('Error updating database:', dbError);
+        } else {
+            console.log('Database updated successfully.');
+        }
+      } else {
+          console.warn('No external_reference (Sale ID) found in payment details.');
       }
 
-      console.log(`Email sent successfully for order ${paymentId}.`);
-    } else {
-      console.log(`Payment ${paymentId} status is '${paymentDetails.status}', not 'approved'. No email sent.`);
+      // 2. Send Email
+      if (resendApiKey && orderPrepEmail) {
+        const emailHtml = createEmailHtml(paymentDetails);
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${resendApiKey}`,
+          },
+          body: JSON.stringify({
+            from: 'Ventas Online <onboarding@resend.dev>',
+            to: [orderPrepEmail],
+            subject: `Nuevo Pedido Aprobado - Orden #${paymentDetails.external_reference?.substring(0,8) || 'N/A'}`,
+            html: emailHtml,
+          }),
+        });
+        console.log('Email sent.');
+      }
     }
 
-    // Acknowledge receipt of the webhook to Mercado Pago
-    return new Response('Webhook processed successfully.', { status: 200 });
+    return new Response('Webhook processed', { status: 200 });
 
   } catch (error) {
     console.error('Error in mercadopago-webhook:', error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500, // Use 500 for server-side errors
+      status: 500,
     });
   }
-}, { verify: false }); // This option disables JWT verification, making the function public.
+}, { verify: false });

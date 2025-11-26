@@ -92,14 +92,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         setPayerInfo(prev => ({ ...prev, [name]: value }));
         validateField(name, value);
     };
-
-    const isFormValid = useMemo(() => {
-        const requiredFields: (keyof typeof payerInfo)[] = ['name', 'surname', 'email', 'phone', 'dni', 'street_name', 'street_number', 'zip_code'];
-        for (const field of requiredFields) {
-            if (!payerInfo[field]) return false;
-        }
-        return Object.values(errors).every(e => e === null);
-    }, [payerInfo, errors]);
     
     const handlePayment = async () => {
         // Final validation check

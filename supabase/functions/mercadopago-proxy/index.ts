@@ -1,3 +1,4 @@
+
 // supabase/functions/mercadopago-proxy/index.ts
 
 // Declare Deno to prevent TypeScript errors
@@ -11,85 +12,50 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Proxy function initialized (v18 - Nested object parsing)');
+console.log('Mercado Pago Proxy function initialized (v19 - With External Reference)');
 
-/**
- * Parses an Argentinian phone number into an area code and local number.
- * This version is stricter and throws an error for ambiguous formats, which is
- * caught and displayed to the user, preventing failures on the Mercado Pago page.
- * @param phoneString The full phone number string from the user.
- * @returns An object with { area_code, number }.
- * @throws An error if the phone number format is ambiguous or invalid.
- */
 function parseArgentinianPhoneNumber(phoneString: string): { area_code: string; number: string } {
-    console.log(`[PhoneParser v12] Parsing: "${phoneString}"`);
     if (!phoneString || phoneString.trim().length < 8) {
-        throw new Error('El número de teléfono es demasiado corto. Debe incluir código de área.');
+        throw new Error('El número de teléfono es demasiado corto.');
     }
     
     let clean = phoneString.replace(/\D/g, '');
-
-    // --- Determine if it's a mobile number based on original input ---
-    // The '9' after country code OR the presence of '15' are strong indicators.
     const originalNoSymbols = phoneString.replace(/[\s-()]/g, '');
     const isMobile = originalNoSymbols.startsWith('+549') || 
                      (originalNoSymbols.startsWith('15') && originalNoSymbols.length >= 8) ||
-                     (clean.startsWith('9') && clean.length > 10); // e.g. 91122334455 (without +54)
+                     (clean.startsWith('9') && clean.length > 10);
 
-    // --- Strip all common prefixes to get to the core 10 digits ---
     if (clean.startsWith('549')) clean = clean.substring(3);
     else if (clean.startsWith('54')) clean = clean.substring(2);
-    
-    if (clean.startsWith('9') && clean.length === 11) { // Handles cases like 91122334455
-        clean = clean.substring(1);
-    }
-    
+    if (clean.startsWith('9') && clean.length === 11) clean = clean.substring(1);
     if (clean.startsWith('0')) clean = clean.substring(1);
 
     let area_code = '';
     let number = '';
     
     if (clean.length === 10) {
-        // Standard 10-digit number (AC + local)
-        if (clean.startsWith('11')) { // Buenos Aires
+        if (clean.startsWith('11')) {
             area_code = '11';
             number = clean.substring(2);
-        } else if (['26','29','37','38'].some(prefix => clean.startsWith(prefix))) { // 4-digit ACs
+        } else if (['26','29','37','38'].some(prefix => clean.startsWith(prefix))) {
             area_code = clean.substring(0, 4);
             number = clean.substring(4);
-        } else { // 3-digit ACs
+        } else {
             area_code = clean.substring(0, 3);
             number = clean.substring(3);
         }
     } else if (clean.length === 8) {
-        // User likely entered a Buenos Aires number without area code.
         area_code = '11';
         number = clean;
     } else {
-        // The number is ambiguous.
-        throw new Error(`El teléfono "${phoneString}" no es válido. Por favor, inclúyelo con código de área (ej: 1122334455).`);
+        throw new Error(`El teléfono "${phoneString}" no es válido.`);
     }
 
-    // --- Finalize the local number part ---
-    // The mobile prefix '15' is now obsolete but might be entered. It should be removed.
-    if (number.startsWith('15')) {
-        number = number.substring(2);
-    }
-    
-    // Mercado Pago requires mobile numbers to be prefixed with '9'.
-    if (isMobile) {
-        number = '9' + number;
-    }
+    if (number.startsWith('15')) number = number.substring(2);
+    if (isMobile) number = '9' + number;
 
-    // Final sanity check
-    if (!area_code || !number) {
-        throw new Error(`No se pudo procesar el teléfono "${phoneString}".`);
-    }
-
-    console.log(`[PhoneParser v12] Result: area_code=${area_code}, number=${number}`);
     return { area_code, number };
 }
-
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -97,8 +63,7 @@ serve(async (req) => {
   }
 
   try {
-    const { items, payer: rawPayer } = await req.json();
-    console.log('Received raw request:', JSON.stringify({ items, payer: rawPayer }, null, 2));
+    const { items, payer: rawPayer, external_reference } = await req.json();
 
     if (!items || !rawPayer) {
       throw new Error('Missing items or payer information.');
@@ -109,21 +74,13 @@ serve(async (req) => {
 
     if (!accessToken) throw new Error('Missing MP_ACCESS_TOKEN env variable.');
     
-    // --- Data Sanitization & Validation ---
     const parsedPhone = parseArgentinianPhoneNumber(rawPayer.phone?.number || '');
-
-    const rawIdNumber = String(rawPayer.identification?.number || '');
-    const cleanIdNumber = rawIdNumber.replace(/\D/g, '');
-    let idType = 'DNI';
-    if (cleanIdNumber.length === 11) {
-        idType = 'CUIT';
-    }
-    console.log(`[Proxy] Inferred ID type as ${idType} for number ${cleanIdNumber}`);
+    const rawIdNumber = String(rawPayer.identification?.number || '').replace(/\D/g, '');
+    let idType = rawIdNumber.length === 11 ? 'CUIT' : 'DNI';
     
-    // **CRITICAL VALIDATION** for street number. Must be a positive number.
     const streetNumber = parseInt(rawPayer.address?.street_number, 10);
     if (isNaN(streetNumber) || streetNumber <= 0) {
-        throw new Error('El número de calle es inválido. Debe ser un número positivo.');
+        throw new Error('El número de calle es inválido.');
     }
 
     const proto = req.headers.get('x-forwarded-proto');
@@ -132,21 +89,16 @@ serve(async (req) => {
 
     const preference = {
       items: items,
+      external_reference: external_reference, // LINKING PAYMENT TO ORDER ID
       payer: {
           name: rawPayer.name,
           surname: rawPayer.surname,
           email: rawPayer.email,
-          phone: {
-              area_code: parsedPhone.area_code,
-              number: parsedPhone.number,
-          },
-          identification: {
-              type: idType,
-              number: cleanIdNumber,
-          },
+          phone: { area_code: parsedPhone.area_code, number: parsedPhone.number },
+          identification: { type: idType, number: rawIdNumber },
           address: {
             street_name: rawPayer.address?.street_name,
-            street_number: streetNumber, // Send the validated, parsed number
+            street_number: streetNumber,
             zip_code: rawPayer.address?.zip_code,
           }
       },
@@ -160,8 +112,6 @@ serve(async (req) => {
       statement_descriptor: "ISABELLA DE LA PERLA",
     };
     
-    console.log('Sending SANITIZED preference to Mercado Pago:', JSON.stringify(preference, null, 2));
-
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
@@ -175,8 +125,7 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error('Mercado Pago API error:', JSON.stringify(data, null, 2));
-      const errorMessage = data.cause?.[0]?.description || data.message || 'Failed to create preference.';
-      throw new Error(errorMessage);
+      throw new Error(data.message || 'Failed to create preference.');
     }
 
     return new Response(JSON.stringify({ init_point: data.init_point }), {

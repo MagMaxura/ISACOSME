@@ -53,9 +53,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
     }
 
-    // CRITICAL FIX: We DO NOT set loading(true) here. 
+    // FIX: We DO NOT set loading(true) here. 
     // Setting loading to true triggers the "Cargando ERP..." screen in App.tsx, which unmounts all child components (including modals).
-    // This was causing the "CheckoutModal closes when typing" issue because the profile was being refreshed in the background.
+    // We only want to block the UI on the initial load (handled by the initial state of loading=true).
     
     setError(null);
     
