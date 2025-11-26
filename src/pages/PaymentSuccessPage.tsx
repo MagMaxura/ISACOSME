@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { IconCheck, IconBrandWhatsapp, IconArrowLeft, IconPackage } from '@/components/Icons';
+import { IconCheck, IconBrandWhatsapp, IconArrowLeft } from '@/components/Icons';
 
 const PaymentSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -8,7 +9,12 @@ const PaymentSuccessPage: React.FC = () => {
   const [paymentId, setPaymentId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Mercado Pago returns these params on redirection
+    // Mercado Pago returns:
+    // collection_status=approved
+    // payment_id=...
+    // external_reference=... (This is our internal Sale ID)
+    // merchant_order_id=...
+    
     const extRef = searchParams.get('external_reference');
     const payId = searchParams.get('payment_id');
     
@@ -21,70 +27,62 @@ const PaymentSuccessPage: React.FC = () => {
   }, [searchParams]);
 
   // --- Configuración de WhatsApp ---
-  // Este es el número al que le llegarán los comprobantes
-  const whatsappNumber = '5493417192294'; 
+  const whatsappNumber = '5493417192294'; // Tu número de administración
   
-  // Construimos el mensaje predeterminado
+  // Construimos el mensaje
   const idShort = orderId ? orderId.substring(0, 8).toUpperCase() : 'WEB';
-  
-  let message = `👋 *¡Hola Isabella de la Perla!* \n\n`;
-  message += `✅ Ya realicé el pago de mi pedido.\n\n`;
+  let message = `👋 ¡Hola Isabella de la Perla! \n\n`;
+  message += `✅ Acabo de realizar el pago de mi pedido.\n`;
   if (orderId) {
-      message += `🆔 *Código de Pedido:* ${idShort}\n`;
+      message += `🆔 *ID de Orden:* ${idShort}\n`; // Usamos un ID corto para que sea fácil de leer
   }
   if (paymentId) {
       message += `💳 *Comprobante MP:* ${paymentId}\n`;
-  } else {
-      message += `💳 *Pago:* Aprobado\n`;
   }
-  message += `\nAguardo confirmación para el envío. ¡Gracias!`;
+  message += `\nPor favor, confirmen la recepción y el envío. ¡Gracias!`;
 
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 font-sans">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden transform transition-all">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden">
         {/* Header Verde */}
-        <div className="bg-[#00C851] p-8 text-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-white opacity-10 transform rotate-45 translate-y-1/2"></div>
-          <div className="relative z-10">
-            <div className="mx-auto bg-white w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 animate-bounce">
-                <IconCheck className="w-10 h-10 text-[#00C851]" strokeWidth={4} />
-            </div>
-            <h1 className="text-3xl font-extrabold text-white tracking-wide drop-shadow-md">¡Pago Exitoso!</h1>
-            <p className="text-green-50 mt-2 font-medium">Tu pedido ha sido registrado.</p>
+        <div className="bg-green-500 p-8 text-center">
+          <div className="mx-auto bg-white w-20 h-20 rounded-full flex items-center justify-center shadow-lg mb-4 animate-bounce">
+            <IconCheck className="w-10 h-10 text-green-500" strokeWidth={3} />
           </div>
+          <h1 className="text-3xl font-bold text-white tracking-wide">¡Pago Exitoso!</h1>
+          <p className="text-green-100 mt-2 text-sm">Tu transacción fue procesada correctamente</p>
         </div>
 
         {/* Body */}
-        <div className="p-8 space-y-8">
+        <div className="p-8 space-y-6">
           
-          <div className="text-center space-y-2">
-            <p className="text-gray-600 text-sm uppercase tracking-wide font-semibold">Código de Referencia</p>
-            <div className="inline-block bg-gray-100 px-6 py-3 rounded-lg border-2 border-dashed border-gray-300">
-                <p className="text-3xl font-mono font-bold text-gray-800 tracking-wider select-all">
-                    {idShort}
-                </p>
-            </div>
-            <p className="text-xs text-gray-400">Guarda este código para tu seguimiento</p>
+          <div className="text-center">
+            <p className="text-gray-600 leading-relaxed">
+              Gracias por tu compra. Hemos registrado tu pedido en el sistema.
+            </p>
+            {orderId && (
+                <div className="mt-4 p-3 bg-gray-100 rounded-lg border border-gray-200 inline-block">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Código de Pedido</p>
+                    <p className="text-xl font-mono font-bold text-gray-800 select-all">{idShort}</p>
+                </div>
+            )}
           </div>
 
-          {/* Action Box - WhatsApp */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 shadow-inner">
-            <div className="flex items-center justify-center mb-3 text-yellow-700 font-bold">
-                <IconPackage className="w-5 h-5 mr-2" />
-                <span>Paso Final Requerido</span>
-            </div>
-            <p className="text-sm text-yellow-800 text-center mb-5 leading-relaxed">
-              Para agilizar el armado y despacho inmediato de tu caja, por favor avísanos por WhatsApp ahora mismo.
+          {/* Action Box */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5">
+            <h3 className="font-bold text-yellow-800 text-center mb-2">⚠️ Paso Final Requerido</h3>
+            <p className="text-sm text-yellow-800 text-center mb-4">
+              Para agilizar el armado y envío, por favor envíanos el comprobante por WhatsApp ahora mismo.
             </p>
             <a 
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center w-full bg-[#25D366] hover:bg-[#20b358] text-white font-bold text-lg py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 group"
+              className="flex items-center justify-center w-full bg-[#25D366] hover:bg-[#1da851] text-white font-bold py-4 px-6 rounded-xl shadow-md transition-all transform hover:scale-105 group"
             >
-              <IconBrandWhatsapp className="w-8 h-8 mr-3 group-hover:animate-pulse" />
+              <IconBrandWhatsapp className="w-6 h-6 mr-3 group-hover:animate-pulse" />
               Enviar Comprobante
             </a>
           </div>
@@ -92,7 +90,7 @@ const PaymentSuccessPage: React.FC = () => {
           <div className="border-t border-gray-100 pt-6 text-center">
             <Link 
               to="/lista-publica" 
-              className="inline-flex items-center text-gray-400 hover:text-primary font-medium transition-colors text-sm"
+              className="inline-flex items-center text-gray-500 hover:text-primary font-medium transition-colors"
             >
               <IconArrowLeft className="w-4 h-4 mr-2" />
               Volver a la tienda
@@ -100,7 +98,7 @@ const PaymentSuccessPage: React.FC = () => {
           </div>
         </div>
       </div>
-      <p className="mt-8 text-xs text-gray-400 opacity-70">Sistema ERP &copy; {new Date().getFullYear()}</p>
+      <p className="mt-6 text-xs text-gray-400">Isabella de la Perla &copy; {new Date().getFullYear()}</p>
     </div>
   );
 };

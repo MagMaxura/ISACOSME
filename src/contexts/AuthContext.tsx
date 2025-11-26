@@ -1,6 +1,4 @@
-
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-// FIX: Use `import type` for type-only imports for User and AuthError to resolve module errors. Removed unused PostgrestError import.
 import type { User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/supabase';
 import { AuthContextType, Profile, AppRole } from '@/types';
@@ -11,7 +9,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<any>(null); // Changed to 'any' to store the full error object
+  const [error, setError] = useState<any>(null);
 
   // Effect 1: Handles user session from Supabase auth state changes.
   useEffect(() => {
@@ -53,9 +51,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
     }
 
-    // FIX: We DO NOT set loading(true) here. 
-    // Setting loading to true triggers the "Cargando ERP..." screen in App.tsx, which unmounts all child components (including modals).
-    // We only want to block the UI on the initial load (handled by the initial state of loading=true).
+    if (!profile) {
+        setLoading(true);
+    }
     
     setError(null);
     
@@ -103,7 +101,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
     } finally {
-        // We ensure loading is false once the initial fetch is done.
         setLoading(false);
     }
   }, [userId]); 

@@ -24,7 +24,7 @@ interface PayerInfo {
  * @returns {Promise<string>} The init_point URL from Mercado Pago.
  */
 export const createPreference = async (orderItems: OrderItem[], payerInfo: PayerInfo, externalReference?: string): Promise<string> => {
-    console.log(`[${SERVICE_NAME}] Creating payment preference.`);
+    console.log(`[${SERVICE_NAME}] Creating payment preference. Sale ID: ${externalReference}`);
     
     const mpItems = orderItems.map(item => ({
         id: item.id,
@@ -52,7 +52,7 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             body: { 
                 items: mpItems, 
                 payer: mpPayer,
-                external_reference: externalReference // Sending the Sale ID to the proxy
+                external_reference: externalReference // CRITICAL: Send Sale ID to link payment
             },
         });
 
