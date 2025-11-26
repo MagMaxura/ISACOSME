@@ -76,7 +76,7 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
                 .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
             
             const lastLoteCost = productLotes.length > 0 ? Number(productLotes[0].costo_laboratorio) : 0;
-            const stockTotal = productLotes.reduce((sum, l) => sum + l.cantidad_actual, 0);
+            const stockTotal = productLotes.reduce((sum, l) => sum + Number(l.cantidad_actual), 0);
             
             const totalUnitCost = insumosCost + lastLoteCost;
 
@@ -86,9 +86,9 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
                 ventasMesActual,
                 ventasAñoActual,
                 costoTotalUnitario: totalUnitCost,
-                precioPublico: p.precio_publico,
-                precioComercio: p.precio_comercio,
-                precioMayorista: p.precio_mayorista,
+                precioPublico: Number(p.precio_publico) || 0,
+                precioComercio: Number(p.precio_comercio) || 0,
+                precioMayorista: Number(p.precio_mayorista) || 0,
                 stockTotal: stockTotal,
                 tasaRotacion: stockTotal > 0 ? last12MonthsSold / stockTotal : 0,
                 tasaVentasPromedio: last90DaysSold / 3,
