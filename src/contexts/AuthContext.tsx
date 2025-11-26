@@ -51,7 +51,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
     }
 
-    if (!profile) {
+    // FIX: Only set global loading on the FIRST load, not on background refreshes.
+    // This prevents the UI from unmounting/remounting (closing modals) when the profile refreshes.
+    if (!profile && !force) {
         setLoading(true);
     }
     
@@ -77,10 +79,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (data) {
             console.log('[AuthContext:fetchProfile] Profile data received via RPC.');
             const profileData = data as any;
-            setProfile({
-                ...profileData,
-                roles: profileData.roles || [],
-            } as Profile);
+            
+            // Only update state if data actually changed to prevent re-renders
+            setProfile(prev => {
+                if (prev && prev.id === profileData.id && JSON.stringify(prev.roles) === JSON.stringify(profileData.roles)) {
+                    return prev;
+                }
+                return {
+                    ...profileData,
+                    roles: profileData.roles || [],
+                } as Profile;
+            });
         } else {
              console.warn('[AuthContext:fetchProfile] RPC call returned no data and no error.');
              setProfile(null);
@@ -103,7 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
         setLoading(false);
     }
-  }, [userId]); 
+  }, [userId]); // Removed profile from dependency to avoid loops
 
   useEffect(() => {
     if (userId) {

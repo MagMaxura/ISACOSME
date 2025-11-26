@@ -1,5 +1,3 @@
-
-// supabase/functions/mercadopago-webhook/index.ts
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -42,7 +40,7 @@ const createEmailHtml = (paymentDetails: any) => {
     </div>`;
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -76,7 +74,7 @@ serve(async (req) => {
       console.log(`Payment ${paymentId} approved. Order ID: ${paymentDetails.external_reference}`);
 
       // 1. Update Database
-      if (paymentDetails.external_reference) {
+      if (paymentDetails.external_reference && paymentDetails.external_reference !== 'NO_ID') {
         const { error: dbError } = await supabase
           .from('ventas')
           .update({ 
@@ -110,7 +108,7 @@ serve(async (req) => {
     }
 
     return new Response('Webhook processed', { status: 200 });
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
     return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
   }

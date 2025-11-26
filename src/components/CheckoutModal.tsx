@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { IconX, IconMercadoPago, IconCheck, IconDeviceFloppy } from './Icons';

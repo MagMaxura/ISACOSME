@@ -1,4 +1,3 @@
-
 import { supabase } from '../supabase';
 import { OrderItem } from '@/components/CheckoutModal';
 
@@ -26,11 +25,12 @@ interface PayerInfo {
 export const createPreference = async (orderItems: OrderItem[], payerInfo: PayerInfo, externalReference?: string): Promise<string> => {
     console.log(`[${SERVICE_NAME}] Creating payment preference. Sale ID: ${externalReference}`);
     
+    // Pre-formatting items to be extra safe
     const mpItems = orderItems.map(item => ({
         id: item.id,
         title: item.nombre,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
+        quantity: Math.floor(item.quantity), // Ensure integer
+        unit_price: Number(item.unitPrice.toFixed(2)), // Ensure 2 decimals max
         currency_id: 'ARS', 
     }));
 
@@ -52,27 +52,30 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             body: { 
                 items: mpItems, 
                 payer: mpPayer,
-                external_reference: externalReference // CRITICAL: Send Sale ID to link payment
+                external_reference: externalReference || 'NO_ID' // Fallback if ID is missing
             },
         });
 
         if (error) {
             console.error(`[${SERVICE_NAME}] Supabase function invocation failed:`, error);
-            if (error.context && typeof error.context.json === 'function') {
-                try {
+            // Try to parse the error message from the function if available
+            let errorMessage = error.message;
+            try {
+                 if (error.context && typeof error.context.json === 'function') {
                     const functionError = await error.context.json();
-                    if (functionError && functionError.error) throw new Error(functionError.error);
-                } catch (e) { console.error(e); }
-            }
-            throw new Error(`Error al contactar el servicio de pago: ${error.message}`);
+                    if (functionError && functionError.error) errorMessage = functionError.error;
+                 }
+            } catch (e) { /* ignore */ }
+            
+            throw new Error(`Error de conexión con Mercado Pago: ${errorMessage}`);
         }
 
         if (!data || !data.init_point) {
             console.error(`[${SERVICE_NAME}] Invalid response from payment function:`, data);
-            throw new Error(data.error || 'El servicio de pago no devolvió un link válido. Intenta de nuevo más tarde.');
+            throw new Error(data.error || 'El servicio de pago no devolvió un link válido.');
         }
         
-        console.log(`[${SERVICE_NAME}] Successfully created preference. Redirecting to Mercado Pago.`);
+        console.log(`[${SERVICE_NAME}] Preference created. Init Point: ${data.init_point}`);
         return data.init_point;
 
     } catch (err: any) {
