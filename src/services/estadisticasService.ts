@@ -1,3 +1,4 @@
+
 import { supabase } from '../supabase';
 import { ProductoEstadistica } from '../types';
 
@@ -78,7 +79,7 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
             const costoTotalUnitario = insumosCost + costoLaboratorioReciente;
 
             // --- Stock Calculation ---
-            // FIX: Ensure 'lote.cantidad_actual' is treated as a number to prevent TS2532 and runtime errors by explicitly casting it with Number() or providing a fallback.
+            // FIX: Ensure 'lote.cantidad_actual' is treated as a number to prevent TS2532 and runtime errors
             const stockTotal = productLotes.reduce((acc, lote) => acc + (Number(lote.cantidad_actual) || 0), 0);
 
             // --- Advanced Stats ---
@@ -105,7 +106,6 @@ export const fetchProductStatistics = async (): Promise<ProductoEstadistica[]> =
 
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error calculating product statistics on client-side:`, error);
-        // Provide a generic but useful error, since the RPC one is no longer relevant.
         throw new Error(`No se pudieron cargar los datos para las estadísticas. Error: ${error.message}`);
     }
 };

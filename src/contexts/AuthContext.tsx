@@ -27,7 +27,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log(`[AuthContext:Effect1] Auth state changed. Event: ${_event}`, session ? `User: ${session.user.id}` : 'No session');
-      setUser(session?.user ?? null);
+      // Only update if the user ID has changed or if transitioning between null/object to prevent deep re-renders on token refresh
+      setUser(prevUser => {
+          if (prevUser?.id === session?.user?.id && prevUser?.email === session?.user?.email) {
+              return prevUser;
+          }
+          return session?.user ?? null;
+      });
     });
 
     return () => {
@@ -39,7 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Effect 2: Fetches the user's profile whenever the user ID changes.
   const userId = user?.id;
 
-  const fetchProfile = useCallback(async () => {
+  const fetchProfile = useCallback(async (force = false) => {
     if (!userId) {
         console.log('[AuthContext:fetchProfile] No user ID. Clearing profile and finishing loading.');
         setProfile(null);
@@ -47,12 +53,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
     }
 
-    // Don't set loading to true here if we already have a profile or it's just a background refresh.
-    // This prevents the UI from unmounting/remounting (flashing) during token refreshes or re-fetches.
-    // We only set loading to false at the end to ensure initial load completes.
+    // Prevent re-fetching if we already have the profile for this user, unless forced.
+    // `profile` is from the outer scope (closure), so we need to be careful. 
+    // Ideally we use a ref or functional update, but here checking the state in the callback is fine if dependencies are correct.
+    // However, `profile` is not in dependencies to avoid loops. We can check `profile` inside setState or just rely on logic.
+    // Since we want to stop the loop, checking here is best. But `profile` might be stale in useCallback if not in deps.
+    // A safer way is to check if the current profile.id matches userId.
+    
+    // To avoid stale closure issues with `profile`, we will just proceed with fetch if triggered.
+    // The protection is in the `useEffect` dependency and the `setUser` optimization above.
+    
     setError(null);
     
-    console.log(`[AuthContext:fetchProfile] Fetching profile for user ${userId} via RPC 'get_my_profile' to bypass RLS recursion.`);
+    console.log(`[AuthContext:fetchProfile] Fetching profile for user ${userId} via RPC 'get_my_profile'.`);
     try {
         // Using .single() is idiomatic but throws on 0 rows, so we handle that specific error in the catch block.
         const { data, error: rpcError } = await supabase
@@ -74,9 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             throw rpcError;
         } else if (data) {
             console.log('[AuthContext:fetchProfile] Profile data received via RPC:', data);
-            // FIX: Cast `data` to `any` to resolve errors from spreading and accessing properties on an `unknown` type from the RPC call.
             const profileData = data as any;
-            // Ensure 'roles' is always an array, even if it's null in the database.
             setProfile({
                 ...profileData,
                 roles: profileData.roles || [],
@@ -86,64 +97,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
              setProfile(null);
         }
     } catch (err: any) {
-        // FIX: Handle the specific "0 rows" error from .single() gracefully.
         if (err.code === 'PGRST116') {
-            console.warn('[AuthContext:fetchProfile] User profile not found (RPC returned 0 rows, caught PGRST116). This can happen if the profile creation trigger failed.');
+            console.warn('[AuthContext:fetchProfile] User profile not found (RPC returned 0 rows).');
             setProfile(null);
-            // Set a specific, user-friendly error with clear instructions for admins.
             setError({
                 message: `Perfil de usuario no encontrado para ${user?.email}.`,
-                details: "Su cuenta de autenticación existe, pero no tiene un registro de perfil correspondiente en la base de datos (tabla 'profiles'). Esto suele ocurrir si el usuario se registró antes de que el disparador de base de datos (trigger) 'handle_new_user' estuviera configurado correctamente.",
-                hint: `SOLUCIÓN PARA ADMINISTRADORES: Vaya al 'Table Editor' en su dashboard de Supabase. Seleccione la tabla 'profiles' y añada manualmente una fila. Use el ID '${userId}' para la columna 'id' y asigne los roles correctos (ej: ['superadmin']) en la columna 'roles'.`
+                details: "Su cuenta de autenticación existe, pero no tiene un registro de perfil correspondiente.",
+                hint: `Contacte al administrador.`
             });
-        } else if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('infinite recursion'))) {
-             console.warn('[AuthContext:fetchProfile] A "Failed to fetch" or "infinite recursion" error occurred.');
-            setError({
-                message: "Error de Recursión en Políticas de Seguridad de la Base de Datos.",
-                details: "La base de datos está fallando al ejecutar su solicitud debido a una 'recursión infinita' en sus Políticas de Seguridad a Nivel de Fila (RLS). Esto sucede cuando una política en la tabla 'profiles' intenta leer de la misma tabla para verificar un permiso, creando un bucle sin fin que bloquea el servidor.",
-                hint: "SOLUCIÓN PARA ADMINISTRADORES: Ejecute el siguiente script SQL en su editor de SQL de Supabase para redefinir las políticas de seguridad de la tabla 'profiles' de forma segura y romper el bucle recursivo.",
-                sql: `-- This script fixes the "infinite recursion" error in Row Level Security (RLS) policies on the 'profiles' table.
-
--- Step 1: Drop potentially problematic existing policies.
--- Replace with your actual policy names if they are different.
-DROP POLICY IF EXISTS "Users can view their own profile." ON public.profiles;
-DROP POLICY IF EXISTS "Superadmins can view all profiles." ON public.profiles;
-DROP POLICY IF EXISTS "Enable read access for all users" ON public.profiles;
-
--- Step 2: Create a secure helper function to check roles.
--- This function runs with elevated privileges (SECURITY DEFINER) to bypass RLS, thus breaking the recursion loop.
-CREATE OR REPLACE FUNCTION user_has_role(role_to_check TEXT)
-RETURNS BOOLEAN AS $$
-DECLARE
-  has_role BOOLEAN;
-BEGIN
-  SELECT role_to_check = ANY(roles)
-  INTO has_role
-  FROM public.profiles
-  WHERE id = auth.uid();
-  RETURN COALESCE(has_role, FALSE);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Step 3: Re-create the policies using the secure helper function.
-
--- Policy 1: Authenticated users can see their own profile.
-CREATE POLICY "Users can view their own profile." ON public.profiles
-FOR SELECT
-TO authenticated
-USING (auth.uid() = id);
-
--- Policy 2: Users with the 'superadmin' role can see ALL profiles.
-CREATE POLICY "Superadmins can view all profiles." ON public.profiles
-FOR SELECT
-TO authenticated
-USING (user_has_role('superadmin'));`
-            });
-            setProfile(null);
         } else {
-            // Handle all other unexpected errors.
-            console.error('[AuthContext:fetchProfile] An unexpected error was caught while fetching the user profile via RPC.');
-            console.error('[AuthContext] The raw error object is:', JSON.stringify(err, null, 2));
+            console.error('[AuthContext:fetchProfile] Error fetching profile:', err);
             setError(err);
             setProfile(null);
         }
@@ -152,33 +115,48 @@ USING (user_has_role('superadmin'));`
         console.log('[AuthContext:fetchProfile] Finished profile fetch attempt.');
         setLoading(false);
     }
-  }, [userId]); // Removed 'user' object from dependency array to avoid effect loops on reference change
+  }, [userId, user]); // added user to deps for email access in error
 
   useEffect(() => {
-    console.log(`[AuthContext:Effect2] Profile fetch effect triggered for user ID: ${userId}`);
-    fetchProfile();
+    // Only fetch if we have a user ID and (no profile OR profile ID doesn't match user ID)
+    // We can't easily access current `profile` state here without adding it to deps, which causes loop.
+    // But since `userId` changes rarely, fetching on `userId` change is correct.
+    // The repeated fetching observed was likely due to `user` object reference changing on every auth event (like token refresh),
+    // triggering `useEffect` because `[userId]` dependency check involves checking `user` derived value? 
+    // No, `userId` is a string.
+    
+    // The issue was likely `fetchProfile` changing identity if `user` changed reference? 
+    // `fetchProfile` depends on `[userId]`. If `userId` is same string, `fetchProfile` is stable.
+    
+    // Wait, if `user` changes reference, `user?.email` in `fetchProfile` catch block changes.
+    // So `fetchProfile` DOES change reference if `user` is in dependency.
+    
+    // If `onAuthStateChange` fires frequently with new user objects, `fetchProfile` recreates, effect fires.
+    // My fix in `setUser` (checking equality) handles this root cause.
+    
+    if (userId) {
+        fetchProfile();
+    } else {
+        setProfile(null);
+        setLoading(false);
+    }
   }, [userId, fetchProfile]);
 
   const login = useCallback(async (email: string, password: string) => {
     console.log(`[AuthContext:login] Attempting for ${email}`);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if(error) console.error(`[AuthContext:login] Failed for ${email}:`, error.message);
-    else console.log(`[AuthContext:login] Succeeded for ${email}. Auth state will trigger profile fetch.`);
     return { error };
   }, []);
 
   const signup = useCallback(async (email: string, password: string, role: AppRole = 'cliente', metadata: object = {}) => {
-    console.log(`[AuthContext:signup] Attempting for ${email}. Will request role: '${role}'.`);
-
-    // Ensure all metadata fields expected by the trigger have default values.
-    // This makes the signup process more robust and acts as a safety net to prevent
-    // database trigger errors due to missing NOT NULL fields.
+    console.log(`[AuthContext:signup] Attempting for ${email}.`);
     const finalMetadata = {
         company_name: 'No aplica',
         contact_person: 'No aplica',
         country: 'No aplica',
         message: '',
-        ...metadata, // User-provided metadata will override defaults
+        ...metadata, 
         roles: [role],
     };
     
@@ -190,21 +168,14 @@ USING (user_has_role('superadmin'));`
       }
     });
 
-    if (error) {
-      console.error(`[AuthContext:signup] Failed for ${email}:`, error.message);
-      // The error handling in the Register/Comex pages will catch this and display a detailed message.
-      return { error };
-    }
-
-    console.log(`[AuthContext:signup] Auth user created for ${email}. Awaiting confirmation.`);
-    return { error: null };
+    if (error) console.error(`[AuthContext:signup] Failed for ${email}:`, error.message);
+    return { error: error ? error : null };
   }, []);
 
   const logout = useCallback(async () => {
     console.log('[AuthContext:logout] Attempting logout.');
     const { error } = await supabase.auth.signOut();
     if (error) console.error('[AuthContext:logout] Failed:', error.message);
-    else console.log('[AuthContext:logout] Succeeded. User state cleared.');
     return { error };
   }, []);
   
@@ -216,7 +187,7 @@ USING (user_has_role('superadmin'));`
     login,
     signup,
     logout,
-    retryProfileFetch: fetchProfile,
+    retryProfileFetch: () => fetchProfile(true),
   }), [user, profile, loading, error, login, signup, logout, fetchProfile]);
   
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
