@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { IconX, IconCheck, IconDeviceFloppy, IconAlertCircle } from './Icons';
+import { IconX, IconCheck, IconDeviceFloppy, IconAlertCircle, IconMercadoPago } from './Icons';
 import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 import { supabase } from '@/supabase';
+import { createPreference } from '../services/mercadoPagoService'; // Importar para el botón de billetera
 
 // Intentar obtener la clave desde las variables de entorno
 const MP_PUBLIC_KEY = (import.meta as any).env.VITE_MP_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
@@ -64,6 +65,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     const [step, setStep] = useState<'form' | 'payment_brick'>('form');
     const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
     const [configError, setConfigError] = useState<string | null>(null);
+    const [redirectLoading, setRedirectLoading] = useState(false);
     
     const [payerInfo, setPayerInfo] = useState({
         name: '',
@@ -173,10 +175,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         }
     };
 
-    // Brick onSubmit Handler
+    // Brick onSubmit Handler (Procesa tarjeta directamente)
     const handleBrickSubmit = async (param: any) => {
         const { formData } = param;
-        console.log("Brick onSubmit triggered. Sending data to backend...");
+        console.log("Brick onSubmit triggered.");
         
         return new Promise<void>((resolve, reject) => {
             supabase.functions.invoke('mercadopago-process-payment', {
@@ -190,13 +192,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     console.error("Function Invocation Error:", error);
                     reject();
                 } else if (data && data.status === 'approved') {
-                    console.log("Payment approved:", data);
                     resolve();
-                    // Redirect to success page
                     window.location.href = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}`;
                 } else {
                     console.error("Payment Not Approved. Response:", data);
-                    // reject() tells the Brick to show the error screen
                     reject(); 
                 }
             })
@@ -205,6 +204,22 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 reject();
             });
         });
+    };
+
+    // Alternativa: Redirigir a Checkout Pro para usar saldo en cuenta / Billetera
+    const handleWalletRedirect = async () => {
+        if (!createdOrderId) return;
+        setRedirectLoading(true);
+        try {
+            // Usamos el servicio que ya conecta con la función 'mercadopago-proxy'
+            // Esta función crea una preferencia de pago y devuelve el link
+            const initPoint = await createPreference(orderItems, payerInfo, createdOrderId, shippingCost);
+            window.location.href = initPoint;
+        } catch (err) {
+            console.error("Redirect error:", err);
+            setApiError("Error al redirigir a Mercado Pago. Intenta con tarjeta directa.");
+            setRedirectLoading(false);
+        }
     };
 
     const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -218,8 +233,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 firstName: payerInfo.name.trim(),
                 lastName: payerInfo.surname.trim(),
                 email: payerInfo.email.trim(),
-                // Removed 'address' and 'identification' to prevent validation errors on initialization.
-                // The Brick will request these details from the user during the payment flow if needed.
             },
         };
     };
@@ -271,12 +284,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                             </>
                         ) : (
                             <div className="w-full">
-                                <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 text-center">
+                                <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 text-center">
                                     <div className="flex items-center justify-center gap-2 text-green-800 font-bold">
                                         <IconCheck className="w-5 h-5" />
                                         <span>Pedido Registrado</span>
                                     </div>
-                                    <p className="text-xs text-green-700">Orden #{createdOrderId?.substring(0, 8).toUpperCase()}. Completa el pago abajo.</p>
+                                    <p className="text-xs text-green-700">Orden #{createdOrderId?.substring(0, 8).toUpperCase()}. Elige tu método de pago.</p>
                                 </div>
                                 
                                 {configError ? (
@@ -288,63 +301,96 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                         </div>
                                     </div>
                                 ) : (
-                                    <Payment
-                                        initialization={getBrickInitialization()}
-                                        customization={{
-                                            visual: {
-                                                style: {
-                                                    theme: "default",
-                                                    customVariables: {
-                                                        textPrimaryColor: "#1e293b",
-                                                        textSecondaryColor: "#64748b",
-                                                        inputBackgroundColor: "#ffffff",
-                                                        formBackgroundColor: "#ffffff",
-                                                        baseColor: "#8a5cf6",
-                                                        baseColorFirstVariant: "#7c3aed",
-                                                        baseColorSecondVariant: "#a78bfa",
-                                                        errorColor: "#ef4444",
-                                                        successColor: "#22c55e",
-                                                        outlinePrimaryColor: "#8a5cf6",
-                                                        outlineSecondaryColor: "#e2e8f0",
-                                                        buttonTextColor: "#ffffff",
-                                                        fontSizeExtraSmall: "12px",
-                                                        fontSizeSmall: "14px",
-                                                        fontSizeMedium: "16px",
-                                                        fontSizeLarge: "18px",
-                                                        fontSizeExtraLarge: "20px",
-                                                        fontWeightNormal: "400",
-                                                        fontWeightSemiBold: "600",
-                                                        formInputsTextTransform: "none",
-                                                        inputVerticalPadding: "12px",
-                                                        inputHorizontalPadding: "16px",
-                                                        inputFocusedBoxShadow: "0 0 0 2px #ddd6fe",
-                                                        inputErrorFocusedBoxShadow: "0 0 0 2px #fecaca",
-                                                        inputBorderWidth: "1px",
-                                                        inputFocusedBorderWidth: "1px",
-                                                        borderRadiusSmall: "4px",
-                                                        borderRadiusMedium: "6px",
-                                                        borderRadiusLarge: "8px",
-                                                        borderRadiusFull: "9999px",
-                                                        formPadding: "24px"
+                                    <>
+                                        {/* OPCIÓN 1: TARJETA DIRECTA (BRICK) */}
+                                        <div className="mb-6">
+                                            <h4 className="font-semibold text-gray-700 mb-2">Pagar con Tarjeta (Débito/Crédito)</h4>
+                                            <Payment
+                                                initialization={getBrickInitialization()}
+                                                customization={{
+                                                    visual: {
+                                                        style: {
+                                                            theme: "default",
+                                                            customVariables: {
+                                                                textPrimaryColor: "#1e293b",
+                                                                textSecondaryColor: "#64748b",
+                                                                inputBackgroundColor: "#ffffff",
+                                                                formBackgroundColor: "#ffffff",
+                                                                baseColor: "#8a5cf6",
+                                                                baseColorFirstVariant: "#7c3aed",
+                                                                baseColorSecondVariant: "#a78bfa",
+                                                                errorColor: "#ef4444",
+                                                                successColor: "#22c55e",
+                                                                outlinePrimaryColor: "#8a5cf6",
+                                                                outlineSecondaryColor: "#e2e8f0",
+                                                                buttonTextColor: "#ffffff",
+                                                                fontSizeExtraSmall: "12px",
+                                                                fontSizeSmall: "14px",
+                                                                fontSizeMedium: "16px",
+                                                                fontSizeLarge: "18px",
+                                                                fontSizeExtraLarge: "20px",
+                                                                fontWeightNormal: "400",
+                                                                fontWeightSemiBold: "600",
+                                                                formInputsTextTransform: "none",
+                                                                inputVerticalPadding: "12px",
+                                                                inputHorizontalPadding: "16px",
+                                                                inputFocusedBoxShadow: "0 0 0 2px #ddd6fe",
+                                                                inputErrorFocusedBoxShadow: "0 0 0 2px #fecaca",
+                                                                inputBorderWidth: "1px",
+                                                                inputFocusedBorderWidth: "1px",
+                                                                borderRadiusSmall: "4px",
+                                                                borderRadiusMedium: "6px",
+                                                                borderRadiusLarge: "8px",
+                                                                borderRadiusFull: "9999px",
+                                                                formPadding: "24px"
+                                                            }
+                                                        },
+                                                        texts: {
+                                                            emailSectionTitle: "Ingresa tu email para el comprobante",
+                                                            installmentsSectionTitle: "Elige la cantidad de cuotas",
+                                                            formSubmit: "Pagar ahora",
+                                                        }
+                                                    },
+                                                    paymentMethods: {
+                                                        maxInstallments: 12,
+                                                        creditCard: "all",
+                                                        debitCard: "all",
+                                                        ticket: "all",
                                                     }
-                                                }
-                                            },
-                                            paymentMethods: {
-                                                maxInstallments: 12,
-                                                // Explicitly enabling payment methods to avoid "No payment type selected" error
-                                                creditCard: "all",
-                                                debitCard: "all",
-                                                ticket: "all",
-                                                bankTransfer: "all",
-                                                atm: "all",
-                                                onboarding_credits: "all",
-                                                wallet_purchase: "all",
-                                            }
-                                        }}
-                                        onSubmit={handleBrickSubmit}
-                                        onError={(error) => console.error("Brick Error:", error)}
-                                        onReady={() => console.log("Brick Ready")}
-                                    />
+                                                }}
+                                                onSubmit={handleBrickSubmit}
+                                                onError={(error) => console.error("Brick Error:", error)}
+                                            />
+                                        </div>
+
+                                        {/* SEPARADOR */}
+                                        <div className="flex items-center gap-4 my-6">
+                                            <div className="h-px bg-gray-300 flex-1"></div>
+                                            <span className="text-gray-500 text-sm font-medium">O también puedes</span>
+                                            <div className="h-px bg-gray-300 flex-1"></div>
+                                        </div>
+
+                                        {/* OPCIÓN 2: CUENTA MERCADO PAGO (REDIRECT) */}
+                                        <div>
+                                            <button 
+                                                onClick={handleWalletRedirect}
+                                                disabled={redirectLoading}
+                                                className="w-full flex items-center justify-center bg-[#009EE3] hover:bg-[#0089C7] text-white font-bold py-4 px-4 rounded-lg shadow transition-colors disabled:bg-gray-300"
+                                            >
+                                                {redirectLoading ? (
+                                                    <span>Conectando...</span>
+                                                ) : (
+                                                    <>
+                                                        <IconMercadoPago className="w-6 h-6 mr-2 text-white" />
+                                                        Ingresar a mi cuenta Mercado Pago
+                                                    </>
+                                                )}
+                                            </button>
+                                            <p className="text-center text-xs text-gray-500 mt-2">
+                                                Usa tu dinero en cuenta, tarjetas guardadas o Mercado Crédito.
+                                            </p>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         )}
