@@ -1,4 +1,3 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 declare const Deno: any;
@@ -8,108 +7,104 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
 
-const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
+console.log("Mercado Pago Webhook Initialized (v28 - Robust / Deno.serve)");
 
-const createEmailHtml = (paymentDetails: any) => {
-  const payer = paymentDetails.payer;
-  const items = paymentDetails.additional_info.items;
-  const shipping = paymentDetails.shipments?.receiver_address;
-  
-  const itemsHtml = items.map((item: any) => `
-    <tr>
-      <td style="padding:8px;border-bottom:1px solid #ddd;">${item.title}</td>
-      <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center;">${item.quantity}</td>
-      <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right;">${formatPrice(Number(item.unit_price))}</td>
-      <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right;">${formatPrice(Number(item.unit_price) * Number(item.quantity))}</td>
-    </tr>`).join('');
-
-  return `
-    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
-      <h1 style="color:#8a5cf6;">Nuevo Pedido Aprobado</h1>
-      <p><strong>Orden ID:</strong> ${paymentDetails.external_reference || 'N/A'}</p>
-      <p><strong>Pago ID:</strong> ${paymentDetails.id}</p>
-      <h3 style="border-bottom:2px solid #eee;">Detalles</h3>
-      <table style="width:100%;border-collapse:collapse;">
-        <thead><tr><th style="text-align:left;">Prod</th><th>Cant</th><th>Precio</th><th>Total</th></tr></thead>
-        <tbody>${itemsHtml}</tbody>
-      </table>
-      <p style="text-align:right;font-weight:bold;font-size:1.2em;">Total: ${formatPrice(paymentDetails.transaction_amount)}</p>
-      <h3 style="border-bottom:2px solid #eee;">Datos Cliente</h3>
-      <p>${payer.first_name} ${payer.last_name} (${payer.email}) - DNI: ${payer.identification?.number}</p>
-      <p><strong>Envío:</strong> ${shipping?.street_name} ${shipping?.street_number}, CP ${shipping?.zip_code}</p>
-    </div>`;
-};
-
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const body = await req.json();
-    // MP sends 'action' for payment creation/updates, or we check topic/type
-    if (body.topic !== 'payment' && body.type !== 'payment' && body.action !== 'payment.created' && body.action !== 'payment.updated') {
-      return new Response('Ignored', { status: 200 });
-    }
-
-    const paymentId = body.data?.id || body.data?.id; // MP format varies slightly
-    if (!paymentId) return new Response('No payment ID found', { status: 200 });
-
-    const accessToken = Deno.env.get('MP_ACCESS_TOKEN');
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
-    const orderPrepEmail = Deno.env.get('ORDER_PREP_EMAIL');
+    const url = new URL(req.url);
     
-    // Initialize Admin Client to update database
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // 1. Extract ID and Topic from Query Params OR Body
+    // MP often sends ?id=...&topic=payment OR ?data.id=...&type=payment
+    let id = url.searchParams.get('id') || url.searchParams.get('data.id');
+    let topic = url.searchParams.get('topic') || url.searchParams.get('type');
 
-    // Get Payment Details from Mercado Pago
-    const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    
-    if (!mpResponse.ok) throw new Error('Error fetching MP payment');
-    const paymentDetails = await mpResponse.json();
-
-    if (paymentDetails.status === 'approved') {
-      console.log(`Payment ${paymentId} approved. Order ID: ${paymentDetails.external_reference}`);
-
-      // 1. Update Database
-      if (paymentDetails.external_reference && paymentDetails.external_reference !== 'NO_ID') {
-        const { error: dbError } = await supabase
-          .from('ventas')
-          .update({ 
-            estado: 'Pagada', 
-            observaciones: `Pagado vía MP (ID: ${paymentId})` 
-          })
-          .eq('id', paymentDetails.external_reference);
-          
-        if (dbError) console.error('Error updating database:', dbError);
-        else console.log('Database updated successfully.');
-      }
-
-      // 2. Send Email
-      if (resendApiKey && orderPrepEmail) {
+    if (!id || !topic) {
         try {
-            await fetch('https://api.resend.com/emails', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${resendApiKey}` },
-              body: JSON.stringify({
-                from: 'Ventas Online <onboarding@resend.dev>',
-                to: [orderPrepEmail],
-                subject: `Nueva Venta Web - Orden #${paymentDetails.external_reference?.substring(0,8)}`,
-                html: createEmailHtml(paymentDetails)
-              })
-            });
-            console.log('Email sent.');
-        } catch (emailError) {
-            console.error('Error sending email:', emailError);
+            const body = await req.json();
+            if (!id) id = body.data?.id || body.id;
+            if (!topic) topic = body.type || body.topic || body.action;
+            
+            // Normalize v1 payment actions
+            if (body.action === 'payment.created' || body.action === 'payment.updated') {
+                topic = 'payment';
+            }
+        } catch (e) {
+            // Body might be empty if it's just a ping or query param request
         }
-      }
     }
 
-    return new Response('Webhook processed', { status: 200 });
-  } catch (error: any) {
-    console.error(error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+    console.log(`Webhook received. ID: ${id}, Topic: ${topic}`);
+
+    // 2. Filter irrelevant events (Return 200 to stop MP from retrying)
+    if (topic === 'merchant_order') {
+        return new Response('Merchant Order Ignored', { status: 200 });
+    }
+    if (topic !== 'payment') {
+        return new Response(`Event type '${topic}' ignored`, { status: 200 });
+    }
+    if (!id) {
+        // If it's a test ping without ID, return OK
+        return new Response('No ID found, ignoring', { status: 200 });
+    }
+
+    // 3. Verify REAL status with Mercado Pago API (Security)
+    const mpToken = Deno.env.get('MP_ACCESS_TOKEN');
+    if (!mpToken) {
+        console.error('Missing MP_ACCESS_TOKEN env var');
+        return new Response('Server Config Error', { status: 500 });
+    }
+
+    const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, {
+        headers: { 'Authorization': `Bearer ${mpToken}` }
+    });
+
+    if (!mpRes.ok) {
+        console.error(`Error verifying payment ${id} with MP API. Status: ${mpRes.status}`);
+        // If MP returns 404, the payment doesn't exist, return 200 to stop retrying
+        if(mpRes.status === 404) return new Response('Payment not found in MP', { status: 200 });
+        return new Response('MP API Error', { status: 500 });
+    }
+
+    const paymentData = await mpRes.json();
+    const status = paymentData.status;
+    const saleId = paymentData.external_reference;
+
+    console.log(`Payment ${id} verified. Status: ${status}. Sale ID: ${saleId}`);
+
+    // 4. Update Database if Approved
+    if (status === 'approved' && saleId && saleId !== 'NO_ID') {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        const { error } = await supabase
+            .from('ventas')
+            .update({ 
+                estado: 'Pagada',
+                observaciones: `Pagado vía MP (ID: ${id}) - ${new Date().toLocaleString('es-AR')}`
+            })
+            .eq('id', saleId);
+
+        if (error) {
+            console.error('Error updating DB:', error);
+            return new Response('DB Update Failed', { status: 500 });
+        }
+        console.log('Sale updated to "Pagada" in DB.');
+    } else {
+        console.log('Payment not approved or missing Sale ID.');
+    }
+
+    return new Response('Webhook Processed', { status: 200 });
+
+  } catch (err: any) {
+    console.error('Webhook Critical Error:', err);
+    // Return 200 even on error to prevent MP retry loops if it's a logic error on our end
+    return new Response(JSON.stringify({ error: err.message }), { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
-}, { verify: false });
+});

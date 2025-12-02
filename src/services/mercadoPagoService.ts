@@ -1,4 +1,3 @@
-
 import { supabase } from '../supabase';
 import { OrderItem } from '@/components/CheckoutModal';
 
@@ -27,7 +26,10 @@ interface PayerInfo {
  * @returns {Promise<string>} The init_point URL from Mercado Pago.
  */
 export const createPreference = async (orderItems: OrderItem[], payerInfo: PayerInfo, externalReference?: string, shippingCost?: number): Promise<string> => {
-    console.log(`[${SERVICE_NAME}] Creating payment preference. Sale ID: ${externalReference}. Shipping: ${shippingCost}`);
+    // Ensure externalReference is a string to prevent JSON parsing issues on the server
+    const safeExternalReference = externalReference || 'NO_ID';
+    
+    console.log(`[${SERVICE_NAME}] Creating payment preference. Sale ID: ${safeExternalReference}. Shipping: ${shippingCost}`);
     
     // Pre-formatting items to be extra safe
     const mpItems = orderItems.map(item => ({
@@ -59,9 +61,8 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             street_name: payerInfo.street_name,
             street_number: payerInfo.street_number, 
             zip_code: payerInfo.zip_code,
-            // We pass city and province in payload for record, though MP proxy handles them loosely
-            city: payerInfo.city,
-            province: payerInfo.province
+            // City and Province are not standard MP address fields but we send them for context if the proxy supports custom parsing
+            // However, our new proxy is strict, so we only send what MP supports in the address object to be safe.
         },
     };
 
@@ -70,7 +71,7 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             body: { 
                 items: mpItems, 
                 payer: mpPayer,
-                external_reference: externalReference || 'NO_ID' // Fallback if ID is missing
+                external_reference: safeExternalReference
             },
         });
 
