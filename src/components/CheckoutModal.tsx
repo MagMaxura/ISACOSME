@@ -197,11 +197,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     console.error("Function Invocation Error:", error);
                     setApiError("Error de comunicación con el servidor de pagos.");
                     reject();
-                } else if (data && data.status === 'approved') {
-                    console.log("Payment approved:", data);
+                } else if (data && (data.status === 'approved' || data.status === 'in_process')) {
+                    // Treat 'in_process' (pending review) as success for UI flow, showing a different message on the success page
+                    console.log(`Payment status: ${data.status}`, data);
                     resolve();
                     // Redirect to success page
-                    window.location.href = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}`;
+                    window.location.href = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}&status=${data.status}`;
                 } else {
                     console.error("Payment Not Approved. Response:", data);
                     
@@ -334,10 +335,13 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     <>
                                         {/* OPCIÓN 1: TARJETA DIRECTA (BRICK) */}
                                         <div className="mb-6">
-                                            <h4 className="font-semibold text-gray-700 mb-2">Pagar con Tarjeta (Débito/Crédito)</h4>
+                                            <h4 className="font-semibold text-gray-700 mb-2">Pagar con Tarjeta (Débito/Crédito/Prepagas)</h4>
                                             <Payment
                                                 initialization={getBrickInitialization()}
                                                 customization={{
+                                                    paymentMethods: {
+                                                        maxInstallments: 12
+                                                    },
                                                     visual: {
                                                         style: {
                                                             theme: "default",
@@ -376,12 +380,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                             }
                                                         },
                                                     },
-                                                    paymentMethods: {
-                                                        maxInstallments: 12,
-                                                        creditCard: "all",
-                                                        debitCard: "all",
-                                                        ticket: "all",
-                                                    }
                                                 }}
                                                 onSubmit={handleBrickSubmit}
                                                 onError={(error) => console.error("Brick Error:", error)}
