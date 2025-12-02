@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 declare const Deno: any;
@@ -7,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("Mercado Pago Process Payment Function Initialized");
+console.log("Mercado Pago Process Payment Function Initialized (v2)");
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -20,8 +21,7 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Processing payment for Sale ID: ${external_reference}`);
 
-    // Build the payment payload.
-    // We use fetch directly to the API to avoid dependency issues with the Node SDK in Deno Edge environment.
+    // Build the payment payload
     const paymentBody = {
         ...formData,
         external_reference: external_reference,
@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
         headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
-            'X-Idempotency-Key': crypto.randomUUID() // Prevent duplicate charges on network retries
+            'X-Idempotency-Key': crypto.randomUUID()
         },
         body: JSON.stringify(paymentBody)
     });
@@ -56,12 +56,12 @@ Deno.serve(async (req: Request) => {
     const paymentResult = await response.json();
 
     if (!response.ok) {
-        console.error('MP API Error:', paymentResult);
-        // We throw the error message from MP to display it in the Brick
-        throw new Error(paymentResult.message || 'Error procesando el pago en Mercado Pago');
+        console.error('MP API Failed:', JSON.stringify(paymentResult, null, 2));
+        const errorDetail = paymentResult.cause?.[0]?.description || paymentResult.message || 'Unknown MP Error';
+        throw new Error(`Mercado Pago Error: ${errorDetail}`);
     }
 
-    console.log('Payment processed. Status:', paymentResult.status);
+    console.log('Payment processed successfully. Status:', paymentResult.status);
 
     return new Response(JSON.stringify(paymentResult), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
     });
 
   } catch (error: any) {
-    console.error("Payment Processing Error:", error);
+    console.error("Payment Processing Exception:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400

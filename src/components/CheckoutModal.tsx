@@ -1,16 +1,19 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { IconX, IconCheck, IconDeviceFloppy } from './Icons';
+import { IconX, IconCheck, IconDeviceFloppy, IconAlertCircle } from './Icons';
 import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 import { supabase } from '@/supabase';
 
-// --- CONFIGURACIÓN DE MERCADO PAGO ---
-// REEMPLAZAR CON TU PUBLIC KEY REAL
-// Ejemplo: 'APP_USR-xxxxxx'
-const MP_PUBLIC_KEY = 'YOUR_PUBLIC_KEY'; 
+// Intentar obtener la clave desde las variables de entorno
+// Usamos cast a 'any' para evitar error de TypeScript 'Property env does not exist on type ImportMeta'
+const MP_PUBLIC_KEY = (import.meta as any).env.VITE_MP_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
 
-initMercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' });
+// Inicializar solo si tenemos una clave que parece válida (evita crash inmediato)
+if (MP_PUBLIC_KEY && MP_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
+    initMercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' });
+}
 
 export interface OrderItem {
   id: string;
@@ -59,6 +62,7 @@ const InputField: React.FC<InputFieldProps> = ({ name, label, value, onChange, e
 const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderItems, subtotal, shippingCost = 0 }) => {
     const [step, setStep] = useState<'form' | 'payment_brick'>('form');
     const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+    const [configError, setConfigError] = useState<string | null>(null);
     
     const [payerInfo, setPayerInfo] = useState({
         name: '',
@@ -78,6 +82,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     const [statusMessage, setStatusMessage] = useState<string>('');
 
     const total = subtotal + shippingCost;
+
+    useEffect(() => {
+        if (step === 'payment_brick' && MP_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+            setConfigError('La Public Key de Mercado Pago no está configurada. Por favor, configura la variable de entorno VITE_MP_PUBLIC_KEY.');
+        }
+    }, [step]);
 
     if (!isOpen) return null;
 
@@ -161,6 +171,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     // Brick onSubmit Handler
     const handleBrickSubmit = async (param: any) => {
         const { formData } = param;
+        console.log("Brick onSubmit triggered. Sending data to backend...");
         
         return new Promise<void>((resolve, reject) => {
             supabase.functions.invoke('mercadopago-process-payment', {
@@ -171,20 +182,21 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
             })
             .then(({ data, error }) => {
                 if (error) {
-                    console.error("Function Error:", error);
+                    console.error("Function Invocation Error:", error);
                     reject();
-                } else if (data?.status === 'approved') {
+                } else if (data && data.status === 'approved') {
+                    console.log("Payment approved:", data);
                     resolve();
                     // Redirect to success page
                     window.location.href = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}`;
                 } else {
-                    console.error("Payment Rejected:", data);
+                    console.error("Payment Not Approved. Response:", data);
                     // reject() tells the Brick to show the error screen
                     reject(); 
                 }
             })
             .catch((err) => {
-                console.error("Network Error:", err);
+                console.error("Network/System Error during payment:", err);
                 reject();
             });
         });
@@ -247,142 +259,101 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     <p className="text-xs text-green-700">Orden #{createdOrderId?.substring(0, 8).toUpperCase()}. Completa el pago abajo.</p>
                                 </div>
                                 
-                                <Payment
-                                    initialization={{
-                                        amount: total,
-                                        payer: {
-                                            firstName: payerInfo.name,
-                                            lastName: payerInfo.surname,
-                                            email: payerInfo.email,
-                                            identification: {
-                                                type: "DNI",
-                                                number: payerInfo.dni
-                                            },
-                                            address: {
-                                                zipCode: payerInfo.zip_code,
-                                                federalUnit: payerInfo.province,
-                                                city: payerInfo.city,
-                                                streetName: payerInfo.street_name,
-                                                streetNumber: payerInfo.street_number,
-                                                neighborhood: "",
-                                                complement: ""
-                                            }
-                                        },
-                                    }}
-                                    customization={{
-                                        visual: {
-                                            style: {
-                                                theme: "default",
-                                                customVariables: {
-                                                    textPrimaryColor: "#1e293b",
-                                                    textSecondaryColor: "#64748b",
-                                                    inputBackgroundColor: "#ffffff",
-                                                    formBackgroundColor: "#ffffff",
-                                                    baseColor: "#8a5cf6",
-                                                    baseColorFirstVariant: "#7c3aed",
-                                                    baseColorSecondVariant: "#a78bfa",
-                                                    errorColor: "#ef4444",
-                                                    successColor: "#22c55e",
-                                                    outlinePrimaryColor: "#8a5cf6",
-                                                    outlineSecondaryColor: "#e2e8f0",
-                                                    buttonTextColor: "#ffffff",
-                                                    fontSizeExtraSmall: "12px",
-                                                    fontSizeSmall: "14px",
-                                                    fontSizeMedium: "16px",
-                                                    fontSizeLarge: "18px",
-                                                    fontSizeExtraLarge: "20px",
-                                                    fontWeightNormal: "400",
-                                                    fontWeightSemiBold: "600",
-                                                    formInputsTextTransform: "none",
-                                                    inputVerticalPadding: "12px",
-                                                    inputHorizontalPadding: "16px",
-                                                    inputFocusedBoxShadow: "0 0 0 2px #ddd6fe",
-                                                    inputErrorFocusedBoxShadow: "0 0 0 2px #fecaca",
-                                                    inputBorderWidth: "1px",
-                                                    inputFocusedBorderWidth: "1px",
-                                                    borderRadiusSmall: "4px",
-                                                    borderRadiusMedium: "6px",
-                                                    borderRadiusLarge: "8px",
-                                                    borderRadiusFull: "9999px",
-                                                    formPadding: "24px"
+                                {configError ? (
+                                    <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex items-start gap-3">
+                                        <IconAlertCircle className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                        <div>
+                                            <h4 className="font-bold text-red-800">Error de Configuración</h4>
+                                            <p className="text-sm text-red-700">{configError}</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <Payment
+                                        initialization={{
+                                            amount: total,
+                                            payer: {
+                                                firstName: payerInfo.name,
+                                                lastName: payerInfo.surname,
+                                                email: payerInfo.email,
+                                                identification: {
+                                                    type: "DNI",
+                                                    number: payerInfo.dni
+                                                },
+                                                address: {
+                                                    zipCode: payerInfo.zip_code,
+                                                    federalUnit: payerInfo.province,
+                                                    city: payerInfo.city,
+                                                    streetName: payerInfo.street_name,
+                                                    streetNumber: payerInfo.street_number,
+                                                    neighborhood: "",
+                                                    complement: ""
                                                 }
                                             },
-                                            texts: {
-                                                formTitle: "Finalizar pago",
-                                                emailSectionTitle: "Ingresa tu email para el comprobante",
-                                                installmentsSectionTitle: "Elige la cantidad de cuotas",
-                                                cardholderName: {
-                                                    label: "Nombre del titular",
-                                                    placeholder: "Como figura en la tarjeta"
+                                        }}
+                                        customization={{
+                                            visual: {
+                                                style: {
+                                                    theme: "default",
+                                                    customVariables: {
+                                                        textPrimaryColor: "#1e293b",
+                                                        textSecondaryColor: "#64748b",
+                                                        inputBackgroundColor: "#ffffff",
+                                                        formBackgroundColor: "#ffffff",
+                                                        baseColor: "#8a5cf6",
+                                                        baseColorFirstVariant: "#7c3aed",
+                                                        baseColorSecondVariant: "#a78bfa",
+                                                        errorColor: "#ef4444",
+                                                        successColor: "#22c55e",
+                                                        outlinePrimaryColor: "#8a5cf6",
+                                                        outlineSecondaryColor: "#e2e8f0",
+                                                        buttonTextColor: "#ffffff",
+                                                        fontSizeExtraSmall: "12px",
+                                                        fontSizeSmall: "14px",
+                                                        fontSizeMedium: "16px",
+                                                        fontSizeLarge: "18px",
+                                                        fontSizeExtraLarge: "20px",
+                                                        fontWeightNormal: "400",
+                                                        fontWeightSemiBold: "600",
+                                                        formInputsTextTransform: "none",
+                                                        inputVerticalPadding: "12px",
+                                                        inputHorizontalPadding: "16px",
+                                                        inputFocusedBoxShadow: "0 0 0 2px #ddd6fe",
+                                                        inputErrorFocusedBoxShadow: "0 0 0 2px #fecaca",
+                                                        inputBorderWidth: "1px",
+                                                        inputFocusedBorderWidth: "1px",
+                                                        borderRadiusSmall: "4px",
+                                                        borderRadiusMedium: "6px",
+                                                        borderRadiusLarge: "8px",
+                                                        borderRadiusFull: "9999px",
+                                                        formPadding: "24px"
+                                                    }
                                                 },
-                                                email: {
-                                                    label: "Correo electrónico",
-                                                    placeholder: "ejemplo@email.com"
-                                                },
-                                                cardholderIdentification: {
-                                                    label: "Documento del titular"
-                                                },
-                                                cardNumber: {
-                                                    label: "Número de tarjeta",
-                                                    placeholder: "0000 0000 0000 0000"
-                                                },
-                                                expirationDate: {
-                                                    label: "Vencimiento",
-                                                    placeholder: "MM/AA"
-                                                },
-                                                securityCode: {
-                                                    label: "Código de seguridad",
-                                                    placeholder: "CVC"
-                                                },
-                                                entityType: {
-                                                    placeholder: "Tipo de persona",
-                                                    label: "Selecciona el tipo"
-                                                },
-                                                financialInstitution: {
-                                                    placeholder: "Selecciona tu banco",
-                                                    label: "Entidad financiera"
-                                                },
-                                                selectInstallments: "Seleccionar cuotas",
-                                                selectIssuerBank: "Seleccionar banco emisor",
-                                                formSubmit: "Pagar ahora",
-                                                paymentMethods: {
-                                                    newCreditCardTitle: "Nueva tarjeta de crédito",
-                                                    creditCardTitle: "Tarjeta de Crédito",
-                                                    creditCardValueProp: "Hasta 12 cuotas",
-                                                    newDebitCardTitle: "Nueva tarjeta de débito",
-                                                    debitCardTitle: "Tarjeta de Débito",
-                                                    debitCardValueProp: "Pago al contado",
-                                                    ticketTitle: "Efectivo",
-                                                    ticketValueProp: "Rapipago, Pago Fácil"
-                                                },
-                                                reviewConfirm: {
-                                                    componentTitle: "Revisa tu compra",
-                                                    payerDetailsTitle: "Datos del pagador",
-                                                    shippingDetailsTitle: "Datos de envío",
-                                                    billingDetailsTitle: "Datos de facturación",
-                                                    paymentMethodDetailsTitle: "Medio de pago",
-                                                    detailsTitle: "Detalle de la compra",
-                                                    summaryItemsTitle: "Productos",
-                                                    summaryShippingTitle: "Costo de envío",
-                                                    summaryDiscountTitle: "Descuentos",
-                                                    summaryYouPayTitle: "Total a pagar",
-                                                    summaryTotalTitle: "Total general"
+                                                texts: {
+                                                    formTitle: "Finalizar pago",
+                                                    emailSectionTitle: "Ingresa tu email para el comprobante",
+                                                    installmentsSectionTitle: "Elige la cantidad de cuotas",
+                                                    formSubmit: "Pagar ahora",
+                                                    paymentMethods: {
+                                                        creditCardTitle: "Tarjeta de Crédito",
+                                                        debitCardTitle: "Tarjeta de Débito",
+                                                        ticketTitle: "Efectivo",
+                                                    }
+                                                }
+                                            },
+                                            paymentMethods: {
+                                                maxInstallments: 12,
+                                                paymentMethod: {
+                                                    types: {
+                                                        excluded: []
+                                                    }
                                                 }
                                             }
-                                        },
-                                        paymentMethods: {
-                                            maxInstallments: 12,
-                                            paymentMethod: {
-                                                types: {
-                                                    excluded: []
-                                                }
-                                            }
-                                        }
-                                    }}
-                                    onSubmit={handleBrickSubmit}
-                                    onError={(error) => console.error("Brick Error:", error)}
-                                    onReady={() => console.log("Brick Ready")}
-                                />
+                                        }}
+                                        onSubmit={handleBrickSubmit}
+                                        onError={(error) => console.error("Brick Error:", error)}
+                                        onReady={() => console.log("Brick Ready")}
+                                    />
+                                )}
                             </div>
                         )}
                     </div>
