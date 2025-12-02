@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { IconX, IconCheck, IconDeviceFloppy, IconAlertCircle } from './Icons';
@@ -7,10 +6,13 @@ import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 import { supabase } from '@/supabase';
 
 // Intentar obtener la clave desde las variables de entorno
+// IMPORTANTE: Asegúrate de que en Vercel esta variable tenga la PUBLIC KEY (no el Access Token)
 const MP_PUBLIC_KEY = (import.meta as any).env.VITE_MP_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
 
 // Inicializar solo si tenemos una clave que parece válida
-const HAS_VALID_KEY = MP_PUBLIC_KEY && MP_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY' && MP_PUBLIC_KEY.length < 50; // Access tokens are longer
+// Access tokens empiezan con APP_USR y son muy largos. Public Keys son más cortas.
+const IS_LIKELY_ACCESS_TOKEN = MP_PUBLIC_KEY && MP_PUBLIC_KEY.length > 60;
+const HAS_VALID_KEY = MP_PUBLIC_KEY && MP_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY' && !IS_LIKELY_ACCESS_TOKEN;
 
 if (HAS_VALID_KEY) {
     initMercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' });
@@ -88,8 +90,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         if (step === 'payment_brick') {
             if (!MP_PUBLIC_KEY || MP_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
                 setConfigError('La Public Key de Mercado Pago no está configurada en las variables de entorno.');
-            } else if (MP_PUBLIC_KEY.length > 60) {
-                setConfigError('Error de Configuración: Parece que estás usando un Access Token en lugar de la Public Key.');
+            } else if (IS_LIKELY_ACCESS_TOKEN) {
+                setConfigError('Error de Configuración: Parece que estás usando un "Access Token" en lugar de la "Public Key" en Vercel. La Public Key es más corta.');
             }
         }
     }, [step]);
@@ -210,29 +212,18 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     // Prepare clean data for Brick initialization
+    // ESTRATEGIA SEGURA: Solo enviamos datos básicos para evitar errores de validación (400)
+    // El Brick se encargará de pedir el resto si es necesario.
     const getBrickInitialization = () => {
-        const streetNum = parseInt(payerInfo.street_number, 10);
-        
         return {
             amount: total,
             payer: {
                 firstName: payerInfo.name.trim(),
                 lastName: payerInfo.surname.trim(),
                 email: payerInfo.email.trim(),
-                entityType: 'individual', // Required
-                identification: {
-                    type: "DNI",
-                    number: payerInfo.dni.replace(/\D/g, '') // Sanitize
-                },
-                address: {
-                    zipCode: payerInfo.zip_code,
-                    federalUnit: payerInfo.province,
-                    city: payerInfo.city,
-                    streetName: payerInfo.street_name,
-                    streetNumber: isNaN(streetNum) ? 1 : streetNum, // Must be valid int, fallback to 1 if empty
-                    neighborhood: "",
-                    complement: ""
-                }
+                // Eliminamos identification y address intencionalmente.
+                // Esto evita conflictos de formato y asegura que el Brick cargue correctamente.
+                // Ya tenemos estos datos guardados en nuestra DB.
             },
         };
     };
