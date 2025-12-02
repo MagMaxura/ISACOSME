@@ -1,9 +1,16 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
-import { IconX, IconMercadoPago, IconCheck, IconDeviceFloppy } from './Icons';
-import { createPreference } from '../services/mercadoPagoService';
+import { IconX, IconCheck, IconDeviceFloppy } from './Icons';
 import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
+import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
+import { supabase } from '@/supabase';
+
+// --- CONFIGURACIÓN DE MERCADO PAGO ---
+// REEMPLAZAR CON TU PUBLIC KEY REAL
+// Ejemplo: 'APP_USR-xxxxxx'
+const MP_PUBLIC_KEY = 'YOUR_PUBLIC_KEY'; 
+
+initMercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' });
 
 export interface OrderItem {
   id: string;
@@ -32,7 +39,6 @@ interface InputFieldProps {
     disabled?: boolean;
 }
 
-// Defined outside to ensure stable reference across renders
 const InputField: React.FC<InputFieldProps> = ({ name, label, value, onChange, error, type = 'text', required = true, disabled = false }) => (
     <div>
         <label className="label-style">{label}</label>
@@ -51,7 +57,7 @@ const InputField: React.FC<InputFieldProps> = ({ name, label, value, onChange, e
 );
 
 const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderItems, subtotal, shippingCost = 0 }) => {
-    const [step, setStep] = useState<'form' | 'payment_ready'>('form');
+    const [step, setStep] = useState<'form' | 'payment_brick'>('form');
     const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
     
     const [payerInfo, setPayerInfo] = useState({
@@ -63,8 +69,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         street_name: '',
         street_number: '',
         zip_code: '',
-        city: '',      // Nuevo campo
-        province: '',  // Nuevo campo
+        city: '',
+        province: '',
     });
     const [errors, setErrors] = useState<Record<string, string | null>>({});
     const [loading, setLoading] = useState(false);
@@ -103,9 +109,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         validateField(name, value);
     };
     
-    // Step 1: Save Order to Database Only
+    // Step 1: Save Order to Database
     const handleRegisterOrder = async () => {
-        // Validation
         let formIsValid = true;
         for (const key in payerInfo) {
             validateField(key, payerInfo[key as keyof typeof payerInfo]);
@@ -121,13 +126,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         setStatusMessage('Registrando tu pedido en el sistema...');
 
         try {
-            // 1. Prepare items
             const itemsParaVenta = await prepareVentaItemsFromCart(orderItems);
-
-            // 2. Create Sale in DB
             const shippingNote = shippingCost > 0 ? ` [Incluye Envío: $${shippingCost}]` : ' [Envío Gratis]';
-            
-            // Construimos una observación completa para logística
             const direccionCompleta = `${payerInfo.street_name} ${payerInfo.street_number}, ${payerInfo.city}, ${payerInfo.province} (CP: ${payerInfo.zip_code})`;
             
             const saleData: VentaToCreate = {
@@ -138,17 +138,15 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 items: itemsParaVenta,
                 subtotal: subtotal,
                 iva: 0,
-                total: total, // Save final total including shipping
+                total: total,
                 observaciones: `Compra Web${shippingNote} - Cliente: ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Tel: ${payerInfo.phone} - Envío a: ${direccionCompleta}`,
                 puntoDeVenta: 'Tienda física', 
             };
 
             const newSaleId = await createVenta(saleData);
-            console.log("Order created locally:", newSaleId);
-            
             setCreatedOrderId(newSaleId);
-            setStatusMessage('¡Pedido registrado con éxito!');
-            setStep('payment_ready'); // Switch to Step 2
+            setStatusMessage('');
+            setStep('payment_brick'); // Go to Payment Brick
 
         } catch (err: any) {
             console.error("Order registration error:", err);
@@ -160,35 +158,46 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         }
     };
 
-    // Step 2: Initiate Payment Redirect
-    const handlePayNow = async () => {
-        if (!createdOrderId) return;
+    // Brick onSubmit Handler
+    const handleBrickSubmit = async (param: any) => {
+        const { formData } = param;
         
-        setLoading(true);
-        setStatusMessage('Conectando con Mercado Pago...');
-        setApiError(null);
-
-        try {
-            // Create Preference in Mercado Pago
-            const preferenceInitPoint = await createPreference(orderItems, payerInfo, createdOrderId, shippingCost);
-            
-            // Redirect
-            window.location.href = preferenceInitPoint;
-        } catch (err: any) {
-            console.error("Payment redirection error:", err);
-            setApiError("Error al conectar con Mercado Pago. Pero tu pedido YA FUE REGISTRADO. Contáctanos por WhatsApp para finalizar.");
-            setLoading(false);
-        }
+        return new Promise<void>((resolve, reject) => {
+            supabase.functions.invoke('mercadopago-process-payment', {
+                body: { 
+                    formData, 
+                    external_reference: createdOrderId 
+                }
+            })
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error("Function Error:", error);
+                    reject();
+                } else if (data?.status === 'approved') {
+                    resolve();
+                    // Redirect to success page
+                    window.location.href = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}`;
+                } else {
+                    console.error("Payment Rejected:", data);
+                    // reject() tells the Brick to show the error screen
+                    reject(); 
+                }
+            })
+            .catch((err) => {
+                console.error("Network Error:", err);
+                reject();
+            });
+        });
     };
-    
+
     const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     return ReactDOM.createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[9999] p-4">
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-fade-in">
                 <div className="flex justify-between items-center p-5 border-b">
                     <h3 className="text-2xl font-semibold text-gray-800">
-                        {step === 'form' ? 'Finalizar Compra' : 'Pedido Registrado'}
+                        {step === 'form' ? 'Finalizar Compra' : 'Realizar Pago'}
                     </h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
                         <IconX className="w-6 h-6" />
@@ -196,8 +205,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 </div>
                 
                 <div className="flex flex-col lg:flex-row p-6 gap-8 overflow-y-auto">
-                    {/* Left Column: Form or Confirmation */}
-                    <div className="lg:w-1/2 space-y-4">
+                    {/* Left Column: Form or Brick */}
+                    <div className="lg:w-3/5 space-y-4">
                         {step === 'form' ? (
                             <>
                                 <h4 className="text-lg font-semibold text-gray-700">Tus Datos</h4>
@@ -221,7 +230,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     </div>
                                 </div>
                                 
-                                {/* Nuevos campos de ubicación */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <InputField name="city" label="Ciudad / Localidad" value={payerInfo.city} onChange={handleInputChange} error={errors.city} />
                                     <InputField name="province" label="Provincia" value={payerInfo.province} onChange={handleInputChange} error={errors.province} />
@@ -230,28 +238,157 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                 <InputField name="zip_code" label="Código Postal" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} />
                             </>
                         ) : (
-                            <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center space-y-4">
-                                <div className="mx-auto bg-white w-16 h-16 rounded-full flex items-center justify-center shadow-sm">
-                                    <IconCheck className="w-10 h-10 text-green-500" />
+                            <div className="w-full">
+                                <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 text-center">
+                                    <div className="flex items-center justify-center gap-2 text-green-800 font-bold">
+                                        <IconCheck className="w-5 h-5" />
+                                        <span>Pedido Registrado</span>
+                                    </div>
+                                    <p className="text-xs text-green-700">Orden #{createdOrderId?.substring(0, 8).toUpperCase()}. Completa el pago abajo.</p>
                                 </div>
-                                <h4 className="text-xl font-bold text-green-800">¡Pedido Creado!</h4>
-                                <p className="text-green-700">Tu orden ha sido guardada en nuestro sistema.</p>
                                 
-                                <div className="bg-white p-3 rounded border border-green-100 text-left text-sm space-y-1">
-                                    <p><strong>Orden ID:</strong> <span className="font-mono">{createdOrderId?.substring(0, 8).toUpperCase()}</span></p>
-                                    <p><strong>Cliente:</strong> {payerInfo.name} {payerInfo.surname}</p>
-                                    <p><strong>Envío a:</strong> {payerInfo.city}, {payerInfo.province}</p>
-                                </div>
-
-                                <p className="text-sm text-gray-600">
-                                    Para completar el proceso, haz clic en el botón de abajo para pagar de forma segura con Mercado Pago.
-                                </p>
+                                <Payment
+                                    initialization={{
+                                        amount: total,
+                                        payer: {
+                                            firstName: payerInfo.name,
+                                            lastName: payerInfo.surname,
+                                            email: payerInfo.email,
+                                            identification: {
+                                                type: "DNI",
+                                                number: payerInfo.dni
+                                            },
+                                            address: {
+                                                zipCode: payerInfo.zip_code,
+                                                federalUnit: payerInfo.province,
+                                                city: payerInfo.city,
+                                                streetName: payerInfo.street_name,
+                                                streetNumber: payerInfo.street_number,
+                                                neighborhood: "",
+                                                complement: ""
+                                            }
+                                        },
+                                    }}
+                                    customization={{
+                                        visual: {
+                                            style: {
+                                                theme: "default",
+                                                customVariables: {
+                                                    textPrimaryColor: "#1e293b",
+                                                    textSecondaryColor: "#64748b",
+                                                    inputBackgroundColor: "#ffffff",
+                                                    formBackgroundColor: "#ffffff",
+                                                    baseColor: "#8a5cf6",
+                                                    baseColorFirstVariant: "#7c3aed",
+                                                    baseColorSecondVariant: "#a78bfa",
+                                                    errorColor: "#ef4444",
+                                                    successColor: "#22c55e",
+                                                    outlinePrimaryColor: "#8a5cf6",
+                                                    outlineSecondaryColor: "#e2e8f0",
+                                                    buttonTextColor: "#ffffff",
+                                                    fontSizeExtraSmall: "12px",
+                                                    fontSizeSmall: "14px",
+                                                    fontSizeMedium: "16px",
+                                                    fontSizeLarge: "18px",
+                                                    fontSizeExtraLarge: "20px",
+                                                    fontWeightNormal: "400",
+                                                    fontWeightSemiBold: "600",
+                                                    formInputsTextTransform: "none",
+                                                    inputVerticalPadding: "12px",
+                                                    inputHorizontalPadding: "16px",
+                                                    inputFocusedBoxShadow: "0 0 0 2px #ddd6fe",
+                                                    inputErrorFocusedBoxShadow: "0 0 0 2px #fecaca",
+                                                    inputBorderWidth: "1px",
+                                                    inputFocusedBorderWidth: "1px",
+                                                    borderRadiusSmall: "4px",
+                                                    borderRadiusMedium: "6px",
+                                                    borderRadiusLarge: "8px",
+                                                    borderRadiusFull: "9999px",
+                                                    formPadding: "24px"
+                                                }
+                                            },
+                                            texts: {
+                                                formTitle: "Finalizar pago",
+                                                emailSectionTitle: "Ingresa tu email para el comprobante",
+                                                installmentsSectionTitle: "Elige la cantidad de cuotas",
+                                                cardholderName: {
+                                                    label: "Nombre del titular",
+                                                    placeholder: "Como figura en la tarjeta"
+                                                },
+                                                email: {
+                                                    label: "Correo electrónico",
+                                                    placeholder: "ejemplo@email.com"
+                                                },
+                                                cardholderIdentification: {
+                                                    label: "Documento del titular"
+                                                },
+                                                cardNumber: {
+                                                    label: "Número de tarjeta",
+                                                    placeholder: "0000 0000 0000 0000"
+                                                },
+                                                expirationDate: {
+                                                    label: "Vencimiento",
+                                                    placeholder: "MM/AA"
+                                                },
+                                                securityCode: {
+                                                    label: "Código de seguridad",
+                                                    placeholder: "CVC"
+                                                },
+                                                entityType: {
+                                                    placeholder: "Tipo de persona",
+                                                    label: "Selecciona el tipo"
+                                                },
+                                                financialInstitution: {
+                                                    placeholder: "Selecciona tu banco",
+                                                    label: "Entidad financiera"
+                                                },
+                                                selectInstallments: "Seleccionar cuotas",
+                                                selectIssuerBank: "Seleccionar banco emisor",
+                                                formSubmit: "Pagar ahora",
+                                                paymentMethods: {
+                                                    newCreditCardTitle: "Nueva tarjeta de crédito",
+                                                    creditCardTitle: "Tarjeta de Crédito",
+                                                    creditCardValueProp: "Hasta 12 cuotas",
+                                                    newDebitCardTitle: "Nueva tarjeta de débito",
+                                                    debitCardTitle: "Tarjeta de Débito",
+                                                    debitCardValueProp: "Pago al contado",
+                                                    ticketTitle: "Efectivo",
+                                                    ticketValueProp: "Rapipago, Pago Fácil"
+                                                },
+                                                reviewConfirm: {
+                                                    componentTitle: "Revisa tu compra",
+                                                    payerDetailsTitle: "Datos del pagador",
+                                                    shippingDetailsTitle: "Datos de envío",
+                                                    billingDetailsTitle: "Datos de facturación",
+                                                    paymentMethodDetailsTitle: "Medio de pago",
+                                                    detailsTitle: "Detalle de la compra",
+                                                    summaryItemsTitle: "Productos",
+                                                    summaryShippingTitle: "Costo de envío",
+                                                    summaryDiscountTitle: "Descuentos",
+                                                    summaryYouPayTitle: "Total a pagar",
+                                                    summaryTotalTitle: "Total general"
+                                                }
+                                            }
+                                        },
+                                        paymentMethods: {
+                                            maxInstallments: 12,
+                                            paymentMethod: {
+                                                types: {
+                                                    excluded: []
+                                                }
+                                            }
+                                        }
+                                    }}
+                                    onSubmit={handleBrickSubmit}
+                                    onError={(error) => console.error("Brick Error:", error)}
+                                    onReady={() => console.log("Brick Ready")}
+                                />
                             </div>
                         )}
                     </div>
 
-                    {/* Right Column: Order Summary & Action */}
-                    <div className="lg:w-1/2 bg-gray-50 p-6 rounded-lg h-fit flex flex-col">
+                    {/* Right Column: Order Summary */}
+                    <div className="lg:w-2/5 bg-gray-50 p-6 rounded-lg h-fit flex flex-col">
                         <h4 className="text-lg font-semibold text-gray-700 mb-4">Resumen del Pedido</h4>
                          <div className="space-y-3 max-h-60 overflow-y-auto pr-2 flex-grow">
                             {orderItems.map(item => (
@@ -286,31 +423,18 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                         {apiError && <div className="mt-4 bg-red-100 text-red-700 p-3 rounded-md text-sm">{apiError}</div>}
                         {loading && statusMessage && (
                             <div className="mt-4 flex items-center justify-center text-blue-600 text-sm font-medium bg-blue-50 p-2 rounded">
-                                <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
                                 {statusMessage}
                             </div>
                         )}
 
-                        {step === 'form' ? (
+                        {step === 'form' && (
                             <button 
                                 onClick={handleRegisterOrder} 
                                 disabled={loading}
                                 className="w-full mt-6 bg-primary text-white py-4 rounded-lg shadow-md hover:bg-primary-dark transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center"
                             >
                                 <IconDeviceFloppy className="h-6 w-6 mr-2" />
-                                Confirmar y Generar Pedido
-                            </button>
-                        ) : (
-                            <button 
-                                onClick={handlePayNow} 
-                                disabled={loading}
-                                className="w-full mt-6 bg-[#009EE3] text-white py-4 rounded-lg shadow-md hover:bg-[#0089c7] transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center animate-pulse"
-                            >
-                                <IconMercadoPago className="h-6 w-6 mr-2" />
-                                Pagar con Mercado Pago
+                                Confirmar y Continuar
                             </button>
                         )}
                     </div>

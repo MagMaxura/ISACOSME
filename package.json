@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mercadopago/sdk-react": "^0.0.19",
     "@supabase/supabase-js": "^2.45.1",
     "@zxing/browser": "^0.1.5",
     "chart.js": "^4.4.3",

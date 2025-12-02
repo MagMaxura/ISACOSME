@@ -1,3 +1,4 @@
+
 import { supabase } from '../supabase';
 import { OrderItem } from '@/components/CheckoutModal';
 
@@ -17,53 +18,46 @@ interface PayerInfo {
 }
 
 /**
- * Creates a Mercado Pago payment preference by invoking a Supabase Edge Function.
- *
- * @param {OrderItem[]} orderItems - The user's cart.
- * @param {PayerInfo} payerInfo - The guest user's contact and shipping information.
- * @param {string} [externalReference] - The internal Sale ID to link the payment to.
- * @param {number} [shippingCost] - The shipping cost to be added as a line item.
- * @returns {Promise<string>} The init_point URL from Mercado Pago.
+ * Genera una preferencia de pago en Mercado Pago.
+ * Estrategia: Datos Parciales de Alta Calidad.
+ * Enviamos Email y Nombre (obligatorios para scoring de fraude) pero omitimos
+ * dirección y teléfono (que causan errores de formato técnico).
  */
 export const createPreference = async (orderItems: OrderItem[], payerInfo: PayerInfo, externalReference?: string, shippingCost?: number): Promise<string> => {
-    // Ensure externalReference is a string to prevent JSON parsing issues on the server
     const safeExternalReference = externalReference || 'NO_ID';
     
-    console.log(`[${SERVICE_NAME}] Creating payment preference. Sale ID: ${safeExternalReference}. Shipping: ${shippingCost}`);
+    console.log(`[${SERVICE_NAME}] Init preference. Sale ID: ${safeExternalReference}. Shipping: ${shippingCost}`);
     
-    // Pre-formatting items to be extra safe
+    // Formatear items para MP
     const mpItems = orderItems.map(item => ({
         id: item.id,
         title: item.nombre,
-        quantity: Math.floor(item.quantity), // Ensure integer
-        unit_price: Number(item.unitPrice.toFixed(2)), // Ensure 2 decimals max
+        description: item.nombre, // MP Requiere descripción para mejorar aprobación
+        quantity: Math.floor(item.quantity),
+        unit_price: Number(item.unitPrice.toFixed(2)),
         currency_id: 'ARS', 
     }));
 
-    // Add shipping as a separate item if applicable
+    // Agregar envío como item si existe
     if (shippingCost && shippingCost > 0) {
         mpItems.push({
             id: 'shipping',
             title: 'Costo de Envío',
+            description: 'Servicio de logística',
             quantity: 1,
             unit_price: Number(shippingCost.toFixed(2)),
             currency_id: 'ARS',
         });
     }
 
-    // ESTRATEGIA MINIMALISTA (FIX "No pudimos procesar tu pago"):
-    // Solo enviamos nombre, apellido y email.
-    // Omitimos intencionalmente teléfono, DNI y dirección. 
-    // Mercado Pago valida estos campos de forma muy estricta y a menudo rechaza pagos legítimos
-    // si el formato no es perfecto o si no coinciden con la tarjeta.
-    // Como ya guardamos los datos de envío en nuestra base de datos, no necesitamos arriesgarnos a enviarlos aquí.
+    // Reactivamos el envío de datos del Payer (Nombre, Apellido, Email)
+    // El reporte de MP indica que el Email es OBLIGATORIO para mejorar la tasa de aprobación.
     const mpPayer = {
         name: payerInfo.name,
         surname: payerInfo.surname,
         email: payerInfo.email,
-        // phone: OMITIDO
-        // identification: OMITIDO
-        // address: OMITIDO
+        // Seguimos omitiendo phone y address intencionalmente para evitar errores de validación de formato
+        // que suelen bloquear la creación de la preferencia.
     };
 
     try {
@@ -76,8 +70,7 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
         });
 
         if (error) {
-            console.error(`[${SERVICE_NAME}] Supabase function invocation failed:`, error);
-            // Try to parse the error message from the function if available
+            console.error(`[${SERVICE_NAME}] Error en Edge Function:`, error);
             let errorMessage = error.message;
             try {
                  if (error.context && typeof error.context.json === 'function') {
@@ -86,19 +79,19 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
                  }
             } catch (e) { /* ignore */ }
             
-            throw new Error(`Error de conexión con Mercado Pago: ${errorMessage}`);
+            throw new Error(`Error al conectar con pasarela de pago: ${errorMessage}`);
         }
 
         if (!data || !data.init_point) {
-            console.error(`[${SERVICE_NAME}] Invalid response from payment function:`, data);
-            throw new Error(data?.error || 'El servicio de pago no devolvió un link válido.');
+            console.error(`[${SERVICE_NAME}] Respuesta inválida:`, data);
+            throw new Error(data?.error || 'No se recibió el link de pago.');
         }
         
-        console.log(`[${SERVICE_NAME}] Preference created. Init Point: ${data.init_point}`);
+        console.log(`[${SERVICE_NAME}] Preferencia creada exitosamente.`);
         return data.init_point;
 
     } catch (err: any) {
-        console.error(`[${SERVICE_NAME}] An exception occurred:`, err);
+        console.error(`[${SERVICE_NAME}] Excepción:`, err);
         throw err;
     }
 };
