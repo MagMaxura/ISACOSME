@@ -7,11 +7,12 @@ import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 import { supabase } from '@/supabase';
 
 // Intentar obtener la clave desde las variables de entorno
-// Usamos cast a 'any' para evitar error de TypeScript 'Property env does not exist on type ImportMeta'
 const MP_PUBLIC_KEY = (import.meta as any).env.VITE_MP_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
 
-// Inicializar solo si tenemos una clave que parece válida (evita crash inmediato)
-if (MP_PUBLIC_KEY && MP_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
+// Inicializar solo si tenemos una clave que parece válida
+const HAS_VALID_KEY = MP_PUBLIC_KEY && MP_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY' && MP_PUBLIC_KEY.length < 50; // Access tokens are longer
+
+if (HAS_VALID_KEY) {
     initMercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' });
 }
 
@@ -84,8 +85,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     const total = subtotal + shippingCost;
 
     useEffect(() => {
-        if (step === 'payment_brick' && MP_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
-            setConfigError('La Public Key de Mercado Pago no está configurada. Por favor, configura la variable de entorno VITE_MP_PUBLIC_KEY.');
+        if (step === 'payment_brick') {
+            if (!MP_PUBLIC_KEY || MP_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+                setConfigError('La Public Key de Mercado Pago no está configurada en las variables de entorno.');
+            } else if (MP_PUBLIC_KEY.length > 60) {
+                setConfigError('Error de Configuración: Parece que estás usando un Access Token en lugar de la Public Key.');
+            }
         }
     }, [step]);
 
@@ -204,6 +209,34 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
 
     const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+    // Prepare clean data for Brick initialization
+    const getBrickInitialization = () => {
+        const streetNum = parseInt(payerInfo.street_number, 10);
+        
+        return {
+            amount: total,
+            payer: {
+                firstName: payerInfo.name.trim(),
+                lastName: payerInfo.surname.trim(),
+                email: payerInfo.email.trim(),
+                entityType: 'individual', // Required
+                identification: {
+                    type: "DNI",
+                    number: payerInfo.dni.replace(/\D/g, '') // Sanitize
+                },
+                address: {
+                    zipCode: payerInfo.zip_code,
+                    federalUnit: payerInfo.province,
+                    city: payerInfo.city,
+                    streetName: payerInfo.street_name,
+                    streetNumber: isNaN(streetNum) ? 1 : streetNum, // Must be valid int, fallback to 1 if empty
+                    neighborhood: "",
+                    complement: ""
+                }
+            },
+        };
+    };
+
     return ReactDOM.createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[9999] p-4">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-fade-in">
@@ -269,27 +302,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     </div>
                                 ) : (
                                     <Payment
-                                        initialization={{
-                                            amount: total,
-                                            payer: {
-                                                firstName: payerInfo.name,
-                                                lastName: payerInfo.surname,
-                                                email: payerInfo.email,
-                                                identification: {
-                                                    type: "DNI",
-                                                    number: payerInfo.dni
-                                                },
-                                                address: {
-                                                    zipCode: payerInfo.zip_code,
-                                                    federalUnit: payerInfo.province,
-                                                    city: payerInfo.city,
-                                                    streetName: payerInfo.street_name,
-                                                    streetNumber: payerInfo.street_number,
-                                                    neighborhood: "",
-                                                    complement: ""
-                                                }
-                                            },
-                                        }}
+                                        initialization={getBrickInitialization()}
                                         customization={{
                                             visual: {
                                                 style: {
