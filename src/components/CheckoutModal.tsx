@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { IconX, IconCheck, IconDeviceFloppy, IconAlertCircle } from './Icons';
@@ -7,11 +6,9 @@ import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 import { supabase } from '@/supabase';
 
 // Intentar obtener la clave desde las variables de entorno
-// IMPORTANTE: Asegúrate de que en Vercel esta variable tenga la PUBLIC KEY (no el Access Token)
 const MP_PUBLIC_KEY = (import.meta as any).env.VITE_MP_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
 
 // Inicializar solo si tenemos una clave que parece válida
-// Access tokens empiezan con APP_USR y son muy largos. Public Keys son más cortas.
 const IS_LIKELY_ACCESS_TOKEN = MP_PUBLIC_KEY && MP_PUBLIC_KEY.length > 60;
 const HAS_VALID_KEY = MP_PUBLIC_KEY && MP_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY' && !IS_LIKELY_ACCESS_TOKEN;
 
@@ -92,7 +89,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
             if (!MP_PUBLIC_KEY || MP_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
                 setConfigError('La Public Key de Mercado Pago no está configurada en las variables de entorno.');
             } else if (IS_LIKELY_ACCESS_TOKEN) {
-                setConfigError('Error de Configuración: Parece que estás usando un "Access Token" en lugar de la "Public Key" en Vercel. La Public Key es más corta.');
+                setConfigError('Error de Configuración: Parece que estás usando un "Access Token" en lugar de la "Public Key". La Public Key es más corta.');
             }
         }
     }, [step]);
@@ -217,12 +214,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         return {
             amount: total,
             payer: {
-                entityType: 'individual' as const, // OBLIGATORIO: Evita el error 400
+                entityType: 'individual' as const,
                 firstName: payerInfo.name.trim(),
                 lastName: payerInfo.surname.trim(),
                 email: payerInfo.email.trim(),
-                // Nota: Identificación y Dirección se omiten intencionalmente en la inicialización
-                // para evitar conflictos de formato. El Brick los pedirá si son necesarios.
+                // No enviamos address ni identification para evitar errores 400 de formato.
+                // El Brick los pedirá si es necesario.
             },
         };
     };
@@ -335,15 +332,11 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                     emailSectionTitle: "Ingresa tu email para el comprobante",
                                                     installmentsSectionTitle: "Elige la cantidad de cuotas",
                                                     formSubmit: "Pagar ahora",
-                                                    paymentMethods: {
-                                                        creditCardTitle: "Tarjeta de Crédito",
-                                                        debitCardTitle: "Tarjeta de Débito",
-                                                        ticketTitle: "Efectivo",
-                                                    }
                                                 }
                                             },
                                             paymentMethods: {
                                                 maxInstallments: 12,
+                                                // Eliminada la configuración anidada que causaba el error 'No payment type selected'
                                             }
                                         }}
                                         onSubmit={handleBrickSubmit}
