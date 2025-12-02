@@ -389,8 +389,12 @@ const PublicPriceListPage: React.FC = () => {
                  <div className="container mx-auto px-4">
                     <div className={`flex flex-col sm:flex-row justify-between items-center transition-all duration-300 ${isScrolled ? 'gap-0' : 'gap-4'}`}>
                         <div className={`text-center sm:text-left transition-all duration-300 origin-left ${isScrolled ? 'scale-75' : 'scale-100 mb-4 sm:mb-0'}`}>
-                            <h1 className="text-3xl font-extrabold text-gray-800 tracking-wider">ISABELLA</h1>
-                            <p className="text-lg text-gray-500">De la Perla</p>
+                            {/* LOGO REPLACEMENT */}
+                            <img 
+                                src="https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.png" 
+                                alt="Isabella de la Perla Logo" 
+                                className="h-16 sm:h-20 object-contain"
+                            />
                         </div>
                         
                         {/* 

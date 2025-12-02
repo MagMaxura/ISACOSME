@@ -218,8 +218,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 firstName: payerInfo.name.trim(),
                 lastName: payerInfo.surname.trim(),
                 email: payerInfo.email.trim(),
-                // No enviamos address ni identification para evitar errores 400 de formato.
-                // El Brick los pedirá si es necesario.
+                // Removed 'address' and 'identification' to prevent validation errors on initialization.
+                // The Brick will request these details from the user during the payment flow if needed.
             },
         };
     };
@@ -327,16 +327,18 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                         borderRadiusFull: "9999px",
                                                         formPadding: "24px"
                                                     }
-                                                },
-                                                texts: {
-                                                    emailSectionTitle: "Ingresa tu email para el comprobante",
-                                                    installmentsSectionTitle: "Elige la cantidad de cuotas",
-                                                    formSubmit: "Pagar ahora",
                                                 }
                                             },
                                             paymentMethods: {
                                                 maxInstallments: 12,
-                                                // Eliminada la configuración anidada que causaba el error 'No payment type selected'
+                                                // Explicitly enabling payment methods to avoid "No payment type selected" error
+                                                creditCard: "all",
+                                                debitCard: "all",
+                                                ticket: "all",
+                                                bankTransfer: "all",
+                                                atm: "all",
+                                                onboarding_credits: "all",
+                                                wallet_purchase: "all",
                                             }
                                         }}
                                         onSubmit={handleBrickSubmit}
