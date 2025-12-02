@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { IconX, IconCheck, IconDeviceFloppy, IconAlertCircle, IconMercadoPago } from './Icons';
 import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 import { supabase } from '@/supabase';
-import { createPreference } from '../services/mercadoPagoService'; // Importar para el botón de billetera
+import { createPreference } from '../services/mercadoPagoService';
 
 // Intentar obtener la clave desde las variables de entorno
 const MP_PUBLIC_KEY = (import.meta as any).env.VITE_MP_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
@@ -178,7 +179,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     // Brick onSubmit Handler (Procesa tarjeta directamente)
     const handleBrickSubmit = async (param: any) => {
         const { formData } = param;
-        console.log("Brick onSubmit triggered.");
+        console.log("Brick onSubmit triggered. Sending data to backend...");
         
         return new Promise<void>((resolve, reject) => {
             supabase.functions.invoke('mercadopago-process-payment', {
@@ -192,10 +193,13 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     console.error("Function Invocation Error:", error);
                     reject();
                 } else if (data && data.status === 'approved') {
+                    console.log("Payment approved:", data);
                     resolve();
+                    // Redirect to success page
                     window.location.href = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}`;
                 } else {
                     console.error("Payment Not Approved. Response:", data);
+                    // reject() tells the Brick to show the error screen
                     reject(); 
                 }
             })
@@ -233,6 +237,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 firstName: payerInfo.name.trim(),
                 lastName: payerInfo.surname.trim(),
                 email: payerInfo.email.trim(),
+                // No enviamos address ni identification para evitar errores 400 de formato.
+                // El Brick los pedirá si es necesario.
             },
         };
     };
@@ -345,11 +351,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                                 formPadding: "24px"
                                                             }
                                                         },
-                                                        texts: {
-                                                            emailSectionTitle: "Ingresa tu email para el comprobante",
-                                                            installmentsSectionTitle: "Elige la cantidad de cuotas",
-                                                            formSubmit: "Pagar ahora",
-                                                        }
                                                     },
                                                     paymentMethods: {
                                                         maxInstallments: 12,
@@ -382,7 +383,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                 ) : (
                                                     <>
                                                         <IconMercadoPago className="w-6 h-6 mr-2 text-white" />
-                                                        Ingresar a mi cuenta Mercado Pago
+                                                        Pagar con Cuenta Mercado Pago
                                                     </>
                                                 )}
                                             </button>

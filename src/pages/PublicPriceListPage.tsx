@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -389,7 +388,6 @@ const PublicPriceListPage: React.FC = () => {
                  <div className="container mx-auto px-4">
                     <div className={`flex flex-col sm:flex-row justify-between items-center transition-all duration-300 ${isScrolled ? 'gap-0' : 'gap-4'}`}>
                         <div className={`text-center sm:text-left transition-all duration-300 origin-left ${isScrolled ? 'scale-75' : 'scale-100 mb-4 sm:mb-0'}`}>
-                            {/* LOGO REPLACEMENT */}
                             <img 
                                 src="https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.png" 
                                 alt="Isabella de la Perla Logo" 
