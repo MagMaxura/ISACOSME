@@ -51,19 +51,19 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
         });
     }
 
+    // ESTRATEGIA MINIMALISTA (FIX "No pudimos procesar tu pago"):
+    // Solo enviamos nombre, apellido y email.
+    // Omitimos intencionalmente teléfono, DNI y dirección. 
+    // Mercado Pago valida estos campos de forma muy estricta y a menudo rechaza pagos legítimos
+    // si el formato no es perfecto o si no coinciden con la tarjeta.
+    // Como ya guardamos los datos de envío en nuestra base de datos, no necesitamos arriesgarnos a enviarlos aquí.
     const mpPayer = {
         name: payerInfo.name,
         surname: payerInfo.surname,
         email: payerInfo.email,
-        phone: { number: payerInfo.phone },
-        identification: { number: payerInfo.dni },
-        address: {
-            street_name: payerInfo.street_name,
-            street_number: payerInfo.street_number, 
-            zip_code: payerInfo.zip_code,
-            // City and Province are not standard MP address fields but we send them for context if the proxy supports custom parsing
-            // However, our new proxy is strict, so we only send what MP supports in the address object to be safe.
-        },
+        // phone: OMITIDO
+        // identification: OMITIDO
+        // address: OMITIDO
     };
 
     try {
@@ -91,7 +91,7 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
 
         if (!data || !data.init_point) {
             console.error(`[${SERVICE_NAME}] Invalid response from payment function:`, data);
-            throw new Error(data.error || 'El servicio de pago no devolvió un link válido.');
+            throw new Error(data?.error || 'El servicio de pago no devolvió un link válido.');
         }
         
         console.log(`[${SERVICE_NAME}] Preference created. Init Point: ${data.init_point}`);
