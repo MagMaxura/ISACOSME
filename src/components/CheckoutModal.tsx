@@ -206,17 +206,22 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     console.error("Payment Not Approved. Response:", data);
                     
                     let msg = "El pago no fue aprobado.";
-                    if (data?.status_detail) {
-                        switch(data.status_detail) {
+                    const detail = data?.status_detail;
+                    
+                    if (detail) {
+                        switch(detail) {
                             case 'cc_rejected_insufficient_amount': msg = "Fondos insuficientes en la tarjeta."; break;
                             case 'cc_rejected_bad_filled_card_number': msg = "Revisa el número de tarjeta."; break;
                             case 'cc_rejected_bad_filled_date': msg = "Revisa la fecha de vencimiento."; break;
                             case 'cc_rejected_bad_filled_security_code': msg = "Revisa el código de seguridad."; break;
-                            case 'cc_rejected_high_risk': msg = "El pago fue rechazado por riesgo de seguridad. Intenta con otro medio."; break;
+                            case 'cc_rejected_high_risk': msg = "El pago fue rechazado por riesgo de seguridad (High Risk). Intenta con otro medio de pago."; break;
                             case 'cc_rejected_call_for_authorize': msg = "Debes autorizar el pago con tu banco."; break;
                             case 'cc_rejected_card_disabled': msg = "La tarjeta no está habilitada para operar."; break;
-                            default: msg = "El pago fue rechazado. Por favor, intenta con otra tarjeta o medio de pago.";
+                            case 'cc_rejected_blacklist': msg = "No pudimos procesar tu pago por seguridad."; break;
+                            default: msg = `El pago fue rechazado (${detail}). Por favor, intenta con otra tarjeta.`;
                         }
+                    } else if (data?.error) {
+                        msg = `Error: ${data.error}`;
                     }
                     
                     setApiError(msg);
@@ -286,8 +291,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                 </div>
                                 <InputField name="email" label="Email" type="email" value={payerInfo.email} onChange={handleInputChange} error={errors.email} />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <InputField name="phone" label="Teléfono" type="tel" value={payerInfo.phone} onChange={handleInputChange} error={errors.phone} />
-                                    <InputField name="dni" label="DNI/CUIT" value={payerInfo.dni} onChange={handleInputChange} error={errors.dni} />
+                                    <InputField name="phone" label="Teléfono" type="number" value={payerInfo.phone} onChange={handleInputChange} error={errors.phone} />
+                                    <InputField name="dni" label="DNI/CUIT" type="number" value={payerInfo.dni} onChange={handleInputChange} error={errors.dni} />
                                 </div>
 
                                 <h4 className="text-lg font-semibold text-gray-700 pt-4">Dirección de Envío</h4>
@@ -296,7 +301,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                         <InputField name="street_name" label="Calle" value={payerInfo.street_name} onChange={handleInputChange} error={errors.street_name} />
                                     </div>
                                     <div>
-                                        <InputField name="street_number" label="Número" value={payerInfo.street_number} onChange={handleInputChange} error={errors.street_number} />
+                                        <InputField name="street_number" label="Número" type="number" value={payerInfo.street_number} onChange={handleInputChange} error={errors.street_number} />
                                     </div>
                                 </div>
                                 
@@ -305,7 +310,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     <InputField name="province" label="Provincia" value={payerInfo.province} onChange={handleInputChange} error={errors.province} />
                                 </div>
                                 
-                                <InputField name="zip_code" label="Código Postal" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} />
+                                <InputField name="zip_code" label="Código Postal" type="number" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} />
                             </>
                         ) : (
                             <div className="w-full">

@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 declare const Deno: any;
@@ -7,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
 
-console.log("Mercado Pago Webhook Initialized (v28 - Robust / Deno.serve)");
+console.log("Mercado Pago Webhook Initialized (v29 - Safe Config)");
 
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
@@ -76,8 +77,15 @@ Deno.serve(async (req: Request) => {
 
     // 4. Update Database if Approved
     if (status === 'approved' && saleId && saleId !== 'NO_ID') {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        
+        if (!supabaseUrl || !supabaseKey) {
+            console.error('Missing DB Config');
+            // Don't crash with 500, just log error so we can fix config, but tell MP we "processed" it to avoid infinite retries if config is broken
+            return new Response('DB Config Error', { status: 500 });
+        }
+
         const supabase = createClient(supabaseUrl, supabaseKey);
 
         const { error } = await supabase

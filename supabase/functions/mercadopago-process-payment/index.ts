@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("Mercado Pago Process Payment Function Initialized (v4 - Enhanced Data)");
+console.log("Mercado Pago Process Payment Function Initialized (v5 - Sanitized Data)");
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -21,14 +21,19 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Processing payment for Sale ID: ${external_reference}`);
 
+    // --- Data Sanitization ---
+    // Mercado Pago is strict about formats. 
+    // Phone must be digits. Street number must be integer.
+    const cleanPhone = payerInfo.phone ? String(payerInfo.phone).replace(/\D/g, '') : "";
+    const cleanStreetNumber = payerInfo.street_number ? (parseInt(String(payerInfo.street_number).replace(/\D/g, ''), 10) || 0) : 0;
+    
     // Build a robust payment payload
-    // Using formData from the Brick + payerInfo from the App for 'additional_info'
     const paymentBody = {
         token: formData.token,
         issuer_id: formData.issuer_id,
         payment_method_id: formData.payment_method_id,
-        transaction_amount: formData.transaction_amount,
-        installments: formData.installments,
+        transaction_amount: Number(formData.transaction_amount),
+        installments: Number(formData.installments),
         payer: {
             email: formData.payer.email || payerInfo.email,
             identification: formData.payer.identification // DNI from brick
@@ -38,29 +43,30 @@ Deno.serve(async (req: Request) => {
         description: `Pedido Web ${external_reference}`,
         additional_info: {
             items: items ? items.map((i: any) => ({
-                id: i.id,
+                id: String(i.id),
                 title: i.nombre,
-                quantity: i.quantity,
-                unit_price: Number(i.unitPrice)
+                description: i.nombre, // Required for better scoring
+                quantity: Math.floor(Number(i.quantity)), // Must be integer
+                unit_price: Number(Number(i.unitPrice).toFixed(2))
             })) : [],
             payer: {
                 first_name: payerInfo.name,
                 last_name: payerInfo.surname,
                 phone: {
                     area_code: "", 
-                    number: payerInfo.phone
+                    number: cleanPhone 
                 },
                 address: {
                     zip_code: payerInfo.zip_code,
                     street_name: payerInfo.street_name,
-                    street_number: parseInt(payerInfo.street_number) || 0
+                    street_number: cleanStreetNumber
                 }
             },
             shipments: {
                 receiver_address: {
                     zip_code: payerInfo.zip_code,
                     street_name: payerInfo.street_name,
-                    street_number: parseInt(payerInfo.street_number) || 0,
+                    street_number: cleanStreetNumber,
                     floor: "",
                     apartment: ""
                 }
@@ -88,7 +94,7 @@ Deno.serve(async (req: Request) => {
         throw new Error(`Mercado Pago Error: ${errorDetail}`);
     }
 
-    console.log('Payment processed. Status:', paymentResult.status, 'ID:', paymentResult.id);
+    console.log(`Payment processed. Status: ${paymentResult.status} | Detail: ${paymentResult.status_detail} | ID: ${paymentResult.id}`);
 
     return new Response(JSON.stringify(paymentResult), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
