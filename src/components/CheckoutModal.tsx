@@ -212,18 +212,16 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     // Prepare clean data for Brick initialization
-    // ESTRATEGIA SEGURA: Solo enviamos datos básicos para evitar errores de validación (400)
-    // El Brick se encargará de pedir el resto si es necesario.
     const getBrickInitialization = () => {
         return {
             amount: total,
             payer: {
+                entityType: 'individual', // OBLIGATORIO: Evita el error 400
                 firstName: payerInfo.name.trim(),
                 lastName: payerInfo.surname.trim(),
                 email: payerInfo.email.trim(),
-                // Eliminamos identification y address intencionalmente.
-                // Esto evita conflictos de formato y asegura que el Brick cargue correctamente.
-                // Ya tenemos estos datos guardados en nuestra DB.
+                // Nota: Identificación y Dirección se omiten intencionalmente en la inicialización
+                // para evitar conflictos de formato. El Brick los pedirá si son necesarios.
             },
         };
     };
