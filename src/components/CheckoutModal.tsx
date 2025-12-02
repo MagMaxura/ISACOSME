@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { IconX, IconCheck, IconDeviceFloppy, IconAlertCircle } from './Icons';
@@ -216,7 +217,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         return {
             amount: total,
             payer: {
-                entityType: 'individual', // OBLIGATORIO: Evita el error 400
+                entityType: 'individual' as const, // OBLIGATORIO: Evita el error 400
                 firstName: payerInfo.name.trim(),
                 lastName: payerInfo.surname.trim(),
                 email: payerInfo.email.trim(),
@@ -331,7 +332,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                     }
                                                 },
                                                 texts: {
-                                                    formTitle: "Finalizar pago",
                                                     emailSectionTitle: "Ingresa tu email para el comprobante",
                                                     installmentsSectionTitle: "Elige la cantidad de cuotas",
                                                     formSubmit: "Pagar ahora",
@@ -344,11 +344,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                             },
                                             paymentMethods: {
                                                 maxInstallments: 12,
-                                                paymentMethod: {
-                                                    types: {
-                                                        excluded: []
-                                                    }
-                                                }
                                             }
                                         }}
                                         onSubmit={handleBrickSubmit}

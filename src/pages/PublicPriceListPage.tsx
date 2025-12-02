@@ -55,6 +55,18 @@ const PublicPriceListPage: React.FC = () => {
     const [loginLoading, setLoginLoading] = useState(false);
     const { login } = useAuth();
 
+    // Scroll state for sticky header animation
+    const [isScrolled, setIsScrolled] = useState(false);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            setIsScrolled(window.scrollY > 50);
+        };
+
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
     const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoginError(null);
@@ -373,14 +385,19 @@ const PublicPriceListPage: React.FC = () => {
     // Public view: Render the full page with its own header and footer.
     return (
         <div className="bg-gray-50 min-h-screen">
-            <header className="bg-white shadow-md sticky top-0 z-10">
-                 <div className="container mx-auto px-4 py-3">
-                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <div className="text-center sm:text-left">
+            <header className={`bg-white shadow-md sticky top-0 z-20 transition-all duration-300 ease-in-out ${isScrolled ? 'py-1 shadow-sm' : 'py-3 shadow-md'}`}>
+                 <div className="container mx-auto px-4">
+                    <div className={`flex flex-col sm:flex-row justify-between items-center transition-all duration-300 ${isScrolled ? 'gap-0' : 'gap-4'}`}>
+                        <div className={`text-center sm:text-left transition-all duration-300 origin-left ${isScrolled ? 'scale-75' : 'scale-100 mb-4 sm:mb-0'}`}>
                             <h1 className="text-3xl font-extrabold text-gray-800 tracking-wider">ISABELLA</h1>
                             <p className="text-lg text-gray-500">De la Perla</p>
                         </div>
-                        <div className="w-full sm:w-auto">
+                        
+                        {/* 
+                            Contenedor de Login colapsable. 
+                            Se oculta completamente (max-h-0, opacity-0, padding-0) cuando se hace scroll.
+                        */}
+                        <div className={`w-full sm:w-auto overflow-hidden transition-all duration-500 ease-in-out flex flex-col items-center sm:items-end ${isScrolled ? 'max-h-0 opacity-0 m-0 p-0 pointer-events-none' : 'max-h-96 opacity-100'}`}>
                             {loginError && <p className="text-red-500 text-xs text-center sm:text-right mb-1">{loginError}</p>}
                             <form onSubmit={handleLoginSubmit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                                 <input 
@@ -410,7 +427,7 @@ const PublicPriceListPage: React.FC = () => {
                                     o Regístrate
                                 </Link>
                             </form>
-                             <div className="text-center sm:text-right mt-2">
+                             <div className="text-center sm:text-right mt-2 w-full">
                                 <Link to="/solicitud-comex" className="text-sm font-semibold text-secondary hover:underline">
                                     Solicitar Acceso COMEX
                                 </Link>
