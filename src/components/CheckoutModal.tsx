@@ -63,6 +63,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         street_name: '',
         street_number: '',
         zip_code: '',
+        city: '',      // Nuevo campo
+        province: '',  // Nuevo campo
     });
     const [errors, setErrors] = useState<Record<string, string | null>>({});
     const [loading, setLoading] = useState(false);
@@ -123,9 +125,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
             const itemsParaVenta = await prepareVentaItemsFromCart(orderItems);
 
             // 2. Create Sale in DB
-            // Note: Total includes shipping, subtotal implies products. 
-            // We add shipping info AND PHONE NUMBER to observations for admin clarity.
             const shippingNote = shippingCost > 0 ? ` [Incluye Envío: $${shippingCost}]` : ' [Envío Gratis]';
+            
+            // Construimos una observación completa para logística
+            const direccionCompleta = `${payerInfo.street_name} ${payerInfo.street_number}, ${payerInfo.city}, ${payerInfo.province} (CP: ${payerInfo.zip_code})`;
             
             const saleData: VentaToCreate = {
                 clienteId: null,
@@ -136,7 +139,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 subtotal: subtotal,
                 iva: 0,
                 total: total, // Save final total including shipping
-                observaciones: `Compra Web${shippingNote} - Cliente: ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Tel: ${payerInfo.phone} - Envío: ${payerInfo.street_name} ${payerInfo.street_number}, CP ${payerInfo.zip_code}`,
+                observaciones: `Compra Web${shippingNote} - Cliente: ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Tel: ${payerInfo.phone} - Envío a: ${direccionCompleta}`,
                 puntoDeVenta: 'Tienda física', 
             };
 
@@ -166,8 +169,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         setApiError(null);
 
         try {
-            // Create Preference in Mercado Pago using the Order ID we just created
-            // We pass shipping cost so the backend can add it as a line item
+            // Create Preference in Mercado Pago
             const preferenceInitPoint = await createPreference(orderItems, payerInfo, createdOrderId, shippingCost);
             
             // Redirect
@@ -218,6 +220,13 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                         <InputField name="street_number" label="Número" value={payerInfo.street_number} onChange={handleInputChange} error={errors.street_number} />
                                     </div>
                                 </div>
+                                
+                                {/* Nuevos campos de ubicación */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <InputField name="city" label="Ciudad / Localidad" value={payerInfo.city} onChange={handleInputChange} error={errors.city} />
+                                    <InputField name="province" label="Provincia" value={payerInfo.province} onChange={handleInputChange} error={errors.province} />
+                                </div>
+                                
                                 <InputField name="zip_code" label="Código Postal" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} />
                             </>
                         ) : (
@@ -231,8 +240,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                 <div className="bg-white p-3 rounded border border-green-100 text-left text-sm space-y-1">
                                     <p><strong>Orden ID:</strong> <span className="font-mono">{createdOrderId?.substring(0, 8).toUpperCase()}</span></p>
                                     <p><strong>Cliente:</strong> {payerInfo.name} {payerInfo.surname}</p>
-                                    <p><strong>Teléfono:</strong> {payerInfo.phone}</p>
-                                    <p><strong>Email:</strong> {payerInfo.email}</p>
+                                    <p><strong>Envío a:</strong> {payerInfo.city}, {payerInfo.province}</p>
                                 </div>
 
                                 <p className="text-sm text-gray-600">

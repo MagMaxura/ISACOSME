@@ -76,8 +76,7 @@ const PublicPriceListPage: React.FC = () => {
             try {
                 const data = await fetchPublicProductsList();
                 setProductos(data);
-            } catch (err: any)
-{
+            } catch (err: any) {
                 setError(err);
             } finally {
                 setLoading(false);

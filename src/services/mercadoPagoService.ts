@@ -13,6 +13,8 @@ interface PayerInfo {
   street_name: string;
   street_number: string;
   zip_code: string;
+  city: string;
+  province: string;
 }
 
 /**
@@ -57,6 +59,9 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             street_name: payerInfo.street_name,
             street_number: payerInfo.street_number, 
             zip_code: payerInfo.zip_code,
+            // We pass city and province in payload for record, though MP proxy handles them loosely
+            city: payerInfo.city,
+            province: payerInfo.province
         },
     };
 
