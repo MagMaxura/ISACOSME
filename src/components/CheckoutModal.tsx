@@ -124,7 +124,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
 
             // 2. Create Sale in DB
             // Note: Total includes shipping, subtotal implies products. 
-            // We add shipping info to observations for admin clarity.
+            // We add shipping info AND PHONE NUMBER to observations for admin clarity.
             const shippingNote = shippingCost > 0 ? ` [Incluye Envío: $${shippingCost}]` : ' [Envío Gratis]';
             
             const saleData: VentaToCreate = {
@@ -136,7 +136,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 subtotal: subtotal,
                 iva: 0,
                 total: total, // Save final total including shipping
-                observaciones: `Compra Web${shippingNote} - Cliente: ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Envío: ${payerInfo.street_name} ${payerInfo.street_number}, CP ${payerInfo.zip_code}`,
+                observaciones: `Compra Web${shippingNote} - Cliente: ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Tel: ${payerInfo.phone} - Envío: ${payerInfo.street_name} ${payerInfo.street_number}, CP ${payerInfo.zip_code}`,
                 puntoDeVenta: 'Tienda física', 
             };
 
@@ -231,6 +231,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                 <div className="bg-white p-3 rounded border border-green-100 text-left text-sm space-y-1">
                                     <p><strong>Orden ID:</strong> <span className="font-mono">{createdOrderId?.substring(0, 8).toUpperCase()}</span></p>
                                     <p><strong>Cliente:</strong> {payerInfo.name} {payerInfo.surname}</p>
+                                    <p><strong>Teléfono:</strong> {payerInfo.phone}</p>
                                     <p><strong>Email:</strong> {payerInfo.email}</p>
                                 </div>
 
