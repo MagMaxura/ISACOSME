@@ -377,6 +377,14 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                             }
                                                         },
                                                     },
+                                                    paymentMethods: {
+                                                        creditCard: "all",
+                                                        debitCard: "all",
+                                                        ticket: "all",
+                                                        bankTransfer: "all",
+                                                        atm: "all",
+                                                        prepaidCard: "all", // Explicitly allow prepaid cards (fintechs)
+                                                    } as any, // Cast to any to avoid potential type issues with prepaidCard
                                                 }}
                                                 onSubmit={handleBrickSubmit}
                                                 onError={(error) => console.error("Brick Error:", error)}
