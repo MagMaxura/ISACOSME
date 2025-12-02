@@ -8,40 +8,67 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("Mercado Pago Process Payment Function Initialized (v2)");
+console.log("Mercado Pago Process Payment Function Initialized (v4 - Enhanced Data)");
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { formData, external_reference } = await req.json();
+    const { formData, external_reference, payerInfo, items } = await req.json();
     const accessToken = Deno.env.get('MP_ACCESS_TOKEN');
 
     if (!accessToken) throw new Error('Server config error: Missing MP Token');
 
     console.log(`Processing payment for Sale ID: ${external_reference}`);
 
-    // Build the payment payload
+    // Build a robust payment payload
+    // Using formData from the Brick + payerInfo from the App for 'additional_info'
     const paymentBody = {
-        ...formData,
+        token: formData.token,
+        issuer_id: formData.issuer_id,
+        payment_method_id: formData.payment_method_id,
+        transaction_amount: formData.transaction_amount,
+        installments: formData.installments,
+        payer: {
+            email: formData.payer.email || payerInfo.email,
+            identification: formData.payer.identification // DNI from brick
+        },
         external_reference: external_reference,
         statement_descriptor: "ISABELLA PERLA",
+        description: `Pedido Web ${external_reference}`,
         additional_info: {
-            items: formData.additional_info?.items || [],
+            items: items ? items.map((i: any) => ({
+                id: i.id,
+                title: i.nombre,
+                quantity: i.quantity,
+                unit_price: Number(i.unitPrice)
+            })) : [],
             payer: {
-                first_name: formData.payer?.first_name,
-                last_name: formData.payer?.last_name,
+                first_name: payerInfo.name,
+                last_name: payerInfo.surname,
                 phone: {
-                    area_code: formData.payer?.phone?.area_code,
-                    number: formData.payer?.phone?.number
+                    area_code: "", 
+                    number: payerInfo.phone
                 },
-                address: formData.payer?.address
+                address: {
+                    zip_code: payerInfo.zip_code,
+                    street_name: payerInfo.street_name,
+                    street_number: parseInt(payerInfo.street_number) || 0
+                }
             },
             shipments: {
-                receiver_address: formData.payer?.address
+                receiver_address: {
+                    zip_code: payerInfo.zip_code,
+                    street_name: payerInfo.street_name,
+                    street_number: parseInt(payerInfo.street_number) || 0,
+                    floor: "",
+                    apartment: ""
+                }
             }
         }
     };
+
+    console.log("Payment Body prepared (partial log):", JSON.stringify({ ...paymentBody, token: 'HIDDEN' }));
 
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
         method: 'POST',
@@ -61,7 +88,7 @@ Deno.serve(async (req: Request) => {
         throw new Error(`Mercado Pago Error: ${errorDetail}`);
     }
 
-    console.log('Payment processed successfully. Status:', paymentResult.status);
+    console.log('Payment processed. Status:', paymentResult.status, 'ID:', paymentResult.id);
 
     return new Response(JSON.stringify(paymentResult), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

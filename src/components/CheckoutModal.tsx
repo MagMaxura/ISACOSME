@@ -180,17 +180,22 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     const handleBrickSubmit = async (param: any) => {
         const { formData } = param;
         console.log("Brick onSubmit triggered. Sending data to backend...");
+        setApiError(null);
         
         return new Promise<void>((resolve, reject) => {
             supabase.functions.invoke('mercadopago-process-payment', {
                 body: { 
                     formData, 
-                    external_reference: createdOrderId 
+                    external_reference: createdOrderId,
+                    // Send full payer info and items for better approval rates
+                    payerInfo: payerInfo,
+                    items: orderItems
                 }
             })
             .then(({ data, error }) => {
                 if (error) {
                     console.error("Function Invocation Error:", error);
+                    setApiError("Error de comunicación con el servidor de pagos.");
                     reject();
                 } else if (data && data.status === 'approved') {
                     console.log("Payment approved:", data);
@@ -199,12 +204,28 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     window.location.href = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}`;
                 } else {
                     console.error("Payment Not Approved. Response:", data);
-                    // reject() tells the Brick to show the error screen
-                    reject(); 
+                    
+                    let msg = "El pago no fue aprobado.";
+                    if (data?.status_detail) {
+                        switch(data.status_detail) {
+                            case 'cc_rejected_insufficient_amount': msg = "Fondos insuficientes en la tarjeta."; break;
+                            case 'cc_rejected_bad_filled_card_number': msg = "Revisa el número de tarjeta."; break;
+                            case 'cc_rejected_bad_filled_date': msg = "Revisa la fecha de vencimiento."; break;
+                            case 'cc_rejected_bad_filled_security_code': msg = "Revisa el código de seguridad."; break;
+                            case 'cc_rejected_high_risk': msg = "El pago fue rechazado por riesgo de seguridad. Intenta con otro medio."; break;
+                            case 'cc_rejected_call_for_authorize': msg = "Debes autorizar el pago con tu banco."; break;
+                            case 'cc_rejected_card_disabled': msg = "La tarjeta no está habilitada para operar."; break;
+                            default: msg = "El pago fue rechazado. Por favor, intenta con otra tarjeta o medio de pago.";
+                        }
+                    }
+                    
+                    setApiError(msg);
+                    reject(); // reject() tells the Brick to show the error screen (or keep loading state off)
                 }
             })
             .catch((err) => {
                 console.error("Network/System Error during payment:", err);
+                setApiError("Error de conexión. Verifica tu internet e intenta nuevamente.");
                 reject();
             });
         });
@@ -237,8 +258,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 firstName: payerInfo.name.trim(),
                 lastName: payerInfo.surname.trim(),
                 email: payerInfo.email.trim(),
-                // No enviamos address ni identification para evitar errores 400 de formato.
-                // El Brick los pedirá si es necesario.
             },
         };
     };
@@ -430,7 +449,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                             </div>
                         </div>
                         
-                        {apiError && <div className="mt-4 bg-red-100 text-red-700 p-3 rounded-md text-sm">{apiError}</div>}
+                        {apiError && <div className="mt-4 bg-red-100 text-red-700 p-3 rounded-md text-sm font-medium border border-red-200">{apiError}</div>}
                         {loading && statusMessage && (
                             <div className="mt-4 flex items-center justify-center text-blue-600 text-sm font-medium bg-blue-50 p-2 rounded">
                                 {statusMessage}
