@@ -339,9 +339,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                             <Payment
                                                 initialization={getBrickInitialization()}
                                                 customization={{
-                                                    paymentMethods: {
-                                                        maxInstallments: 12
-                                                    },
                                                     visual: {
                                                         style: {
                                                             theme: "default",
