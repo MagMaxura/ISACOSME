@@ -179,7 +179,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     // Brick onSubmit Handler (Procesa tarjeta directamente)
     const handleBrickSubmit = async (param: any) => {
         const { formData } = param;
-        console.log("Brick onSubmit triggered. Sending data to backend...", formData);
+        console.log("Brick onSubmit triggered. Form Data:", formData);
+        console.log("Sending additional Payer Info to Backend:", payerInfo);
         setApiError(null);
         
         return new Promise<void>((resolve, reject) => {

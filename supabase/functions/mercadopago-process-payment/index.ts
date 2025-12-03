@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("Mercado Pago Process Payment Function Initialized (v7 - Smart Binary Mode)");
+console.log("Mercado Pago Process Payment Function Initialized (v8 - Deep Log & DNI Fallback)");
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -22,19 +22,20 @@ Deno.serve(async (req: Request) => {
     console.log(`Processing payment for Sale ID: ${external_reference}. Type: ${formData.payment_type_id}`);
 
     // --- Data Sanitization ---
-    // Mercado Pago is strict about formats. 
-    // Phone must be digits. Street number must be integer.
     const cleanPhone = payerInfo.phone ? String(payerInfo.phone).replace(/\D/g, '') : "";
     const cleanStreetNumber = payerInfo.street_number ? (parseInt(String(payerInfo.street_number).replace(/\D/g, ''), 10) || 0) : 0;
     
-    // --- Smart Binary Mode ---
-    // Cards (Credit, Debit, Prepaid) should be instant (Approved/Rejected) to avoid confusing "Pending" states.
-    // Offline methods (Ticket, ATM) MUST be pending (binary_mode: false) to wait for payment.
-    const paymentTypeId = formData.payment_type_id;
-    const isCard = paymentTypeId === 'credit_card' || paymentTypeId === 'debit_card' || paymentTypeId === 'prepaid_card';
-    const binaryMode = isCard; 
-
-    console.log(`Setting binary_mode to ${binaryMode} for payment type ${paymentTypeId}`);
+    // --- Identification Logic (DNI Fallback) ---
+    // CRITICAL FIX: If the Brick doesn't provide identification (common in some configs), 
+    // we use the DNI collected in the checkout form (payerInfo).
+    let identification = formData.payer?.identification;
+    if (!identification || !identification.number) {
+        console.log("Brick did not provide identification. Using fallback from PayerInfo form.");
+        identification = {
+            type: 'DNI',
+            number: String(payerInfo.dni).replace(/\D/g, '') // Ensure only digits
+        };
+    }
 
     // Build a robust payment payload
     const paymentBody = {
@@ -45,18 +46,20 @@ Deno.serve(async (req: Request) => {
         installments: Number(formData.installments),
         payer: {
             email: formData.payer.email || payerInfo.email,
-            identification: formData.payer.identification // DNI from brick
+            identification: identification, // Uses the robust/fallback identification
+            first_name: payerInfo.name, // Moving name to root payer improves scoring
+            last_name: payerInfo.surname
         },
         external_reference: external_reference,
         statement_descriptor: "ISABELLA PERLA",
         description: `Pedido Web ${external_reference}`,
-        binary_mode: binaryMode, 
+        binary_mode: false, // FALSE allows "in_process" status instead of instant rejection. Better for high approval.
         additional_info: {
             items: items ? items.map((i: any) => ({
                 id: String(i.id),
                 title: i.nombre,
-                description: i.nombre, // Required for better scoring
-                quantity: Math.floor(Number(i.quantity)), // Must be integer
+                description: i.nombre,
+                quantity: Math.floor(Number(i.quantity)),
                 unit_price: Number(Number(i.unitPrice).toFixed(2))
             })) : [],
             payer: {
@@ -84,7 +87,12 @@ Deno.serve(async (req: Request) => {
         }
     };
 
-    console.log("Payment Body prepared (partial log):", JSON.stringify({ ...paymentBody, token: 'HIDDEN' }));
+    // --- DEEP LOGGING FOR DEBUGGING ---
+    console.log("----- DEBUG: PAYLOAD TO MERCADOPAGO -----");
+    // Create a safe copy for logging (masking sensitive token)
+    const logBody = { ...paymentBody, token: '***MASKED***' };
+    console.log(JSON.stringify(logBody, null, 2));
+    console.log("-----------------------------------------");
 
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
         method: 'POST',
