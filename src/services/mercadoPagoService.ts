@@ -8,20 +8,13 @@ interface PayerInfo {
   name: string;
   surname: string;
   email: string;
-  phone: string;
-  dni: string;
-  street_name: string;
-  street_number: string;
-  zip_code: string;
-  city: string;
-  province: string;
+  // Campos opcionales para Checkout Pro pero útiles si los tenemos
+  phone?: string; 
+  dni?: string;
 }
 
 /**
- * Genera una preferencia de pago en Mercado Pago.
- * Estrategia: Datos Parciales de Alta Calidad.
- * Enviamos Email y Nombre (obligatorios para scoring de fraude) pero omitimos
- * dirección y teléfono (que causan errores de formato técnico).
+ * Genera una preferencia de pago en Mercado Pago (Checkout Pro).
  */
 export const createPreference = async (orderItems: OrderItem[], payerInfo: PayerInfo, externalReference?: string, shippingCost?: number): Promise<string> => {
     const safeExternalReference = externalReference || 'NO_ID';
@@ -32,10 +25,11 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
     const mpItems = orderItems.map(item => ({
         id: item.id,
         title: item.nombre,
-        description: item.nombre, // MP Requiere descripción para mejorar aprobación
+        description: item.nombre, // Requerido para mejor UX en el checkout
         quantity: Math.floor(item.quantity),
         unit_price: Number(item.unitPrice.toFixed(2)),
         currency_id: 'ARS', 
+        picture_url: 'https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.png' // Logo genérico
     }));
 
     // Agregar envío como item si existe
@@ -47,17 +41,18 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             quantity: 1,
             unit_price: Number(shippingCost.toFixed(2)),
             currency_id: 'ARS',
+            picture_url: ''
         });
     }
 
-    // Reactivamos el envío de datos del Payer (Nombre, Apellido, Email)
-    // El reporte de MP indica que el Email es OBLIGATORIO para mejorar la tasa de aprobación.
+    // Datos del Payer para pre-llenar Checkout Pro
     const mpPayer = {
         name: payerInfo.name,
         surname: payerInfo.surname,
         email: payerInfo.email,
-        // Seguimos omitiendo phone y address intencionalmente para evitar errores de validación de formato
-        // que suelen bloquear la creación de la preferencia.
+        date_created: new Date().toISOString(),
+        // Enviamos identification si está disponible para facturación
+        identification: payerInfo.dni ? { type: 'DNI', number: payerInfo.dni } : undefined,
     };
 
     try {
@@ -87,7 +82,7 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             throw new Error(data?.error || 'No se recibió el link de pago.');
         }
         
-        console.log(`[${SERVICE_NAME}] Preferencia creada exitosamente.`);
+        console.log(`[${SERVICE_NAME}] Preferencia creada exitosamente: ${data.init_point}`);
         return data.init_point;
 
     } catch (err: any) {

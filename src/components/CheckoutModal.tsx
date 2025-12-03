@@ -1,22 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
-import { IconX, IconCheck, IconDeviceFloppy, IconAlertCircle, IconMercadoPago } from './Icons';
+import { IconX, IconMercadoPago, IconAlertCircle, IconCheck } from './Icons';
 import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
-import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
-import { supabase } from '@/supabase';
 import { createPreference } from '../services/mercadoPagoService';
-
-// Intentar obtener la clave desde las variables de entorno, o usar la clave de prueba proporcionada
-const MP_PUBLIC_KEY = (import.meta as any).env.VITE_MP_PUBLIC_KEY || 'APP_USR-e4e8f2fe-bbc6-4da7-b26e-9c80e77a49a1';
-
-// Inicializar solo si tenemos una clave que parece válida
-const IS_LIKELY_ACCESS_TOKEN = MP_PUBLIC_KEY && MP_PUBLIC_KEY.length > 60;
-const HAS_VALID_KEY = MP_PUBLIC_KEY && MP_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY' && !IS_LIKELY_ACCESS_TOKEN;
-
-if (HAS_VALID_KEY) {
-    initMercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' });
-}
 
 export interface OrderItem {
   id: string;
@@ -63,11 +50,6 @@ const InputField: React.FC<InputFieldProps> = ({ name, label, value, onChange, e
 );
 
 const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderItems, subtotal, shippingCost = 0 }) => {
-    const [step, setStep] = useState<'form' | 'payment_brick'>('form');
-    const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
-    const [configError, setConfigError] = useState<string | null>(null);
-    const [redirectLoading, setRedirectLoading] = useState(false);
-    
     const [payerInfo, setPayerInfo] = useState({
         name: '',
         surname: '',
@@ -86,16 +68,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     const [statusMessage, setStatusMessage] = useState<string>('');
 
     const total = subtotal + shippingCost;
-
-    useEffect(() => {
-        if (step === 'payment_brick') {
-            if (!MP_PUBLIC_KEY || MP_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
-                setConfigError('La Public Key de Mercado Pago no está configurada.');
-            } else if (IS_LIKELY_ACCESS_TOKEN) {
-                setConfigError('Error de Configuración: Parece que estás usando un "Access Token" en lugar de la "Public Key".');
-            }
-        }
-    }, [step]);
 
     if (!isOpen) return null;
 
@@ -127,8 +99,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         validateField(name, value);
     };
     
-    // Step 1: Save Order to Database
-    const handleRegisterOrder = async () => {
+    const handleCheckoutPro = async () => {
+        // 1. Validar Formulario
         let formIsValid = true;
         for (const key in payerInfo) {
             validateField(key, payerInfo[key as keyof typeof payerInfo]);
@@ -141,378 +113,187 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
 
         setLoading(true);
         setApiError(null);
-        setStatusMessage('Registrando tu pedido en el sistema...');
+        setStatusMessage('Registrando pedido...');
 
         try {
+            // 2. Preparar Items y Stock
             const itemsParaVenta = await prepareVentaItemsFromCart(orderItems);
             const shippingNote = shippingCost > 0 ? ` [Incluye Envío: $${shippingCost}]` : ' [Envío Gratis]';
             const direccionCompleta = `${payerInfo.street_name} ${payerInfo.street_number}, ${payerInfo.city}, ${payerInfo.province} (CP: ${payerInfo.zip_code})`;
             
+            // 3. Crear Venta en Base de Datos
             const saleData: VentaToCreate = {
                 clienteId: null,
                 fecha: new Date().toISOString().split('T')[0],
                 tipo: 'Venta',
-                estado: 'Pendiente',
+                estado: 'Pendiente', // Se actualizará via Webhook cuando MP confirme
                 items: itemsParaVenta,
                 subtotal: subtotal,
                 iva: 0,
                 total: total,
-                observaciones: `Compra Web${shippingNote} - Cliente: ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Tel: ${payerInfo.phone} - Envío a: ${direccionCompleta}`,
+                observaciones: `Checkout Pro${shippingNote} - Cliente: ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Tel: ${payerInfo.phone} - Envío a: ${direccionCompleta}`,
                 puntoDeVenta: 'Tienda física', 
             };
 
             const newSaleId = await createVenta(saleData);
-            setCreatedOrderId(newSaleId);
-            setStatusMessage('');
-            setStep('payment_brick'); // Go to Payment Brick
+            
+            // 4. Crear Preferencia de Mercado Pago
+            setStatusMessage('Generando link de pago seguro...');
+            const initPoint = await createPreference(orderItems, payerInfo, newSaleId, shippingCost);
+            
+            // 5. Redirigir a Mercado Pago
+            setStatusMessage('Redirigiendo a Mercado Pago...');
+            window.location.href = initPoint;
 
         } catch (err: any) {
-            console.error("Order registration error:", err);
-            let msg = err.message || 'Ocurrió un error al registrar el pedido.';
+            console.error("Checkout error:", err);
+            let msg = err.message || 'Ocurrió un error al procesar el pedido.';
             if (msg.includes('insufficient stock')) msg = 'Stock insuficiente para completar el pedido.';
             setApiError(msg);
-        } finally {
             setLoading(false);
-        }
-    };
-
-    // Brick onSubmit Handler (Procesa tarjeta directamente)
-    const handleBrickSubmit = async (param: any) => {
-        const { formData } = param;
-        console.log("Brick onSubmit triggered. Sending data to backend...");
-        setApiError(null);
-        
-        return new Promise<void>((resolve, reject) => {
-            supabase.functions.invoke('mercadopago-process-payment', {
-                body: { 
-                    formData, 
-                    external_reference: createdOrderId,
-                    // Send full payer info and items for better approval rates
-                    payerInfo: payerInfo,
-                    items: orderItems
-                }
-            })
-            .then(({ data, error }) => {
-                if (error) {
-                    console.error("Function Invocation Error:", error);
-                    setApiError("Error de comunicación con el servidor de pagos. Por favor, intenta nuevamente.");
-                    reject();
-                } else if (data && (data.status === 'approved' || data.status === 'in_process' || data.status === 'pending')) {
-                    // Treat 'in_process' and 'pending' as ssuccess for UI flow
-                    console.log(`Payment status: ${data.status}`, data);
-                    resolve();
-                    
-                    // Construct redirect URL
-                    let redirectUrl = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}&status=${data.status}`;
-                    
-                    // Check for Ticket URL (Rapipago/Pago Fácil) - Check multiple locations
-                    let ticketUrl = data.transaction_details?.external_resource_url;
-                    
-                    if (!ticketUrl && data.point_of_interaction?.transaction_data?.ticket_url) {
-                        ticketUrl = data.point_of_interaction.transaction_data.ticket_url;
-                    }
-
-                    if (ticketUrl) {
-                        console.log("Ticket URL found:", ticketUrl);
-                        redirectUrl += `&ticket_url=${encodeURIComponent(ticketUrl)}`;
-                    } else {
-                        console.log("No ticket URL found in response.");
-                    }
-
-                    // Redirect to success page
-                    window.location.href = redirectUrl;
-                } else {
-                    // Log the full response object to help debugging if 'Object' is seen in console
-                    console.error("Payment Not Approved. Response:", JSON.stringify(data, null, 2));
-                    
-                    let msg = "El pago no fue aprobado.";
-                    const detail = data?.status_detail;
-                    
-                    if (detail) {
-                        switch(detail) {
-                            case 'cc_rejected_insufficient_amount': msg = "Fondos insuficientes en la tarjeta."; break;
-                            case 'cc_rejected_bad_filled_card_number': msg = "Revisa el número de tarjeta."; break;
-                            case 'cc_rejected_bad_filled_date': msg = "Revisa la fecha de vencimiento."; break;
-                            case 'cc_rejected_bad_filled_security_code': msg = "Revisa el código de seguridad."; break;
-                            case 'cc_rejected_high_risk': msg = "Pago rechazado por seguridad. Verifica que el DNI ingresado coincida con el titular de la tarjeta."; break;
-                            case 'cc_rejected_call_for_authorize': msg = "Debes autorizar el pago con tu banco."; break;
-                            case 'cc_rejected_card_disabled': msg = "La tarjeta no está habilitada para operar."; break;
-                            case 'cc_rejected_blacklist': msg = "No pudimos procesar tu pago por seguridad."; break;
-                            default: msg = `El pago fue rechazado (${detail}). Por favor, intenta con otra tarjeta.`;
-                        }
-                    } else if (data?.message) {
-                        msg = `Error: ${data.message}`;
-                    } else if (data?.error) {
-                        msg = `Error técnico: ${data.error}`;
-                    }
-                    
-                    setApiError(msg);
-                    reject(); // reject() tells the Brick to show the error screen (or keep loading state off)
-                }
-            })
-            .catch((err) => {
-                console.error("Network/System Error during payment:", err);
-                setApiError("Error de conexión. Verifica tu internet e intenta nuevamente.");
-                reject();
-            });
-        });
-    };
-
-    const handleBrickError = (error: any) => {
-        console.error("Brick Error:", error);
-        if (error?.message === 'payment_method_not_in_allowed_types') {
-            setApiError("Esta tarjeta no está soportada directamente. Por favor, usa la opción 'Pagar con Cuenta Mercado Pago' (botón azul abajo) que acepta todas las tarjetas.");
-        }
-    }
-
-    // Alternativa: Redirigir a Checkout Pro para usar saldo en cuenta / Billetera
-    const handleWalletRedirect = async () => {
-        if (!createdOrderId) return;
-        setRedirectLoading(true);
-        try {
-            // Usamos el servicio que ya conecta con la función 'mercadopago-proxy'
-            // Esta función crea una preferencia de pago y devuelve el link
-            const initPoint = await createPreference(orderItems, payerInfo, createdOrderId, shippingCost);
-            window.location.href = initPoint;
-        } catch (err) {
-            console.error("Redirect error:", err);
-            setApiError("Error al redirigir a Mercado Pago. Intenta con tarjeta directa.");
-            setRedirectLoading(false);
         }
     };
 
     const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    // Prepare clean data for Brick initialization
-    const getBrickInitialization = () => {
-        return {
-            amount: total,
-            payer: {
-                entityType: 'individual' as const,
-                firstName: payerInfo.name.trim(),
-                lastName: payerInfo.surname.trim(),
-                email: payerInfo.email.trim(),
-            },
-        };
-    };
-
     return ReactDOM.createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[9999] p-4">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-fade-in">
                 <div className="flex justify-between items-center p-5 border-b">
-                    <h3 className="text-2xl font-semibold text-gray-800">
-                        {step === 'form' ? 'Finalizar Compra' : 'Realizar Pago'}
+                    <h3 className="text-2xl font-bold text-gray-800 flex items-center">
+                        <IconMercadoPago className="w-8 h-8 mr-2 text-[#009EE3]" />
+                        Finalizar Compra
                     </h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={onClose} disabled={loading} className="text-gray-400 hover:text-gray-600 disabled:opacity-50">
                         <IconX className="w-6 h-6" />
                     </button>
                 </div>
                 
                 <div className="flex flex-col lg:flex-row p-6 gap-8 overflow-y-auto">
-                    {/* Left Column: Form or Brick */}
+                    {/* Left Column: Form */}
                     <div className="lg:w-3/5 space-y-4">
-                        {step === 'form' ? (
-                            <>
-                                <h4 className="text-lg font-semibold text-gray-700">Tus Datos</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <InputField name="name" label="Nombre" value={payerInfo.name} onChange={handleInputChange} error={errors.name} />
-                                    <InputField name="surname" label="Apellido" value={payerInfo.surname} onChange={handleInputChange} error={errors.surname} />
-                                </div>
-                                <InputField name="email" label="Email" type="email" value={payerInfo.email} onChange={handleInputChange} error={errors.email} />
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <InputField name="phone" label="Teléfono" type="number" value={payerInfo.phone} onChange={handleInputChange} error={errors.phone} />
-                                    <InputField name="dni" label="DNI/CUIT" type="number" value={payerInfo.dni} onChange={handleInputChange} error={errors.dni} />
-                                </div>
-
-                                <h4 className="text-lg font-semibold text-gray-700 pt-4">Dirección de Envío</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div className="sm:col-span-2">
-                                        <InputField name="street_name" label="Calle" value={payerInfo.street_name} onChange={handleInputChange} error={errors.street_name} />
-                                    </div>
-                                    <div>
-                                        <InputField name="street_number" label="Número" type="number" value={payerInfo.street_number} onChange={handleInputChange} error={errors.street_number} />
-                                    </div>
-                                </div>
-                                
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <InputField name="city" label="Ciudad / Localidad" value={payerInfo.city} onChange={handleInputChange} error={errors.city} />
-                                    <InputField name="province" label="Provincia" value={payerInfo.province} onChange={handleInputChange} error={errors.province} />
-                                </div>
-                                
-                                <InputField name="zip_code" label="Código Postal" type="number" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} />
-                            </>
-                        ) : (
-                            <div className="w-full">
-                                <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 text-center">
-                                    <div className="flex items-center justify-center gap-2 text-green-800 font-bold">
-                                        <IconCheck className="w-5 h-5" />
-                                        <span>Pedido Registrado</span>
-                                    </div>
-                                    <p className="text-xs text-green-700">Orden #{createdOrderId?.substring(0, 8).toUpperCase()}. Elige tu método de pago.</p>
-                                </div>
-                                
-                                {configError ? (
-                                    <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex items-start gap-3">
-                                        <IconAlertCircle className="w-6 h-6 text-red-600 flex-shrink-0" />
-                                        <div>
-                                            <h4 className="font-bold text-red-800">Error de Configuración</h4>
-                                            <p className="text-sm text-red-700">{configError}</p>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <>
-                                        {/* OPCIÓN 1: TARJETA DIRECTA (BRICK) */}
-                                        <div className="mb-6">
-                                            <h4 className="font-semibold text-gray-700 mb-2">Pagar con Tarjeta o Efectivo</h4>
-                                            <Payment
-                                                initialization={getBrickInitialization()}
-                                                customization={{
-                                                    visual: {
-                                                        style: {
-                                                            theme: "default",
-                                                            customVariables: {
-                                                                textPrimaryColor: "#1e293b",
-                                                                textSecondaryColor: "#64748b",
-                                                                inputBackgroundColor: "#ffffff",
-                                                                formBackgroundColor: "#ffffff",
-                                                                baseColor: "#8a5cf6",
-                                                                baseColorFirstVariant: "#7c3aed",
-                                                                baseColorSecondVariant: "#a78bfa",
-                                                                errorColor: "#ef4444",
-                                                                successColor: "#22c55e",
-                                                                outlinePrimaryColor: "#8a5cf6",
-                                                                outlineSecondaryColor: "#e2e8f0",
-                                                                buttonTextColor: "#ffffff",
-                                                                fontSizeExtraSmall: "12px",
-                                                                fontSizeSmall: "14px",
-                                                                fontSizeMedium: "16px",
-                                                                fontSizeLarge: "18px",
-                                                                fontSizeExtraLarge: "20px",
-                                                                fontWeightNormal: "400",
-                                                                fontWeightSemiBold: "600",
-                                                                formInputsTextTransform: "none",
-                                                                inputVerticalPadding: "12px",
-                                                                inputHorizontalPadding: "16px",
-                                                                inputFocusedBoxShadow: "0 0 0 2px #ddd6fe",
-                                                                inputErrorFocusedBoxShadow: "0 0 0 2px #fecaca",
-                                                                inputBorderWidth: "1px",
-                                                                inputFocusedBorderWidth: "1px",
-                                                                borderRadiusSmall: "4px",
-                                                                borderRadiusMedium: "6px",
-                                                                borderRadiusLarge: "8px",
-                                                                borderRadiusFull: "9999px",
-                                                                formPadding: "24px"
-                                                            }
-                                                        },
-                                                    },
-                                                    paymentMethods: {
-                                                        // Simplify configuration to reduce console warnings and conflicts.
-                                                        // We allow standard cards + ticket. 
-                                                        // prepaidCard is kept as users reported needing it for Fintechs (Uala/Lemon).
-                                                        creditCard: "all",
-                                                        debitCard: "all",
-                                                        ticket: "all",
-                                                        prepaidCard: "all",
-                                                    } as any, 
-                                                }}
-                                                onSubmit={handleBrickSubmit}
-                                                onError={handleBrickError}
-                                            />
-                                        </div>
-
-                                        {/* SEPARADOR */}
-                                        <div className="flex items-center gap-4 my-6">
-                                            <div className="h-px bg-gray-300 flex-1"></div>
-                                            <span className="text-gray-500 text-sm font-medium">O también puedes</span>
-                                            <div className="h-px bg-gray-300 flex-1"></div>
-                                        </div>
-
-                                        {/* OPCIÓN 2: CUENTA MERCADO PAGO (REDIRECT) */}
-                                        <div>
-                                            <button 
-                                                onClick={handleWalletRedirect}
-                                                disabled={redirectLoading}
-                                                className="w-full flex items-center justify-center bg-[#009EE3] hover:bg-[#0089C7] text-white font-bold py-4 px-4 rounded-lg shadow transition-colors disabled:bg-gray-300"
-                                            >
-                                                {redirectLoading ? (
-                                                    <span>Conectando...</span>
-                                                ) : (
-                                                    <>
-                                                        <IconMercadoPago className="w-6 h-6 mr-2 text-white" />
-                                                        Pagar con Cuenta Mercado Pago
-                                                    </>
-                                                )}
-                                            </button>
-                                            <p className="text-center text-xs text-gray-500 mt-2">
-                                                Usa tu dinero en cuenta, tarjetas guardadas o Mercado Crédito.
-                                            </p>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Right Column: Order Summary */}
-                    <div className="lg:w-2/5 bg-gray-50 p-6 rounded-lg h-fit flex flex-col">
-                        <h4 className="text-lg font-semibold text-gray-700 mb-4">Resumen del Pedido</h4>
-                         <div className="space-y-3 max-h-60 overflow-y-auto pr-2 flex-grow">
-                            {orderItems.map(item => (
-                                <div key={item.id} className="flex justify-between items-center text-sm">
-                                    <div>
-                                        <p className="font-semibold text-gray-800">{item.nombre}</p>
-                                        <p className="text-gray-500">{item.quantity} x {formatPrice(item.unitPrice)}</p>
-                                    </div>
-                                    <p className="font-semibold">{formatPrice(item.lineTotal)}</p>
-                                </div>
-                            ))}
+                        <h4 className="text-lg font-semibold text-gray-700">1. Datos del Cliente</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <InputField name="name" label="Nombre" value={payerInfo.name} onChange={handleInputChange} error={errors.name} disabled={loading} />
+                            <InputField name="surname" label="Apellido" value={payerInfo.surname} onChange={handleInputChange} error={errors.surname} disabled={loading} />
                         </div>
-                        <div className="mt-4 pt-4 border-t-2 border-gray-200 space-y-2">
-                            <div className="flex justify-between text-gray-600">
-                                <span>Subtotal:</span>
-                                <span>{formatPrice(subtotal)}</span>
+                        <InputField name="email" label="Email" type="email" value={payerInfo.email} onChange={handleInputChange} error={errors.email} disabled={loading} />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <InputField name="phone" label="Teléfono" type="number" value={payerInfo.phone} onChange={handleInputChange} error={errors.phone} disabled={loading} />
+                            <InputField name="dni" label="DNI/CUIT" type="number" value={payerInfo.dni} onChange={handleInputChange} error={errors.dni} disabled={loading} />
+                        </div>
+
+                        <h4 className="text-lg font-semibold text-gray-700 pt-4">2. Dirección de Envío</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="sm:col-span-2">
+                                <InputField name="street_name" label="Calle" value={payerInfo.street_name} onChange={handleInputChange} error={errors.street_name} disabled={loading} />
                             </div>
-                            <div className="flex justify-between text-gray-600">
-                                <span>Costo de Envío:</span>
-                                {shippingCost === 0 ? (
-                                    <span className="text-green-600 font-bold">Gratis</span>
-                                ) : (
-                                    <span>{formatPrice(shippingCost)}</span>
-                                )}
-                            </div>
-                            <div className="flex justify-between font-bold text-2xl text-gray-800 border-t pt-2">
-                                <span>Total:</span>
-                                <span>{formatPrice(total)}</span>
+                            <div>
+                                <InputField name="street_number" label="Número" type="number" value={payerInfo.street_number} onChange={handleInputChange} error={errors.street_number} disabled={loading} />
                             </div>
                         </div>
                         
-                        {apiError && <div className="mt-4 bg-red-100 text-red-700 p-3 rounded-md text-sm font-medium border border-red-200">{apiError}</div>}
-                        {loading && statusMessage && (
-                            <div className="mt-4 flex items-center justify-center text-blue-600 text-sm font-medium bg-blue-50 p-2 rounded">
-                                {statusMessage}
-                            </div>
-                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <InputField name="city" label="Ciudad / Localidad" value={payerInfo.city} onChange={handleInputChange} error={errors.city} disabled={loading} />
+                            <InputField name="province" label="Provincia" value={payerInfo.province} onChange={handleInputChange} error={errors.province} disabled={loading} />
+                        </div>
+                        
+                        <InputField name="zip_code" label="Código Postal" type="number" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} disabled={loading} />
+                    </div>
 
-                        {step === 'form' && (
+                    {/* Right Column: Order Summary & Pay Button */}
+                    <div className="lg:w-2/5 flex flex-col">
+                        <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-sm sticky top-0">
+                            <h4 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Resumen del Pedido</h4>
+                            
+                            <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar mb-4">
+                                {orderItems.map(item => (
+                                    <div key={item.id} className="flex justify-between items-start text-sm">
+                                        <div>
+                                            <p className="font-medium text-gray-800">{item.nombre}</p>
+                                            <p className="text-gray-500 text-xs">{item.quantity} x {formatPrice(item.unitPrice)}</p>
+                                        </div>
+                                        <p className="font-semibold text-gray-700">{formatPrice(item.lineTotal)}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="space-y-2 border-t border-gray-200 pt-4">
+                                <div className="flex justify-between text-gray-600">
+                                    <span>Subtotal:</span>
+                                    <span>{formatPrice(subtotal)}</span>
+                                </div>
+                                <div className="flex justify-between text-gray-600">
+                                    <span>Costo de Envío:</span>
+                                    {shippingCost === 0 ? (
+                                        <span className="text-green-600 font-bold">Gratis</span>
+                                    ) : (
+                                        <span>{formatPrice(shippingCost)}</span>
+                                    )}
+                                </div>
+                                <div className="flex justify-between font-bold text-2xl text-gray-900 pt-2 border-t border-gray-200 mt-2">
+                                    <span>Total:</span>
+                                    <span>{formatPrice(total)}</span>
+                                </div>
+                            </div>
+
+                            {apiError && (
+                                <div className="mt-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded text-sm flex items-start">
+                                    <IconAlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-bold">Error</p>
+                                        <p>{apiError}</p>
+                                    </div>
+                                </div>
+                            )}
+
                             <button 
-                                onClick={handleRegisterOrder} 
+                                onClick={handleCheckoutPro} 
                                 disabled={loading}
-                                className="w-full mt-6 bg-primary text-white py-4 rounded-lg shadow-md hover:bg-primary-dark transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center"
+                                className="w-full mt-6 bg-[#009EE3] hover:bg-[#0089C7] text-white py-4 rounded-lg shadow-md transition-all transform hover:scale-[1.02] active:scale-95 disabled:bg-gray-400 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center relative overflow-hidden"
                             >
-                                <IconDeviceFloppy className="h-6 w-6 mr-2" />
-                                Confirmar y Continuar
+                                {loading ? (
+                                    <span className="flex items-center">
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Procesando...
+                                    </span>
+                                ) : (
+                                    <>
+                                        Pagar con Mercado Pago
+                                        <IconMercadoPago className="w-6 h-6 ml-2" />
+                                    </>
+                                )}
                             </button>
-                        )}
+                            
+                            {loading && statusMessage && (
+                                <p className="text-center text-sm text-[#009EE3] mt-3 font-medium animate-pulse">
+                                    {statusMessage}
+                                </p>
+                            )}
+
+                            {!loading && (
+                                <p className="text-xs text-center text-gray-500 mt-4">
+                                    Serás redirigido al sitio seguro de Mercado Pago para completar tu compra. Aceptamos tarjetas, efectivo (Rapipago/PagoFácil) y dinero en cuenta.
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
              <style>{`
                 .label-style { display: block; margin-bottom: 0.25rem; font-size: 0.875rem; font-weight: 500; color: #374151; }
-                .input-style { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); transition: border-color 0.15s ease-in-out; } 
-                .input-style:focus { outline: 2px solid transparent; outline-offset: 2px; border-color: #8a5cf6; }
+                .input-style { display: block; width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); transition: all 0.2s; } 
+                .input-style:focus { outline: none; border-color: #8a5cf6; ring: 2px; ring-color: #ddd6fe; }
                 .input-style.border-red-500 { border-color: #EF4444; }
-                @keyframes fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-                .animate-fade-in { animation: fade-in 0.2s ease-out; }
+                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+                @keyframes fade-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+                .animate-fade-in { animation: fade-in 0.25s ease-out; }
             `}</style>
         </div>,
         document.body
