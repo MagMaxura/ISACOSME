@@ -179,7 +179,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     // Brick onSubmit Handler (Procesa tarjeta directamente)
     const handleBrickSubmit = async (param: any) => {
         const { formData } = param;
-        console.log("Brick onSubmit triggered. Sending data to backend...");
+        console.log("Brick onSubmit triggered. Sending data to backend...", formData);
         setApiError(null);
         
         return new Promise<void>((resolve, reject) => {
@@ -195,7 +195,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
             .then(({ data, error }) => {
                 if (error) {
                     console.error("Function Invocation Error:", error);
-                    setApiError("Error de comunicación con el servidor de pagos.");
+                    setApiError("Error de comunicación con el servidor de pagos. Por favor, intenta nuevamente.");
                     reject();
                 } else if (data && (data.status === 'approved' || data.status === 'in_process' || data.status === 'pending')) {
                     // Treat 'in_process' and 'pending' as success for UI flow
@@ -234,7 +234,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                             case 'cc_rejected_bad_filled_card_number': msg = "Revisa el número de tarjeta."; break;
                             case 'cc_rejected_bad_filled_date': msg = "Revisa la fecha de vencimiento."; break;
                             case 'cc_rejected_bad_filled_security_code': msg = "Revisa el código de seguridad."; break;
-                            case 'cc_rejected_high_risk': msg = "El pago fue rechazado por riesgo de seguridad (High Risk). Intenta con otro medio de pago."; break;
+                            case 'cc_rejected_high_risk': msg = "El pago fue rechazado por seguridad. Intenta con otro medio de pago."; break;
                             case 'cc_rejected_call_for_authorize': msg = "Debes autorizar el pago con tu banco."; break;
                             case 'cc_rejected_card_disabled': msg = "La tarjeta no está habilitada para operar."; break;
                             case 'cc_rejected_blacklist': msg = "No pudimos procesar tu pago por seguridad."; break;
@@ -354,7 +354,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     <>
                                         {/* OPCIÓN 1: TARJETA DIRECTA (BRICK) */}
                                         <div className="mb-6">
-                                            <h4 className="font-semibold text-gray-700 mb-2">Pagar con Tarjeta (Débito/Crédito/Prepagas)</h4>
+                                            <h4 className="font-semibold text-gray-700 mb-2">Pagar con Tarjeta o Efectivo</h4>
                                             <Payment
                                                 initialization={getBrickInitialization()}
                                                 customization={{
@@ -400,8 +400,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                         creditCard: "all",
                                                         debitCard: "all",
                                                         ticket: "all",
-                                                        // Removed atm and bankTransfer to resolve brick configuration warnings
-                                                        prepaidCard: "all", // Explicitly allow prepaid cards (fintechs)
+                                                        prepaidCard: "all", // Explicitly allow prepaid/fintech
                                                     } as any, 
                                                 }}
                                                 onSubmit={handleBrickSubmit}

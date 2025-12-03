@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("Mercado Pago Process Payment Function Initialized (v6 - Offline Support)");
+console.log("Mercado Pago Process Payment Function Initialized (v7 - Smart Binary Mode)");
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -19,7 +19,7 @@ Deno.serve(async (req: Request) => {
 
     if (!accessToken) throw new Error('Server config error: Missing MP Token');
 
-    console.log(`Processing payment for Sale ID: ${external_reference}`);
+    console.log(`Processing payment for Sale ID: ${external_reference}. Type: ${formData.payment_type_id}`);
 
     // --- Data Sanitization ---
     // Mercado Pago is strict about formats. 
@@ -27,6 +27,15 @@ Deno.serve(async (req: Request) => {
     const cleanPhone = payerInfo.phone ? String(payerInfo.phone).replace(/\D/g, '') : "";
     const cleanStreetNumber = payerInfo.street_number ? (parseInt(String(payerInfo.street_number).replace(/\D/g, ''), 10) || 0) : 0;
     
+    // --- Smart Binary Mode ---
+    // Cards (Credit, Debit, Prepaid) should be instant (Approved/Rejected) to avoid confusing "Pending" states.
+    // Offline methods (Ticket, ATM) MUST be pending (binary_mode: false) to wait for payment.
+    const paymentTypeId = formData.payment_type_id;
+    const isCard = paymentTypeId === 'credit_card' || paymentTypeId === 'debit_card' || paymentTypeId === 'prepaid_card';
+    const binaryMode = isCard; 
+
+    console.log(`Setting binary_mode to ${binaryMode} for payment type ${paymentTypeId}`);
+
     // Build a robust payment payload
     const paymentBody = {
         token: formData.token,
@@ -41,7 +50,7 @@ Deno.serve(async (req: Request) => {
         external_reference: external_reference,
         statement_descriptor: "ISABELLA PERLA",
         description: `Pedido Web ${external_reference}`,
-        binary_mode: false, // Important: False allows "pending" status for offline payments (Rapipago/PagoFacil)
+        binary_mode: binaryMode, 
         additional_info: {
             items: items ? items.map((i: any) => ({
                 id: String(i.id),
