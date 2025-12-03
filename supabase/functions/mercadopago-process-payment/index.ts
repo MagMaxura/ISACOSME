@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("Mercado Pago Process Payment Function Initialized (v5 - Sanitized Data)");
+console.log("Mercado Pago Process Payment Function Initialized (v6 - Offline Support)");
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -41,6 +41,7 @@ Deno.serve(async (req: Request) => {
         external_reference: external_reference,
         statement_descriptor: "ISABELLA PERLA",
         description: `Pedido Web ${external_reference}`,
+        binary_mode: false, // Important: False allows "pending" status for offline payments (Rapipago/PagoFacil)
         additional_info: {
             items: items ? items.map((i: any) => ({
                 id: String(i.id),

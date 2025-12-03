@@ -205,10 +205,18 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     // Construct redirect URL
                     let redirectUrl = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}&status=${data.status}`;
                     
-                    // Check for Ticket URL (Rapipago/Pago Fácil)
-                    const ticketUrl = data.transaction_details?.external_resource_url;
+                    // Check for Ticket URL (Rapipago/Pago Fácil) - Check multiple locations
+                    let ticketUrl = data.transaction_details?.external_resource_url;
+                    
+                    if (!ticketUrl && data.point_of_interaction?.transaction_data?.ticket_url) {
+                        ticketUrl = data.point_of_interaction.transaction_data.ticket_url;
+                    }
+
                     if (ticketUrl) {
+                        console.log("Ticket URL found:", ticketUrl);
                         redirectUrl += `&ticket_url=${encodeURIComponent(ticketUrl)}`;
+                    } else {
+                        console.log("No ticket URL found in response.");
                     }
 
                     // Redirect to success page
