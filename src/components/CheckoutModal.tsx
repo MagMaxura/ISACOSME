@@ -201,8 +201,18 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     // Treat 'in_process' and 'pending' as success for UI flow
                     console.log(`Payment status: ${data.status}`, data);
                     resolve();
+                    
+                    // Construct redirect URL
+                    let redirectUrl = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}&status=${data.status}`;
+                    
+                    // Check for Ticket URL (Rapipago/Pago Fácil)
+                    const ticketUrl = data.transaction_details?.external_resource_url;
+                    if (ticketUrl) {
+                        redirectUrl += `&ticket_url=${encodeURIComponent(ticketUrl)}`;
+                    }
+
                     // Redirect to success page
-                    window.location.href = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}&status=${data.status}`;
+                    window.location.href = redirectUrl;
                 } else {
                     // Log the full response object to help debugging if 'Object' is seen in console
                     console.error("Payment Not Approved. Response:", JSON.stringify(data, null, 2));

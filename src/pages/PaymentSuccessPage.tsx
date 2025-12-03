@@ -1,13 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { IconCheck, IconBrandWhatsapp, IconArrowLeft, IconClock, IconAlertCircle } from '@/components/Icons';
+import { IconCheck, IconBrandWhatsapp, IconArrowLeft, IconClock, IconAlertCircle, IconFileText } from '@/components/Icons';
 
 const PaymentSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [orderId, setOrderId] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('approved');
+  const [ticketUrl, setTicketUrl] = useState<string | null>(null);
 
   useEffect(() => {
     // Mercado Pago returns:
@@ -15,11 +16,13 @@ const PaymentSuccessPage: React.FC = () => {
     // payment_id=...
     // external_reference=... (This is our internal Sale ID)
     // status=... (Custom param we passed)
+    // ticket_url=... (Custom param for offline payments)
     
     const extRef = searchParams.get('external_reference');
     const payId = searchParams.get('payment_id');
     const statusParam = searchParams.get('status');
     const collectionStatus = searchParams.get('collection_status');
+    const ticketUrlParam = searchParams.get('ticket_url');
     
     if (extRef && extRef !== 'null') {
         setOrderId(extRef);
@@ -27,6 +30,10 @@ const PaymentSuccessPage: React.FC = () => {
     if (payId) {
         setPaymentId(payId);
     }
+    if (ticketUrlParam && ticketUrlParam !== 'undefined') {
+        setTicketUrl(ticketUrlParam);
+    }
+
     if (statusParam) {
         setStatus(statusParam);
     } else if (collectionStatus) {
@@ -45,7 +52,11 @@ const PaymentSuccessPage: React.FC = () => {
   
   let message = `👋 ¡Hola Isabella de la Perla! \n\n`;
   if (isPending) {
-      message += `⏳ He realizado un pago que quedó en *Revisión*.\n`;
+      if (ticketUrl) {
+          message += `🎟️ He generado un cupón de pago (Rapipago/Pago Fácil).\n`;
+      } else {
+          message += `⏳ He realizado un pago que quedó en *Revisión*.\n`;
+      }
   } else {
       message += `✅ Acabo de realizar el pago de mi pedido.\n`;
   }
@@ -78,10 +89,16 @@ const PaymentSuccessPage: React.FC = () => {
             )}
           </div>
           <h1 className="text-3xl font-bold text-white tracking-wide">
-              {isPending ? 'Pago en Revisión' : '¡Pago Exitoso!'}
+              {isPending 
+                ? (ticketUrl ? 'Cupón Generado' : 'Pago en Revisión') 
+                : '¡Pago Exitoso!'
+              }
           </h1>
           <p className={`${isPending ? 'text-yellow-100' : 'text-green-100'} mt-2 text-sm`}>
-              {isPending ? 'Mercado Pago está procesando tu pago' : 'Tu transacción fue procesada correctamente'}
+              {isPending 
+                ? (ticketUrl ? 'Descarga tu cupón para pagar en efectivo' : 'Mercado Pago está procesando tu pago') 
+                : 'Tu transacción fue procesada correctamente'
+              }
           </p>
         </div>
 
@@ -91,7 +108,9 @@ const PaymentSuccessPage: React.FC = () => {
           <div className="text-center">
             <p className="text-gray-600 leading-relaxed">
               {isPending 
-                ? "No te preocupes, esto es normal. En unos minutos te confirmaremos si el pago fue aprobado."
+                ? (ticketUrl 
+                    ? "Para finalizar tu compra, descarga el cupón y paga en la sucursal más cercana." 
+                    : "No te preocupes, esto es normal. En unos minutos te confirmaremos si el pago fue aprobado.")
                 : "Gracias por tu compra. Hemos registrado tu pedido en el sistema."
               }
             </p>
@@ -103,6 +122,22 @@ const PaymentSuccessPage: React.FC = () => {
             )}
           </div>
 
+          {/* Ticket Button (Only for Rapipago/PagoFacil) */}
+          {ticketUrl && (
+              <div className="text-center">
+                  <a 
+                    href={ticketUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-xl shadow-md transition-all mb-2"
+                  >
+                      <IconFileText className="w-6 h-6 mr-2" />
+                      Ver Cupón de Pago
+                  </a>
+                  <p className="text-xs text-gray-500">Haz clic para abrir el PDF del ticket</p>
+              </div>
+          )}
+
           {/* Action Box */}
           <div className={`${isPending ? 'bg-orange-50 border-orange-200' : 'bg-yellow-50 border-yellow-200'} border rounded-xl p-5`}>
             <h3 className={`font-bold text-center mb-2 ${isPending ? 'text-orange-800' : 'text-yellow-800'}`}>
@@ -110,7 +145,7 @@ const PaymentSuccessPage: React.FC = () => {
             </h3>
             <p className={`text-sm text-center mb-4 ${isPending ? 'text-orange-800' : 'text-yellow-800'}`}>
               {isPending 
-                ? "Envíanos un mensaje para que estemos atentos a la aprobación de tu pago."
+                ? "Envíanos un mensaje para avisarnos que has generado el pago."
                 : "Para agilizar el armado y envío, por favor envíanos el comprobante por WhatsApp ahora mismo."
               }
             </p>
@@ -121,7 +156,7 @@ const PaymentSuccessPage: React.FC = () => {
               className="flex items-center justify-center w-full bg-[#25D366] hover:bg-[#1da851] text-white font-bold py-4 px-6 rounded-xl shadow-md transition-all transform hover:scale-105 group"
             >
               <IconBrandWhatsapp className="w-6 h-6 mr-3 group-hover:animate-pulse" />
-              {isPending ? 'Consultar por WhatsApp' : 'Enviar Comprobante'}
+              {isPending ? 'Avisar por WhatsApp' : 'Enviar Comprobante'}
             </a>
           </div>
 
