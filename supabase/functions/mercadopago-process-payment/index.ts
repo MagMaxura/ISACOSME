@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("Mercado Pago Process Payment Function Initialized (v15 - Safe Mode)");
+console.log("Mercado Pago Process Payment Function Initialized (v17 - Real IP & Safe Mode)");
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -19,7 +19,12 @@ Deno.serve(async (req: Request) => {
 
     if (!accessToken) throw new Error('Server config error: Missing MP Token');
 
-    console.log(`Processing payment for Sale ID: ${external_reference}. Type: ${formData.payment_type_id}`);
+    // --- CRITICAL: Get Real Client IP ---
+    // Sending 127.0.0.1 causes 'cc_rejected_high_risk'.
+    // Supabase passes the client IP in 'x-forwarded-for'.
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || "127.0.0.1";
+    
+    console.log(`Processing payment for Sale ID: ${external_reference}. Client IP: ${clientIp}`);
 
     // --- Data Sanitization & Enrichment ---
     
@@ -42,12 +47,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // 3. Binary Mode Strategy
-    // We set this to false to allow 'in_process' status.
-    // This prevents immediate rejections for 'high_risk' and allows manual review.
+    // EXPLICITLY FALSE to allow 'in_process'.
     const binaryMode = false;
 
     // 4. Strict Payer Identification
-    // We prioritize the data from the explicit form (payerInfo) over the Brick's data
     const identificationNumber = String(payerInfo.dni).replace(/\D/g, '');
     const identification = {
         type: 'DNI',
@@ -64,24 +67,24 @@ Deno.serve(async (req: Request) => {
         transaction_amount: Number(formData.transaction_amount),
         installments: installments,
         payer: {
-            email: payerInfo.email, // Force email from form
-            identification: identification, // Force DNI from form
-            first_name: payerInfo.name, // Force Name from form
-            last_name: payerInfo.surname, // Force Surname from form
-            entity_type: 'individual'
+            email: payerInfo.email,
+            identification: identification,
+            first_name: payerInfo.name,
+            last_name: payerInfo.surname,
+            // Removed entity_type to avoid conflicts with existing MP users
         },
         external_reference: external_reference,
         statement_descriptor: "ISABELLA PERLA",
         description: `Pedido ${external_reference.substring(0,8)}`,
         binary_mode: binaryMode, 
         additional_info: {
-            ip_address: "127.0.0.1", 
+            ip_address: clientIp, // Sending REAL IP is crucial for fraud check
             items: items ? items.map((i: any) => ({
                 id: String(i.id),
                 title: i.nombre,
                 description: i.nombre, 
                 category_id: "beauty_and_personal_care",
-                quantity: Math.floor(Number(i.quantity)),
+                quantity: Math.max(1, Math.floor(Number(i.quantity))),
                 unit_price: Number(Number(i.unitPrice).toFixed(2))
             })) : [],
             payer: {
@@ -109,10 +112,7 @@ Deno.serve(async (req: Request) => {
         }
     };
 
-    // --- DEEP LOGGING ---
-    console.log("----- PAYLOAD (Binary Mode: " + binaryMode + ") -----");
-    const logBody = { ...paymentBody, token: '***MASKED***' };
-    console.log(JSON.stringify(logBody, null, 2));
+    console.log(`----- PAYLOAD SENT TO MP (IP: ${clientIp}) -----`);
 
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
         method: 'POST',

@@ -7,8 +7,8 @@ import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 import { supabase } from '@/supabase';
 import { createPreference } from '../services/mercadoPagoService';
 
-// Intentar obtener la clave desde las variables de entorno
-const MP_PUBLIC_KEY = (import.meta as any).env.VITE_MP_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
+// Intentar obtener la clave desde las variables de entorno, o usar la clave de prueba proporcionada
+const MP_PUBLIC_KEY = (import.meta as any).env.VITE_MP_PUBLIC_KEY || 'APP_USR-e4e8f2fe-bbc6-4da7-b26e-9c80e77a49a1';
 
 // Inicializar solo si tenemos una clave que parece válida
 const IS_LIKELY_ACCESS_TOKEN = MP_PUBLIC_KEY && MP_PUBLIC_KEY.length > 60;
@@ -90,9 +90,9 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     useEffect(() => {
         if (step === 'payment_brick') {
             if (!MP_PUBLIC_KEY || MP_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
-                setConfigError('La Public Key de Mercado Pago no está configurada en las variables de entorno.');
+                setConfigError('La Public Key de Mercado Pago no está configurada.');
             } else if (IS_LIKELY_ACCESS_TOKEN) {
-                setConfigError('Error de Configuración: Parece que estás usando un "Access Token" en lugar de la "Public Key". La Public Key es más corta.');
+                setConfigError('Error de Configuración: Parece que estás usando un "Access Token" en lugar de la "Public Key".');
             }
         }
     }, [step]);
@@ -404,12 +404,13 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                         },
                                                     },
                                                     paymentMethods: {
-                                                        // Explicitly allow main types and prepaid for fintechs.
-                                                        // Removed 'atm', 'bankTransfer', 'wallet_purchase' to fix console warnings.
+                                                        // Simplify configuration to reduce console warnings and conflicts.
+                                                        // We allow standard cards + ticket. 
+                                                        // prepaidCard is kept as users reported needing it for Fintechs (Uala/Lemon).
                                                         creditCard: "all",
                                                         debitCard: "all",
                                                         ticket: "all",
-                                                        prepaidCard: "all", 
+                                                        prepaidCard: "all",
                                                     } as any, 
                                                 }}
                                                 onSubmit={handleBrickSubmit}
