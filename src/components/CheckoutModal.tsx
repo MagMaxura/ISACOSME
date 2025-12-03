@@ -198,7 +198,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     setApiError("Error de comunicación con el servidor de pagos. Por favor, intenta nuevamente.");
                     reject();
                 } else if (data && (data.status === 'approved' || data.status === 'in_process' || data.status === 'pending')) {
-                    // Treat 'in_process' and 'pending' as success for UI flow
+                    // Treat 'in_process' and 'pending' as ssuccess for UI flow
                     console.log(`Payment status: ${data.status}`, data);
                     resolve();
                     
