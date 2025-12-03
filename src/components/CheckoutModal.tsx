@@ -197,14 +197,15 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     console.error("Function Invocation Error:", error);
                     setApiError("Error de comunicación con el servidor de pagos.");
                     reject();
-                } else if (data && (data.status === 'approved' || data.status === 'in_process')) {
-                    // Treat 'in_process' (pending review) as success for UI flow, showing a different message on the success page
+                } else if (data && (data.status === 'approved' || data.status === 'in_process' || data.status === 'pending')) {
+                    // Treat 'in_process' and 'pending' as success for UI flow
                     console.log(`Payment status: ${data.status}`, data);
                     resolve();
                     // Redirect to success page
                     window.location.href = `/#/payment-success?external_reference=${createdOrderId}&payment_id=${data.id}&status=${data.status}`;
                 } else {
-                    console.error("Payment Not Approved. Response:", data);
+                    // Log the full response object to help debugging if 'Object' is seen in console
+                    console.error("Payment Not Approved. Response:", JSON.stringify(data, null, 2));
                     
                     let msg = "El pago no fue aprobado.";
                     const detail = data?.status_detail;
@@ -381,10 +382,9 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                         creditCard: "all",
                                                         debitCard: "all",
                                                         ticket: "all",
-                                                        bankTransfer: "all",
-                                                        atm: "all",
+                                                        // Removed atm and bankTransfer to resolve brick configuration warnings
                                                         prepaidCard: "all", // Explicitly allow prepaid cards (fintechs)
-                                                    } as any, // Cast to any to avoid potential type issues with prepaidCard
+                                                    } as any, 
                                                 }}
                                                 onSubmit={handleBrickSubmit}
                                                 onError={(error) => console.error("Brick Error:", error)}
