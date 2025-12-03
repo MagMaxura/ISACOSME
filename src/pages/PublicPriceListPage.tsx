@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Producto } from '@/types';
 import { fetchPublicProductsList } from '@/services/productosService';
-import { IconPackage, IconShoppingCart, IconList, IconLayoutGrid, IconTruck } from '@/components/Icons';
+import { IconPackage, IconShoppingCart, IconList, IconLayoutGrid, IconTruck, IconPlus, IconMinus } from '@/components/Icons';
 import CheckoutModal from '@/components/CheckoutModal';
 import { OrderItem } from '@/components/CheckoutModal';
 
@@ -112,6 +113,14 @@ const PublicPriceListPage: React.FC = () => {
         setQuantities(prev => ({ ...prev, [productId]: isNaN(newQuantity) || newQuantity < 0 ? 0 : newQuantity }));
     };
 
+    const handleAdjustQuantity = (productId: string, delta: number) => {
+        setQuantities(prev => {
+            const currentQty = prev[productId] || 0;
+            const newQty = Math.max(0, currentQty + delta);
+            return { ...prev, [productId]: newQty };
+        });
+    };
+
     const { orderItems, subtotal } = useMemo(() => {
         const items: OrderItem[] = Object.keys(quantities)
             .filter(productId => quantities[productId] > 0)
@@ -193,7 +202,7 @@ const PublicPriceListPage: React.FC = () => {
                                         <div className="bg-white shadow-lg rounded-b-lg overflow-hidden">
                                             <div className="hidden md:flex bg-gray-50 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                                 <div className="p-3 flex-1">Producto</div>
-                                                <div className="p-3 w-28 text-center">Cantidad</div>
+                                                <div className="p-3 w-32 text-center">Cantidad</div>
                                                 <div className="p-3 w-32 text-center">Precio Unit.</div>
                                                 <div className="p-3 w-32 text-right">Total</div>
                                             </div>
@@ -219,9 +228,29 @@ const PublicPriceListPage: React.FC = () => {
                                                                 </div>
                                                             </div>
                                                             <div className="flex w-full md:w-auto items-center justify-between md:justify-end gap-2 md:gap-4 shrink-0 mt-4 md:mt-0">
-                                                                <div className="w-28 text-center">
-                                                                    <label className="text-xs text-gray-500 font-semibold md:hidden">Cantidad</label>
-                                                                    <input type="number" value={quantity} onChange={e => handleQuantityChange(product.id!, e.target.value)} min="0" className="w-24 text-center font-semibold text-gray-800 border-2 border-gray-200 rounded-md p-2 focus:ring-primary focus:border-primary transition" />
+                                                                <div className="w-32 text-center flex flex-col items-center">
+                                                                    <label className="text-xs text-gray-500 font-semibold md:hidden mb-1">Cantidad</label>
+                                                                    <div className="flex items-center border border-gray-300 rounded-md">
+                                                                        <button
+                                                                            onClick={() => handleAdjustQuantity(product.id!, -1)}
+                                                                            className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-l-md transition-colors focus:outline-none"
+                                                                        >
+                                                                            <IconMinus className="w-3 h-3" />
+                                                                        </button>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={quantity}
+                                                                            onChange={e => handleQuantityChange(product.id!, e.target.value)}
+                                                                            min="0"
+                                                                            className="w-12 text-center font-semibold text-gray-800 border-x border-gray-300 border-y-0 p-1 focus:ring-0 appearance-none bg-white"
+                                                                        />
+                                                                        <button
+                                                                            onClick={() => handleAdjustQuantity(product.id!, 1)}
+                                                                            className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-r-md transition-colors focus:outline-none"
+                                                                        >
+                                                                            <IconPlus className="w-3 h-3" />
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                                 <div className="w-32 text-center">
                                                                     <label className="text-xs text-gray-500 font-semibold md:hidden">Precio Unit.</label>
@@ -272,14 +301,28 @@ const PublicPriceListPage: React.FC = () => {
                                                             <div className="mt-4 pt-4 border-t">
                                                                 <div className="flex justify-between items-center mb-3">
                                                                     <label htmlFor={`quantity-grid-${product.id}`} className="text-sm font-medium text-gray-700">Cantidad:</label>
-                                                                    <input 
-                                                                        id={`quantity-grid-${product.id}`}
-                                                                        type="number" 
-                                                                        value={quantity} 
-                                                                        onChange={e => handleQuantityChange(product.id!, e.target.value)} 
-                                                                        min="0" 
-                                                                        className="w-20 text-center font-semibold text-gray-800 border-2 border-gray-200 rounded-md p-2 focus:ring-primary focus:border-primary transition" 
-                                                                    />
+                                                                    <div className="flex items-center border border-gray-300 rounded-md">
+                                                                        <button
+                                                                            onClick={() => handleAdjustQuantity(product.id!, -1)}
+                                                                            className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-l-md transition-colors focus:outline-none"
+                                                                        >
+                                                                            <IconMinus className="w-3 h-3" />
+                                                                        </button>
+                                                                        <input 
+                                                                            id={`quantity-grid-${product.id}`}
+                                                                            type="number" 
+                                                                            value={quantity} 
+                                                                            onChange={e => handleQuantityChange(product.id!, e.target.value)} 
+                                                                            min="0" 
+                                                                            className="w-12 text-center font-semibold text-gray-800 border-x border-gray-300 border-y-0 p-1 focus:ring-0 appearance-none bg-white" 
+                                                                        />
+                                                                        <button
+                                                                            onClick={() => handleAdjustQuantity(product.id!, 1)}
+                                                                            className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-r-md transition-colors focus:outline-none"
+                                                                        >
+                                                                            <IconPlus className="w-3 h-3" />
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                                 <div className="flex justify-between items-center text-sm">
                                                                     <span className="text-gray-500">Precio Unit.:</span>
