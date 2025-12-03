@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("Mercado Pago Process Payment Function Initialized (v8 - Deep Log & DNI Fallback)");
+console.log("Mercado Pago Process Payment Function Initialized (v14 - Strict Payer Data)");
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -21,44 +21,66 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Processing payment for Sale ID: ${external_reference}. Type: ${formData.payment_type_id}`);
 
-    // --- Data Sanitization ---
-    const cleanPhone = payerInfo.phone ? String(payerInfo.phone).replace(/\D/g, '') : "";
-    const cleanStreetNumber = payerInfo.street_number ? (parseInt(String(payerInfo.street_number).replace(/\D/g, ''), 10) || 0) : 0;
+    // --- Data Sanitization & Enrichment ---
     
-    // --- Identification Logic (DNI Fallback) ---
-    // CRITICAL FIX: If the Brick doesn't provide identification (common in some configs), 
-    // we use the DNI collected in the checkout form (payerInfo).
-    let identification = formData.payer?.identification;
-    if (!identification || !identification.number) {
-        console.log("Brick did not provide identification. Using fallback from PayerInfo form.");
-        identification = {
-            type: 'DNI',
-            number: String(payerInfo.dni).replace(/\D/g, '') // Ensure only digits
-        };
+    // 1. Phone Parsing
+    let cleanPhone = payerInfo.phone ? String(payerInfo.phone).replace(/\D/g, '') : "";
+    let areaCode = "";
+    let phoneNumber = cleanPhone;
+    
+    if (cleanPhone.length >= 10) {
+       areaCode = cleanPhone.substring(0, cleanPhone.length - 7); 
+       phoneNumber = cleanPhone.substring(cleanPhone.length - 7);
     }
 
-    // Build a robust payment payload
+    const cleanStreetNumber = payerInfo.street_number ? (parseInt(String(payerInfo.street_number).replace(/\D/g, ''), 10) || 0) : 0;
+    
+    // 2. Installments Logic
+    let installments = formData.installments ? Math.floor(Number(formData.installments)) : 1;
+    if (formData.payment_type_id === 'debit_card' || formData.payment_type_id === 'prepaid_card') {
+        installments = 1;
+    }
+
+    // 3. Binary Mode Strategy
+    // Forces instant approval/rejection. Set to false only for offline methods.
+    const isOfflineMethod = formData.payment_method_id === 'rapipago' || formData.payment_method_id === 'pagofacil';
+    const binaryMode = !isOfflineMethod; 
+
+    // 4. Strict Payer Identification
+    // We prioritize the data from the explicit form (payerInfo) over the Brick's data
+    const identificationNumber = String(payerInfo.dni).replace(/\D/g, '');
+    const identification = {
+        type: 'DNI',
+        number: identificationNumber
+    };
+
+    console.log(`Using Payer: ${payerInfo.name} ${payerInfo.surname} (DNI: ${identificationNumber})`);
+
+    // Build the robust payload
     const paymentBody = {
         token: formData.token,
         issuer_id: formData.issuer_id,
         payment_method_id: formData.payment_method_id,
         transaction_amount: Number(formData.transaction_amount),
-        installments: Number(formData.installments),
+        installments: installments,
         payer: {
-            email: formData.payer.email || payerInfo.email,
-            identification: identification, // Uses the robust/fallback identification
-            first_name: payerInfo.name, // Moving name to root payer improves scoring
-            last_name: payerInfo.surname
+            email: payerInfo.email, // Force email from form
+            identification: identification, // Force DNI from form
+            first_name: payerInfo.name, // Force Name from form
+            last_name: payerInfo.surname, // Force Surname from form
+            entity_type: 'individual'
         },
         external_reference: external_reference,
         statement_descriptor: "ISABELLA PERLA",
-        description: `Pedido Web ${external_reference}`,
-        binary_mode: false, // FALSE allows "in_process" status instead of instant rejection. Better for high approval.
+        description: `Pedido ${external_reference.substring(0,8)}`,
+        binary_mode: binaryMode, 
         additional_info: {
+            ip_address: "127.0.0.1", 
             items: items ? items.map((i: any) => ({
                 id: String(i.id),
                 title: i.nombre,
-                description: i.nombre,
+                description: i.nombre, 
+                category_id: "beauty_and_personal_care",
                 quantity: Math.floor(Number(i.quantity)),
                 unit_price: Number(Number(i.unitPrice).toFixed(2))
             })) : [],
@@ -66,8 +88,8 @@ Deno.serve(async (req: Request) => {
                 first_name: payerInfo.name,
                 last_name: payerInfo.surname,
                 phone: {
-                    area_code: "", 
-                    number: cleanPhone 
+                    area_code: areaCode, 
+                    number: phoneNumber 
                 },
                 address: {
                     zip_code: payerInfo.zip_code,
@@ -87,12 +109,10 @@ Deno.serve(async (req: Request) => {
         }
     };
 
-    // --- DEEP LOGGING FOR DEBUGGING ---
-    console.log("----- DEBUG: PAYLOAD TO MERCADOPAGO -----");
-    // Create a safe copy for logging (masking sensitive token)
+    // --- DEEP LOGGING ---
+    console.log("----- PAYLOAD (Binary Mode: " + binaryMode + ") -----");
     const logBody = { ...paymentBody, token: '***MASKED***' };
     console.log(JSON.stringify(logBody, null, 2));
-    console.log("-----------------------------------------");
 
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
         method: 'POST',
@@ -112,7 +132,7 @@ Deno.serve(async (req: Request) => {
         throw new Error(`Mercado Pago Error: ${errorDetail}`);
     }
 
-    console.log(`Payment processed. Status: ${paymentResult.status} | Detail: ${paymentResult.status_detail} | ID: ${paymentResult.id}`);
+    console.log(`Result: ${paymentResult.status} | Detail: ${paymentResult.status_detail}`);
 
     return new Response(JSON.stringify(paymentResult), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -120,7 +140,7 @@ Deno.serve(async (req: Request) => {
     });
 
   } catch (error: any) {
-    console.error("Payment Processing Exception:", error);
+    console.error("Payment Exception:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400

@@ -179,8 +179,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     // Brick onSubmit Handler (Procesa tarjeta directamente)
     const handleBrickSubmit = async (param: any) => {
         const { formData } = param;
-        console.log("Brick onSubmit triggered. Form Data:", formData);
-        console.log("Sending additional Payer Info to Backend:", payerInfo);
+        console.log("Brick onSubmit triggered. Sending data to backend...");
         setApiError(null);
         
         return new Promise<void>((resolve, reject) => {
@@ -235,7 +234,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                             case 'cc_rejected_bad_filled_card_number': msg = "Revisa el número de tarjeta."; break;
                             case 'cc_rejected_bad_filled_date': msg = "Revisa la fecha de vencimiento."; break;
                             case 'cc_rejected_bad_filled_security_code': msg = "Revisa el código de seguridad."; break;
-                            case 'cc_rejected_high_risk': msg = "El pago fue rechazado por seguridad. Intenta con otro medio de pago."; break;
+                            case 'cc_rejected_high_risk': msg = "Pago rechazado por seguridad. Verifica que el DNI ingresado coincida con el titular de la tarjeta."; break;
                             case 'cc_rejected_call_for_authorize': msg = "Debes autorizar el pago con tu banco."; break;
                             case 'cc_rejected_card_disabled': msg = "La tarjeta no está habilitada para operar."; break;
                             case 'cc_rejected_blacklist': msg = "No pudimos procesar tu pago por seguridad."; break;
@@ -256,6 +255,13 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
             });
         });
     };
+
+    const handleBrickError = (error: any) => {
+        console.error("Brick Error:", error);
+        if (error?.message === 'payment_method_not_in_allowed_types') {
+            setApiError("Esta tarjeta no está soportada directamente. Por favor, usa la opción 'Pagar con Cuenta Mercado Pago' (botón azul abajo) que acepta todas las tarjetas.");
+        }
+    }
 
     // Alternativa: Redirigir a Checkout Pro para usar saldo en cuenta / Billetera
     const handleWalletRedirect = async () => {
@@ -398,14 +404,20 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                         },
                                                     },
                                                     paymentMethods: {
+                                                        // List all supported types to avoid filtering out Fintech cards
                                                         creditCard: "all",
                                                         debitCard: "all",
                                                         ticket: "all",
+                                                        bankTransfer: "all",
+                                                        atm: "all",
+                                                        onboarding_credits: "all",
+                                                        wallet_purchase: "all",
                                                         prepaidCard: "all", // Explicitly allow prepaid/fintech
+                                                        maxInstallments: 12
                                                     } as any, 
                                                 }}
                                                 onSubmit={handleBrickSubmit}
-                                                onError={(error) => console.error("Brick Error:", error)}
+                                                onError={handleBrickError}
                                             />
                                         </div>
 
