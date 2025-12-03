@@ -240,8 +240,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                             case 'cc_rejected_blacklist': msg = "No pudimos procesar tu pago por seguridad."; break;
                             default: msg = `El pago fue rechazado (${detail}). Por favor, intenta con otra tarjeta.`;
                         }
+                    } else if (data?.message) {
+                        msg = `Error: ${data.message}`;
                     } else if (data?.error) {
-                        msg = `Error: ${data.error}`;
+                        msg = `Error técnico: ${data.error}`;
                     }
                     
                     setApiError(msg);

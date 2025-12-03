@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("Mercado Pago Process Payment Function Initialized (v17 - Real IP & Safe Mode)");
+console.log("Mercado Pago Process Payment Function Initialized (v18 - Robust Error Handling)");
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -20,8 +20,6 @@ Deno.serve(async (req: Request) => {
     if (!accessToken) throw new Error('Server config error: Missing MP Token');
 
     // --- CRITICAL: Get Real Client IP ---
-    // Sending 127.0.0.1 causes 'cc_rejected_high_risk'.
-    // Supabase passes the client IP in 'x-forwarded-for'.
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || "127.0.0.1";
     
     console.log(`Processing payment for Sale ID: ${external_reference}. Client IP: ${clientIp}`);
@@ -47,11 +45,15 @@ Deno.serve(async (req: Request) => {
     }
 
     // 3. Binary Mode Strategy
-    // EXPLICITLY FALSE to allow 'in_process'.
     const binaryMode = false;
 
     // 4. Strict Payer Identification
-    const identificationNumber = String(payerInfo.dni).replace(/\D/g, '');
+    const identificationNumber = payerInfo.dni ? String(payerInfo.dni).replace(/\D/g, '') : '';
+    
+    if (!identificationNumber) {
+        throw new Error('El DNI del titular es obligatorio para procesar el pago.');
+    }
+
     const identification = {
         type: 'DNI',
         number: identificationNumber
@@ -71,14 +73,13 @@ Deno.serve(async (req: Request) => {
             identification: identification,
             first_name: payerInfo.name,
             last_name: payerInfo.surname,
-            // Removed entity_type to avoid conflicts with existing MP users
         },
         external_reference: external_reference,
         statement_descriptor: "ISABELLA PERLA",
-        description: `Pedido ${external_reference.substring(0,8)}`,
+        description: `Pedido ${external_reference ? external_reference.substring(0,8) : 'WEB'}`,
         binary_mode: binaryMode, 
         additional_info: {
-            ip_address: clientIp, // Sending REAL IP is crucial for fraud check
+            ip_address: clientIp, 
             items: items ? items.map((i: any) => ({
                 id: String(i.id),
                 title: i.nombre,
@@ -112,7 +113,7 @@ Deno.serve(async (req: Request) => {
         }
     };
 
-    console.log(`----- PAYLOAD SENT TO MP (IP: ${clientIp}) -----`);
+    console.log(`----- PAYLOAD SENT TO MP -----`);
 
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
         method: 'POST',
@@ -128,8 +129,26 @@ Deno.serve(async (req: Request) => {
 
     if (!response.ok) {
         console.error('MP API Failed:', JSON.stringify(paymentResult, null, 2));
-        const errorDetail = paymentResult.cause?.[0]?.description || paymentResult.message || 'Unknown MP Error';
-        throw new Error(`Mercado Pago Error: ${errorDetail}`);
+        
+        // Extract a user-friendly error message from MP response
+        let errorDetail = 'Error desconocido de Mercado Pago';
+        if (paymentResult.cause && Array.isArray(paymentResult.cause) && paymentResult.cause.length > 0) {
+             const cause = paymentResult.cause[0];
+             errorDetail = `${cause.description} (Code: ${cause.code})`;
+        } else if (paymentResult.message) {
+             errorDetail = paymentResult.message;
+        }
+
+        // Return 200 with error details so the frontend can display it nicely instead of crashing
+        return new Response(JSON.stringify({ 
+            status: 'rejected',
+            status_detail: 'cc_rejected_other_reason',
+            message: `Pago rechazado por el procesador: ${errorDetail}`,
+            error: true
+        }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200 
+        });
     }
 
     console.log(`Result: ${paymentResult.status} | Detail: ${paymentResult.status_detail}`);
@@ -141,9 +160,14 @@ Deno.serve(async (req: Request) => {
 
   } catch (error: any) {
     console.error("Payment Exception:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    // Return 200 to avoid FunctionsHttpError in frontend, but indicate failure in body
+    return new Response(JSON.stringify({ 
+        status: 'rejected',
+        message: error.message || 'Ocurrió un error inesperado en el servidor de pagos.',
+        error: true
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400
+      status: 200
     });
   }
 });
