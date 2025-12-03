@@ -8,9 +8,11 @@ interface PayerInfo {
   name: string;
   surname: string;
   email: string;
-  // Campos opcionales para Checkout Pro pero útiles si los tenemos
   phone?: string; 
   dni?: string;
+  street_name?: string;
+  street_number?: string;
+  zip_code?: string;
 }
 
 /**
@@ -21,15 +23,15 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
     
     console.log(`[${SERVICE_NAME}] Init preference. Sale ID: ${safeExternalReference}. Shipping: ${shippingCost}`);
     
-    // Formatear items para MP
+    // Formatear items para el proxy
     const mpItems = orderItems.map(item => ({
         id: item.id,
         title: item.nombre,
-        description: item.nombre, // Requerido para mejor UX en el checkout
+        description: item.nombre, 
         quantity: Math.floor(item.quantity),
         unit_price: Number(item.unitPrice.toFixed(2)),
         currency_id: 'ARS', 
-        picture_url: 'https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.png' // Logo genérico
+        picture_url: 'https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.png'
     }));
 
     // Agregar envío como item si existe
@@ -45,14 +47,16 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
         });
     }
 
-    // Datos del Payer para pre-llenar Checkout Pro
+    // Datos del Payer
     const mpPayer = {
         name: payerInfo.name,
         surname: payerInfo.surname,
         email: payerInfo.email,
-        date_created: new Date().toISOString(),
-        // Enviamos identification si está disponible para facturación
-        identification: payerInfo.dni ? { type: 'DNI', number: payerInfo.dni } : undefined,
+        phone: payerInfo.phone,
+        dni: payerInfo.dni,
+        street_name: payerInfo.street_name,
+        street_number: payerInfo.street_number,
+        zip_code: payerInfo.zip_code
     };
 
     try {
@@ -72,7 +76,7 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
                     const functionError = await error.context.json();
                     if (functionError && functionError.error) errorMessage = functionError.error;
                  }
-            } catch (e) { /* ignore */ }
+            } catch (e) { /* ignore json parse error */ }
             
             throw new Error(`Error al conectar con pasarela de pago: ${errorMessage}`);
         }
