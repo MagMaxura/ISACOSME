@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("Mercado Pago Process Payment Function Initialized (v14 - Strict Payer Data)");
+console.log("Mercado Pago Process Payment Function Initialized (v15 - Safe Mode)");
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -42,9 +42,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // 3. Binary Mode Strategy
-    // Forces instant approval/rejection. Set to false only for offline methods.
-    const isOfflineMethod = formData.payment_method_id === 'rapipago' || formData.payment_method_id === 'pagofacil';
-    const binaryMode = !isOfflineMethod; 
+    // We set this to false to allow 'in_process' status.
+    // This prevents immediate rejections for 'high_risk' and allows manual review.
+    const binaryMode = false;
 
     // 4. Strict Payer Identification
     // We prioritize the data from the explicit form (payerInfo) over the Brick's data

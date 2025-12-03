@@ -404,16 +404,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                                         },
                                                     },
                                                     paymentMethods: {
-                                                        // List all supported types to avoid filtering out Fintech cards
+                                                        // Explicitly allow main types and prepaid for fintechs.
+                                                        // Removed 'atm', 'bankTransfer', 'wallet_purchase' to fix console warnings.
                                                         creditCard: "all",
                                                         debitCard: "all",
                                                         ticket: "all",
-                                                        bankTransfer: "all",
-                                                        atm: "all",
-                                                        onboarding_credits: "all",
-                                                        wallet_purchase: "all",
-                                                        prepaidCard: "all", // Explicitly allow prepaid/fintech
-                                                        maxInstallments: 12
+                                                        prepaidCard: "all", 
                                                     } as any, 
                                                 }}
                                                 onSubmit={handleBrickSubmit}
@@ -481,7 +477,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     <span>{formatPrice(shippingCost)}</span>
                                 )}
                             </div>
-                            <div className="flex justify-between font-bold text-xl text-gray-800 border-t pt-2">
+                            <div className="flex justify-between font-bold text-2xl text-gray-800 border-t pt-2">
                                 <span>Total:</span>
                                 <span>{formatPrice(total)}</span>
                             </div>
