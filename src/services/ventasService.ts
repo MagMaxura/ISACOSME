@@ -37,8 +37,11 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
 
         // 2. Find suitable lots (FIFO strategy: oldest expiration first, or oldest created first)
         // We aggregate all lots from all deposits for the public sale.
+        // STRICT FILTERING: Ensure we treat values as Numbers and filter strictly > 0.
+        // This is crucial to avoid picking up "ghost" lots with 0 stock that cause DB trigger errors.
         const allLots = product.stockPorDeposito.flatMap(d => d.lotes)
-            .filter(l => Number(l.cantidad_actual) > 0) // Strict check for positive stock, forcing Number type
+            .map(l => ({ ...l, cantidad_actual: Number(l.cantidad_actual) })) // Force number type
+            .filter(l => l.cantidad_actual > 0) // Strict positive filter
             .sort((a, b) => {
                 // Sort by expiration date (if available), then by creation (simulated by ID or assumed sequence)
                 if (a.fecha_vencimiento && b.fecha_vencimiento) {
@@ -55,7 +58,7 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
         for (const lote of allLots) {
             if (cantidadRestante <= 0) break;
 
-            const stockLote = Number(lote.cantidad_actual);
+            const stockLote = lote.cantidad_actual; // Already coerced to Number above
             const cantidadDeLote = Math.min(cantidadRestante, stockLote);
             
             if (cantidadDeLote > 0) {

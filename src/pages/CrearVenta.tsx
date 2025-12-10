@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
@@ -221,8 +222,10 @@ const CrearVenta: React.FC = () => {
                 
                 // Get lots for the specific deposit
                 // STRICT FILTERING: Ensure we treat values as Numbers and filter strictly > 0.
+                // This prevents picking empty lots that might have been left over with 0 quantity.
                 const lotesDisponibles = (depositData?.lotes || [])
-                    .filter(l => Number(l.cantidad_actual) > 0) 
+                    .map(l => ({ ...l, cantidad_actual: Number(l.cantidad_actual) })) // Force number type
+                    .filter(l => l.cantidad_actual > 0) // Strict check
                     .sort((a, b) => {
                         // Prioritize lots with expiration dates (FIFO), then by ID/Creation
                         if (a.fecha_vencimiento && b.fecha_vencimiento) {
@@ -241,7 +244,7 @@ const CrearVenta: React.FC = () => {
                 for (const lote of lotesDisponibles) {
                     if (cantidadRestante <= 0) break;
                     
-                    const stockLote = Number(lote.cantidad_actual);
+                    const stockLote = lote.cantidad_actual;
                     const cantidadDeLote = Math.min(cantidadRestante, stockLote);
                     
                     if (cantidadDeLote > 0) {
