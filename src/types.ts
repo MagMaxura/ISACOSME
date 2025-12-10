@@ -280,3 +280,12 @@ export interface ProductoEstadistica {
   tasaRotacion: number;
   tasaVentasPromedio: number;
 }
+
+// Types for Checkout and Orders
+export interface OrderItem {
+  id: string;
+  nombre: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}

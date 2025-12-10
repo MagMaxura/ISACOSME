@@ -1,8 +1,7 @@
 
 import { supabase } from '../supabase';
-import { Venta, VentaItem, PuntoDeVenta } from '../types';
+import { Venta, VentaItem, PuntoDeVenta, OrderItem } from '../types';
 import { fetchProductosConStock } from './productosService';
-import { OrderItem } from '@/components/CheckoutModal';
 
 const SERVICE_NAME = 'VentasService';
 
@@ -39,7 +38,7 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
         // 2. Find suitable lots (FIFO strategy: oldest expiration first, or oldest created first)
         // We aggregate all lots from all deposits for the public sale.
         const allLots = product.stockPorDeposito.flatMap(d => d.lotes)
-            .filter(l => (l.cantidad_actual || 0) > 0) // Strict check for positive stock
+            .filter(l => Number(l.cantidad_actual) > 0) // Strict check for positive stock, forcing Number type
             .sort((a, b) => {
                 // Sort by expiration date (if available), then by creation (simulated by ID or assumed sequence)
                 if (a.fecha_vencimiento && b.fecha_vencimiento) {
@@ -56,7 +55,8 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
         for (const lote of allLots) {
             if (cantidadRestante <= 0) break;
 
-            const cantidadDeLote = Math.min(cantidadRestante, lote.cantidad_actual);
+            const stockLote = Number(lote.cantidad_actual);
+            const cantidadDeLote = Math.min(cantidadRestante, stockLote);
             
             if (cantidadDeLote > 0) {
                 itemsParaCrear.push({

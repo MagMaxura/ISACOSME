@@ -194,7 +194,8 @@ const CrearVenta: React.FC = () => {
         setIsSubmitting(true);
         setError(null);
         try {
-            // 1. Fetch FRESH stock data to avoid stale state issues
+            // 1. Fetch FRESH stock data to avoid stale state issues. 
+            // This is critical to prevent selling stock that doesn't exist in the DB.
             const freshProducts = await fetchProductosConStock();
             const itemsParaCrear: VentaItemParaCrear[] = [];
             
@@ -218,15 +219,16 @@ const CrearVenta: React.FC = () => {
 
                 let cantidadRestante = item.cantidad;
                 
-                // Get lots for the specific deposit, strictly filtering out empty lots
+                // Get lots for the specific deposit
+                // STRICT FILTERING: Ensure we treat values as Numbers and filter strictly > 0.
                 const lotesDisponibles = (depositData?.lotes || [])
-                    .filter(l => (l.cantidad_actual || 0) > 0)
+                    .filter(l => Number(l.cantidad_actual) > 0) 
                     .sort((a, b) => {
                         // Prioritize lots with expiration dates (FIFO), then by ID/Creation
                         if (a.fecha_vencimiento && b.fecha_vencimiento) {
                             return new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime();
                         }
-                        // If one has expiry and other doesn't, prioritize the one with expiry
+                        // If one has expiry and other doesn't, prioritize the one with expiry (usually implies stock)
                         if (a.fecha_vencimiento) return -1;
                         if (b.fecha_vencimiento) return 1;
                         return 0;
@@ -239,7 +241,8 @@ const CrearVenta: React.FC = () => {
                 for (const lote of lotesDisponibles) {
                     if (cantidadRestante <= 0) break;
                     
-                    const cantidadDeLote = Math.min(cantidadRestante, lote.cantidad_actual);
+                    const stockLote = Number(lote.cantidad_actual);
+                    const cantidadDeLote = Math.min(cantidadRestante, stockLote);
                     
                     if (cantidadDeLote > 0) {
                         itemsParaCrear.push({

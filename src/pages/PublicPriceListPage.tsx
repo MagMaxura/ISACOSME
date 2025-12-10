@@ -2,11 +2,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Producto } from '@/types';
+import { Producto, OrderItem } from '@/types';
 import { fetchPublicProductsList } from '@/services/productosService';
 import { IconPackage, IconShoppingCart, IconList, IconLayoutGrid, IconTruck, IconPlus, IconMinus } from '@/components/Icons';
 import CheckoutModal from '@/components/CheckoutModal';
-import { OrderItem } from '@/components/CheckoutModal';
 
 const SHIPPING_COST = 9800;
 const FREE_SHIPPING_THRESHOLD = 30000;

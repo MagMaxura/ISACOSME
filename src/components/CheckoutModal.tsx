@@ -4,14 +4,7 @@ import ReactDOM from 'react-dom';
 import { IconX, IconMercadoPago, IconAlertCircle, IconCheck } from './Icons';
 import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
 import { createPreference } from '../services/mercadoPagoService';
-
-export interface OrderItem {
-  id: string;
-  nombre: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
-}
+import { OrderItem } from '@/types';
 
 interface CheckoutModalProps {
   isOpen: boolean;

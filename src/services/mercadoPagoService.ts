@@ -1,6 +1,6 @@
 
 import { supabase } from '../supabase';
-import { OrderItem } from '@/components/CheckoutModal';
+import { OrderItem } from '@/types';
 
 const SERVICE_NAME = 'MercadoPagoService';
 
