@@ -1,3 +1,4 @@
+
 // FIX: Use `import type` for type-only imports and remove `AuthResponse` which is not an exported member of `@supabase/supabase-js`.
 import type { Session, User, AuthError } from '@supabase/supabase-js';
 

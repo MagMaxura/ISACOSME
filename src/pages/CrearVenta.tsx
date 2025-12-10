@@ -1,14 +1,14 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import PageHeader from '@/components/PageHeader';
-import { IconArrowLeft, IconPlus, IconTrash, IconFileText, IconCamera } from '@/components/Icons';
-import { SimpleCliente, Producto, VentaItem, Lote, PuntoDeVenta } from '@/types';
-import { VentaToCreate, createVenta, VentaItemParaCrear } from '@/services/ventasService';
-import { fetchSimpleClientes } from '@/services/clientesService';
-import { fetchProductosConStock } from '@/services/productosService';
-import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
-import BarcodeScanner from '@/components/BarcodeScanner';
+import PageHeader from '../components/PageHeader';
+import { IconArrowLeft, IconPlus, IconTrash, IconFileText, IconCamera } from '../components/Icons';
+import { SimpleCliente, Producto, VentaItem, Lote, PuntoDeVenta } from '../types';
+import { VentaToCreate, createVenta, VentaItemParaCrear } from '../services/ventasService';
+import { fetchSimpleClientes } from '../services/clientesService';
+import { fetchProductosConStock } from '../services/productosService';
+import { fetchLotesParaVenta } from '../services/stockService';
+import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
+import BarcodeScanner from '../components/BarcodeScanner';
 
 const IVA_RATE = 0.21;
 
@@ -22,7 +22,7 @@ const CrearVenta: React.FC = () => {
     const [clientes, setClientes] = useState<SimpleCliente[]>([]);
     const [productos, setProductos] = useState<Producto[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<any | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const [selectedClienteId, setSelectedClienteId] = useState<string>('');
     const [items, setItems] = useState<VentaItemUI[]>([]);
@@ -59,7 +59,7 @@ const CrearVenta: React.FC = () => {
                 setProductos(productosData);
                 setSelectedClienteId(''); // Default to Consumidor Final
             } catch (err: any) {
-                setError(err);
+                setError(`Error al cargar datos: ${err.message}`);
             } finally {
                 setLoading(false);
             }
@@ -188,16 +188,13 @@ const CrearVenta: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (items.length === 0) {
-            setError({ message: 'Debe agregar al menos un producto.' });
+            setError('Debe agregar al menos un producto.');
             return;
         }
 
         setIsSubmitting(true);
         setError(null);
         try {
-            // 1. Fetch FRESH stock data to avoid stale state issues. 
-            // This is critical to prevent selling stock that doesn't exist in the DB.
-            const freshProducts = await fetchProductosConStock();
             const itemsParaCrear: VentaItemParaCrear[] = [];
             
             for (const item of items) {
@@ -205,43 +202,24 @@ const CrearVenta: React.FC = () => {
                     throw new Error(`Debe seleccionar un depósito para el producto "${item.productoNombre}".`);
                 }
 
-                const product = freshProducts.find(p => p.id === item.productoId);
-                if (!product) {
-                    throw new Error(`El producto "${item.productoNombre}" ya no está disponible.`);
-                }
-
-                // Verify total stock in specific deposit again with fresh data
-                const depositData = product.stockPorDeposito.find(d => d.depositoId === item.depositoId);
-                const stockInDeposito = depositData?.stock || 0;
+                // 1. Fetch valid lots directly from DB (bypassing potentially stale aggregation)
+                // This ensures we get the absolute latest stock state.
+                const lotesDisponibles = await fetchLotesParaVenta(item.productoId, item.depositoId);
+                
+                // 2. Filter lots strictly. Ignore "dust" or empty lots that DB sees as 0.
+                const usableLotes = lotesDisponibles.filter(l => l.cantidad_actual >= 1);
+                
+                // 3. Calculate real available stock from these lots
+                const stockInDeposito = usableLotes.reduce((sum, l) => sum + l.cantidad_actual, 0);
 
                 if (item.cantidad > stockInDeposito) {
-                    throw new Error(`Stock insuficiente para "${item.productoNombre}" en el depósito seleccionado. Solicitado: ${item.cantidad}, Disponible: ${stockInDeposito}.`);
+                    throw new Error(`Stock insuficiente para "${item.productoNombre}" en el depósito seleccionado. Solicitado: ${item.cantidad}, Disponible real: ${stockInDeposito}.`);
                 }
 
                 let cantidadRestante = item.cantidad;
                 
-                // Get lots for the specific deposit
-                // STRICT FILTERING: Ensure we treat values as Numbers and filter strictly > 0.
-                // This prevents picking empty lots that might have been left over with 0 quantity.
-                const lotesDisponibles = (depositData?.lotes || [])
-                    .map(l => ({ ...l, cantidad_actual: Number(l.cantidad_actual) })) // Force number type
-                    .filter(l => l.cantidad_actual > 0) // Strict check
-                    .sort((a, b) => {
-                        // Prioritize lots with expiration dates (FIFO), then by ID/Creation
-                        if (a.fecha_vencimiento && b.fecha_vencimiento) {
-                            return new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime();
-                        }
-                        // If one has expiry and other doesn't, prioritize the one with expiry (usually implies stock)
-                        if (a.fecha_vencimiento) return -1;
-                        if (b.fecha_vencimiento) return 1;
-                        return 0;
-                    });
-
-                if (lotesDisponibles.length === 0 && cantidadRestante > 0) {
-                     throw new Error(`Inconsistencia de datos: El depósito muestra ${stockInDeposito} unidades de "${item.productoNombre}", pero no se encontraron lotes con stock positivo.`);
-                }
-
-                for (const lote of lotesDisponibles) {
+                // 4. Allocate stock from lots
+                for (const lote of usableLotes) {
                     if (cantidadRestante <= 0) break;
                     
                     const stockLote = lote.cantidad_actual;
@@ -259,7 +237,8 @@ const CrearVenta: React.FC = () => {
                 }
                 
                 if (cantidadRestante > 0) {
-                    throw new Error(`No se pudo asignar stock completo para "${item.productoNombre}". Faltaron ${cantidadRestante} unidades por asignar a lotes válidos.`);
+                    // This theoretically shouldn't happen if check passed, but acts as a safety net
+                    throw new Error(`Error de asignación de lotes para "${item.productoNombre}". El sistema detectó stock pero no pudo asignarlo a lotes válidos (quizás son decimales pequeños). Por favor, intente nuevamente.`);
                 }
             }
 
@@ -279,7 +258,7 @@ const CrearVenta: React.FC = () => {
             await createVenta(ventaData);
             navigate('/ventas');
         } catch (err: any) {
-            setError(err);
+            setError(`Error al guardar la venta: ${err.message}`);
         } finally {
             setIsSubmitting(false);
         }
