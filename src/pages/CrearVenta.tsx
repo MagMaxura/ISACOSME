@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
@@ -213,7 +214,7 @@ const CrearVenta: React.FC = () => {
                 const stockInDeposito = usableLotes.reduce((sum, l) => sum + l.cantidad_actual, 0);
 
                 if (item.cantidad > stockInDeposito) {
-                    throw new Error(`Stock insuficiente para "${item.productoNombre}" en el depósito seleccionado. Solicitado: ${item.cantidad}, Disponible real: ${stockInDeposito}.`);
+                    throw new Error(`Stock insuficiente para "${item.productoNombre}" en el depósito seleccionado. Solicitado: ${item.cantidad}, Disponible real: ${Math.floor(stockInDeposito)}.`);
                 }
 
                 let cantidadRestante = item.cantidad;

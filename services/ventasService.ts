@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
-import { Venta, VentaItem, PuntoDeVenta } from '../types';
+import { Venta, VentaItem, PuntoDeVenta, OrderItem } from '../types';
+import { fetchLotesParaVenta } from './stockService';
 
 const SERVICE_NAME = 'VentasService';
 
@@ -65,6 +66,43 @@ export const fetchVentas = async (): Promise<Venta[]> => {
     return [];
 };
 
+export const fetchVentaPorId = async (id: string): Promise<Venta | null> => {
+    try {
+        const { data, error } = await supabase
+            .from('ventas')
+            .select('*, clientes(nombre), venta_items(cantidad, precio_unitario, productos(nombre))')
+            .eq('id', id)
+            .single();
+
+        if (error) throw error;
+        if (!data) return null;
+
+        const items = data.venta_items.map((item: any) => ({
+            productoId: '', 
+            cantidad: item.cantidad,
+            precioUnitario: item.precio_unitario,
+            productoNombre: item.productos?.nombre || 'N/A',
+        }));
+
+        return {
+            id: data.id,
+            clienteId: data.cliente_id,
+            fecha: new Date(data.fecha).toLocaleDateString('es-AR'),
+            subtotal: data.subtotal,
+            iva: data.iva,
+            total: data.total,
+            tipo: data.tipo,
+            estado: data.estado,
+            clienteNombre: data.clientes?.nombre || 'Consumidor Final',
+            items: items,
+            observaciones: data.observaciones,
+            puntoDeVenta: data.punto_de_venta,
+        };
+    } catch (error) {
+        console.error("Error fetching sale by ID:", error);
+        return null;
+    }
+};
 
 export const createVenta = async (ventaData: VentaToCreate): Promise<string> => {
     console.log(`[${SERVICE_NAME}] Creating new sale.`);
@@ -196,4 +234,52 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;`
         // The calling component will handle displaying the error.
         throw error;
     }
+};
+
+// --- Helper Function ---
+export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise<VentaItemParaCrear[]> => {
+    console.log(`[${SERVICE_NAME}] Preparing sale items and assigning lots for ${cartItems.length} products.`);
+    
+    // We process items sequentially to ensure stock integrity per item
+    const itemsParaCrear: VentaItemParaCrear[] = [];
+
+    for (const item of cartItems) {
+        // 1. Fetch valid lots directly from DB (bypassing aggregated RPCs)
+        // This ensures we get the absolute latest stock state for the default warehouse (or all warehouses if no ID provided)
+        const lotesDisponibles = await fetchLotesParaVenta(item.id); 
+        
+        // 2. Strict filter: Ignore lots with < 1 unit to avoid DB float->int rounding errors (e.g. 0.4 quantity seen as 0)
+        const usableLotes = lotesDisponibles.filter(l => l.cantidad_actual >= 1);
+        
+        const stockTotal = usableLotes.reduce((acc, l) => acc + l.cantidad_actual, 0);
+
+        if (stockTotal < item.quantity) {
+             throw new Error(`Stock insuficiente para el producto "${item.nombre}". Solicitado: ${item.quantity}, Disponible: ${stockTotal}`);
+        }
+
+        let cantidadRestante = item.quantity;
+
+        // 3. Allocate stock
+        for (const lote of usableLotes) {
+            if (cantidadRestante <= 0) break;
+
+            const cantidadDeLote = Math.min(cantidadRestante, lote.cantidad_actual);
+            
+            itemsParaCrear.push({
+                productoId: item.id,
+                cantidad: cantidadDeLote,
+                precioUnitario: item.unitPrice,
+                loteId: lote.id,
+            });
+
+            cantidadRestante -= cantidadDeLote;
+        }
+        
+        if (cantidadRestante > 0) {
+             // This theoretically shouldn't happen if stockTotal check passed, but acts as a double safety
+             throw new Error(`Error de asignación de lotes para "${item.nombre}". Por favor intente nuevamente.`);
+        }
+    }
+
+    return itemsParaCrear;
 };

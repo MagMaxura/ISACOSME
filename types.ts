@@ -251,6 +251,7 @@ export interface TransferenciaStock {
     cantidad: number;
     usuarioEmail: string;
     notas: string | null;
+    numeroLote?: string | null;
 }
 
 // Type for COMEX access requests
@@ -263,4 +264,28 @@ export interface AccessRequest {
     country: string;
     message: string | null;
     status: 'pending' | 'approved' | 'rejected';
+}
+
+// Types for Product Statistics Page
+export interface ProductoEstadistica {
+  id: string;
+  nombre: string;
+  ventasMesActual: number;
+  ventasAñoActual: number;
+  costoTotalUnitario: number;
+  precioPublico: number;
+  precioComercio: number;
+  precioMayorista: number;
+  stockTotal: number;
+  tasaRotacion: number;
+  tasaVentasPromedio: number;
+}
+
+// Types for Checkout and Orders
+export interface OrderItem {
+  id: string;
+  nombre: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
 }

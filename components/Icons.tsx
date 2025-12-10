@@ -53,6 +53,10 @@ export const IconPlus: React.FC<IconProps> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
 );
 
+export const IconMinus: React.FC<IconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+);
+
 export const IconFileText: React.FC<IconProps> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" x2="8" y1="13" y2="13"></line><line x1="16" x2="8" y1="17" y2="17"></line><line x1="10" x2="8" y1="9" y2="9"></line></svg>
 );
@@ -157,7 +161,7 @@ export const IconScale: React.FC<IconProps> = (props) => (
     </svg>
 );
 
-// FIX: Add IconLayoutGrid and IconList components to fix missing export errors in PublicPriceListPage.
+// FIX: Add IconLayoutGrid, IconList, IconTruck and IconMercadoPago components.
 export const IconLayoutGrid: React.FC<IconProps> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
         <rect x="3" y="3" width="7" height="7"></rect>
@@ -175,5 +179,20 @@ export const IconList: React.FC<IconProps> = (props) => (
         <line x1="3" y1="6" x2="3.01" y2="6"></line>
         <line x1="3" y1="12" x2="3.01" y2="12"></line>
         <line x1="3" y1="18" x2="3.01" y2="18"></line>
+    </svg>
+);
+
+export const IconTruck: React.FC<IconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <rect x="1" y="3" width="15" height="13"></rect>
+        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+        <circle cx="5.5" cy="18.5" r="2.5"></circle>
+        <circle cx="18.5" cy="18.5" r="2.5"></circle>
+    </svg>
+);
+
+export const IconMercadoPago: React.FC<IconProps> = (props) => (
+    <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+        <path d="M24.8354 28.3243C22.2575 29.4795 19.5298 29.206 17.5843 27.6186C16.8924 27.0694 16.3218 26.3775 15.9392 25.5786C15.8286 25.3289 16.0374 25.0792 16.3071 25.1741C18.2326 25.866 20.3201 25.6922 22.086 24.6062C24.3828 23.2205 25.1724 20.6726 24.1814 18.3958C23.7065 17.3098 22.7824 16.4873 21.6587 16.0847C21.369 15.9741 21.2741 15.6031 21.4829 15.3943C21.8439 15.0333 22.2465 14.7327 22.6808 14.483C24.8172 13.2578 27.4137 13.5622 29.2173 15.1179C31.5241 16.9922 32.0131 20.1438 30.567 22.7416C29.627 24.4172 27.9727 25.6842 26.0671 26.2434C26.0067 26.2634 25.9463 26.2833 25.8859 26.3033L24.8354 28.3243Z" fill="currentColor"/>
     </svg>
 );
