@@ -191,57 +191,69 @@ const CrearVenta: React.FC = () => {
             return;
         }
 
-        for (const item of items) {
-            if (!item.depositoId) {
-                setError({ message: `Debe seleccionar un depósito para el producto "${item.productoNombre}".` });
-                return;
-            }
-            const product = productos.find(p => p.id === item.productoId);
-            const stockInDeposito = product?.stockPorDeposito.find(d => d.depositoId === item.depositoId)?.stock || 0;
-
-            if (item.cantidad > stockInDeposito) {
-                setError({ message: `Stock insuficiente para "${item.productoNombre}" en el depósito seleccionado. Por favor, ajusta la cantidad.` });
-                return;
-            }
-             if (item.cantidad <= 0) {
-                setError({ message: `La cantidad para "${item.productoNombre}" debe ser mayor a cero.` });
-                return;
-            }
-        }
-
         setIsSubmitting(true);
         setError(null);
         try {
+            // 1. Fetch FRESH stock data to avoid stale state issues
+            const freshProducts = await fetchProductosConStock();
             const itemsParaCrear: VentaItemParaCrear[] = [];
             
             for (const item of items) {
-                const product = productos.find(p => p.id === item.productoId);
-                if (!product) continue;
+                if (!item.depositoId) {
+                    throw new Error(`Debe seleccionar un depósito para el producto "${item.productoNombre}".`);
+                }
+
+                const product = freshProducts.find(p => p.id === item.productoId);
+                if (!product) {
+                    throw new Error(`El producto "${item.productoNombre}" ya no está disponible.`);
+                }
+
+                // Verify total stock in specific deposit again with fresh data
+                const depositData = product.stockPorDeposito.find(d => d.depositoId === item.depositoId);
+                const stockInDeposito = depositData?.stock || 0;
+
+                if (item.cantidad > stockInDeposito) {
+                    throw new Error(`Stock insuficiente para "${item.productoNombre}" en el depósito seleccionado. Solicitado: ${item.cantidad}, Disponible: ${stockInDeposito}.`);
+                }
 
                 let cantidadRestante = item.cantidad;
                 
-                const lotesDisponibles = product.stockPorDeposito
-                    .find(d => d.depositoId === item.depositoId)?.lotes
-                    .filter(l => l.cantidad_actual > 0)
+                // Get lots for the specific deposit, strictly filtering out empty lots
+                const lotesDisponibles = (depositData?.lotes || [])
+                    .filter(l => (l.cantidad_actual || 0) > 0)
                     .sort((a, b) => {
-                        if (!a.fecha_vencimiento) return 1;
-                        if (!b.fecha_vencimiento) return -1;
-                        return new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime();
-                    }) || [];
+                        // Prioritize lots with expiration dates (FIFO), then by ID/Creation
+                        if (a.fecha_vencimiento && b.fecha_vencimiento) {
+                            return new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime();
+                        }
+                        // If one has expiry and other doesn't, prioritize the one with expiry
+                        if (a.fecha_vencimiento) return -1;
+                        if (b.fecha_vencimiento) return 1;
+                        return 0;
+                    });
+
+                if (lotesDisponibles.length === 0 && cantidadRestante > 0) {
+                     throw new Error(`Inconsistencia de datos: El depósito muestra ${stockInDeposito} unidades de "${item.productoNombre}", pero no se encontraron lotes con stock positivo.`);
+                }
 
                 for (const lote of lotesDisponibles) {
                     if (cantidadRestante <= 0) break;
                     
                     const cantidadDeLote = Math.min(cantidadRestante, lote.cantidad_actual);
                     
-                    itemsParaCrear.push({
-                        productoId: item.productoId,
-                        cantidad: cantidadDeLote,
-                        precioUnitario: item.precioUnitario,
-                        loteId: lote.id,
-                    });
-                    
-                    cantidadRestante -= cantidadDeLote;
+                    if (cantidadDeLote > 0) {
+                        itemsParaCrear.push({
+                            productoId: item.productoId,
+                            cantidad: cantidadDeLote,
+                            precioUnitario: item.precioUnitario,
+                            loteId: lote.id,
+                        });
+                        cantidadRestante -= cantidadDeLote;
+                    }
+                }
+                
+                if (cantidadRestante > 0) {
+                    throw new Error(`No se pudo asignar stock completo para "${item.productoNombre}". Faltaron ${cantidadRestante} unidades por asignar a lotes válidos.`);
                 }
             }
 

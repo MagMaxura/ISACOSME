@@ -39,12 +39,15 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
         // 2. Find suitable lots (FIFO strategy: oldest expiration first, or oldest created first)
         // We aggregate all lots from all deposits for the public sale.
         const allLots = product.stockPorDeposito.flatMap(d => d.lotes)
-            .filter(l => l.cantidad_actual > 0)
+            .filter(l => (l.cantidad_actual || 0) > 0) // Strict check for positive stock
             .sort((a, b) => {
                 // Sort by expiration date (if available), then by creation (simulated by ID or assumed sequence)
                 if (a.fecha_vencimiento && b.fecha_vencimiento) {
                     return new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime();
                 }
+                // Prefer expired dates first (FIFO)? No, prefer SOONEST expiry.
+                if (a.fecha_vencimiento) return -1; // a has expiry, b doesn't -> a first
+                if (b.fecha_vencimiento) return 1;
                 return 0; 
             });
 
@@ -55,18 +58,19 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
 
             const cantidadDeLote = Math.min(cantidadRestante, lote.cantidad_actual);
             
-            itemsParaCrear.push({
-                productoId: item.id,
-                cantidad: cantidadDeLote,
-                precioUnitario: item.unitPrice,
-                loteId: lote.id,
-            });
-
-            cantidadRestante -= cantidadDeLote;
+            if (cantidadDeLote > 0) {
+                itemsParaCrear.push({
+                    productoId: item.id,
+                    cantidad: cantidadDeLote,
+                    precioUnitario: item.unitPrice,
+                    loteId: lote.id,
+                });
+                cantidadRestante -= cantidadDeLote;
+            }
         }
 
         if (cantidadRestante > 0) {
-             throw new Error(`Error de integridad de stock para "${item.nombre}". El stock total reportado no coincide con la suma de lotes disponibles.`);
+             throw new Error(`Error de integridad de stock para "${item.nombre}". El stock total reportado (${product.stockTotal}) no coincide con la suma de lotes disponibles.`);
         }
     }
 
@@ -117,6 +121,71 @@ export const fetchVentas = async (): Promise<Venta[]> => {
     console.log(`[${SERVICE_NAME}] No sales found.`);
     return [];
 };
+
+export const fetchVentaPorId = async (id: string): Promise<Venta | null> => {
+    console.log(`[${SERVICE_NAME}] Fetching single sale by ID: ${id}`);
+    
+    try {
+        const { data, error } = await supabase
+            .from('ventas')
+            .select(`
+                *, 
+                clientes(nombre), 
+                venta_items (
+                    cantidad, 
+                    precio_unitario, 
+                    productos ( nombre )
+                )
+            `)
+            .eq('id', id)
+            .single();
+
+        if (error) {
+            // Check for RLS error (42501) or empty result (PGRST116)
+            if (error.code === 'PGRST116') {
+                console.warn(`[${SERVICE_NAME}] Sale not found with ID: ${id}`);
+                return null;
+            }
+            if (error.code === '42501' || error.message.includes('security policy')) {
+                 console.warn(`[${SERVICE_NAME}] RLS prevented access to sale ${id}. This is expected for public anonymous users unless RPC is used.`);
+                 throw {
+                     message: 'No se pudo acceder al detalle de la venta por permisos de seguridad.',
+                     hint: `Para mostrar el detalle a usuarios públicos, un administrador debe crear la función RPC 'get_venta_detalle_publico'.`,
+                     isPermissionError: true
+                 }
+            }
+            throw error;
+        }
+
+        if (!data) return null;
+
+        const items = data.venta_items.map((item: any) => ({
+            productoId: '', 
+            cantidad: item.cantidad,
+            precioUnitario: item.precio_unitario,
+            productoNombre: item.productos?.nombre || 'Producto'
+        }));
+
+        return {
+            id: data.id,
+            clienteId: data.cliente_id,
+            fecha: new Date(data.fecha).toLocaleDateString('es-AR'),
+            subtotal: data.subtotal,
+            iva: data.iva,
+            total: data.total,
+            tipo: data.tipo,
+            estado: data.estado,
+            clienteNombre: data.clientes?.nombre || 'Consumidor Final',
+            items: items,
+            observaciones: data.observaciones,
+            puntoDeVenta: data.punto_de_venta,
+        };
+
+    } catch (err: any) {
+        console.error(`[${SERVICE_NAME}] Error fetching single sale:`, err);
+        throw err;
+    }
+}
 
 
 export const createVenta = async (ventaData: VentaToCreate): Promise<string> => {

@@ -21,7 +21,10 @@ interface PayerInfo {
 export const createPreference = async (orderItems: OrderItem[], payerInfo: PayerInfo, externalReference?: string, shippingCost?: number): Promise<string> => {
     const safeExternalReference = externalReference || 'NO_ID';
     
-    console.log(`[${SERVICE_NAME}] Init preference. Sale ID: ${safeExternalReference}. Shipping: ${shippingCost}`);
+    // Capturamos el dominio actual (ej: https://www.ultrashineskin.com o https://www.isabelladelaperla.app)
+    const currentDomain = window.location.origin;
+
+    console.log(`[${SERVICE_NAME}] Init preference. Sale ID: ${safeExternalReference}. Shipping: ${shippingCost}. Domain: ${currentDomain}`);
     
     // Formatear items para el proxy
     const mpItems = orderItems.map(item => ({
@@ -64,7 +67,8 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             body: { 
                 items: mpItems, 
                 payer: mpPayer,
-                external_reference: safeExternalReference
+                external_reference: safeExternalReference,
+                back_url: currentDomain // Enviamos el dominio para que MP sepa donde volver
             },
         });
 

@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Mercado Pago Proxy function initialized (v34 - Verbose Logging)');
+console.log('Mercado Pago Proxy function initialized (v35 - Dynamic Domains)');
 
 Deno.serve(async (req: Request) => {
   // Manejo de CORS
@@ -18,7 +18,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { items, payer: rawPayer, external_reference } = body;
+    const { items, payer: rawPayer, external_reference, back_url } = body;
 
     // --- LOGS DETALLADOS PARA SEGURIDAD Y DEBUG ---
     console.log('------------------------------------------------');
@@ -32,8 +32,14 @@ Deno.serve(async (req: Request) => {
     }
     
     const accessToken = Deno.env.get('MP_ACCESS_TOKEN');
-    // En producción esto debe ser dinámico o variable de entorno, para local puede ser localhost
-    const appUrl = req.headers.get('origin') || 'https://www.isabelladelaperla.app';
+    
+    // Determinamos la URL de retorno dinámicamente
+    // 1. Usamos la enviada explícitamente desde el frontend (back_url)
+    // 2. Si no existe, intentamos usar el header 'origin'
+    // 3. Fallback a la URL principal por defecto
+    const appUrl = back_url || req.headers.get('origin') || 'https://www.isabelladelaperla.app';
+    
+    console.log(`>>> [PROXY] Return URL configured to: ${appUrl}`);
 
     if (!accessToken) {
         console.error('>>> [PROXY] CRITICAL: MP_ACCESS_TOKEN no configurado.');

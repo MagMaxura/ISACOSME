@@ -1,3 +1,4 @@
+
 import { supabase } from '../supabase';
 import { Producto, Lote, SimpleProducto, StockPorDeposito } from '../types';
 import { PostgrestError } from '@supabase/supabase-js';
@@ -58,15 +59,36 @@ export const fetchProductosConStock = async (): Promise<Producto[]> => {
         const functionNotFound = 
             error.code === '42883' || 
             error.message?.includes('function get_productos_con_stock does not exist') ||
-            error.message?.includes('Could not find the function');
+            error.message?.includes('Could not find the function') ||
+            error.code === '42P13'; // cannot change return type
             
         if (functionNotFound) {
-            // FIX: Update RPC function definition to include new dynamic pricing columns.
+            // FIX: Update RPC function definition to include new dynamic pricing columns AND DROP statement.
             throw {
-                message: "Error de base de datos: La función 'get_productos_con_stock' no existe o está desactualizada.",
-                details: "Esta función es esencial para cargar la lista de productos con su stock y detalles de precios. La versión actual en la app incluye nuevos campos para precios dinámicos que parecen faltar en su base de datos.",
-                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear o actualizar la función. Esto solucionará el problema de forma permanente.",
-                sql: `CREATE OR REPLACE FUNCTION get_productos_con_stock()
+                message: "Error de base de datos: La función 'get_productos_con_stock' necesita ser actualizada.",
+                details: "La estructura de la base de datos ha cambiado (nuevos campos de precios o galería) y PostgreSQL requiere recrear la función para reflejar estos cambios.",
+                hint: "Ejecuta el script SQL proporcionado en el chat. Incluye DROP FUNCTION para corregir el error de tipo de retorno.",
+                sql: `
+-- 1. Asegurar que existe la tabla de imágenes
+CREATE TABLE IF NOT EXISTS public.producto_imagenes (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    producto_id uuid REFERENCES public.productos(id) ON DELETE CASCADE,
+    url text NOT NULL,
+    created_at timestamptz DEFAULT now()
+);
+
+-- 2. Habilitar seguridad
+ALTER TABLE public.producto_imagenes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public images are viewable by everyone" ON public.producto_imagenes;
+CREATE POLICY "Public images are viewable by everyone" ON public.producto_imagenes FOR SELECT TO anon, authenticated USING (true);
+DROP POLICY IF EXISTS "Staff can manage images" ON public.producto_imagenes;
+CREATE POLICY "Staff can manage images" ON public.producto_imagenes FOR ALL TO authenticated USING (true);
+
+-- 3. Eliminar la función anterior para permitir cambios de tipo de retorno
+DROP FUNCTION IF EXISTS get_productos_con_stock();
+
+-- 4. Crear la nueva función actualizada
+CREATE OR REPLACE FUNCTION get_productos_con_stock()
 RETURNS TABLE (
     id uuid,
     nombre text,
@@ -87,8 +109,12 @@ RETURNS TABLE (
     products_per_box integer,
     stock_total bigint,
     lotes json,
-    stock_por_deposito jsonb
-) AS $$
+    stock_por_deposito jsonb,
+    imagenes_galeria jsonb
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
 BEGIN
     RETURN QUERY
     WITH producto_lotes AS (
@@ -154,6 +180,13 @@ BEGIN
         FROM producto_lotes pl
         WHERE pl.lote_id IS NOT NULL
         GROUP BY pl.producto_id
+    ),
+    galeria_agg AS (
+        SELECT 
+            pi.producto_id,
+            jsonb_agg(jsonb_build_object('id', pi.id, 'url', pi.url)) as galeria
+        FROM producto_imagenes pi
+        GROUP BY pi.producto_id
     )
     SELECT
         p.id,
@@ -175,13 +208,15 @@ BEGIN
         p.products_per_box,
         COALESCE(ala.stock_total, 0)::bigint,
         COALESCE(ala.lotes_json, '[]'::json),
-        COALESCE(pda.stock_por_deposito_json, '[]'::jsonb)
+        COALESCE(pda.stock_por_deposito_json, '[]'::jsonb),
+        COALESCE(ga.galeria, '[]'::jsonb)
     FROM productos p
     LEFT JOIN all_lotes_agg ala ON p.id = ala.producto_id
     LEFT JOIN producto_deposito_agg pda ON p.id = pda.producto_id
+    LEFT JOIN galeria_agg ga ON p.id = ga.producto_id
     ORDER BY p.nombre;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;`
+$function$;`
             };
         }
 

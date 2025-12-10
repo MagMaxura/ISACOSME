@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Producto } from '@/types';
@@ -47,6 +47,9 @@ const PublicPriceListPage: React.FC = () => {
     const [error, setError] = useState<any | null>(null);
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    
+    // Ref for scrolling to summary on mobile
+    const summaryRef = useRef<HTMLDivElement>(null);
     
     // Login form state (only used for public view)
     const [email, setEmail] = useState('');
@@ -151,7 +154,13 @@ const PublicPriceListPage: React.FC = () => {
     const total = subtotal + shippingCost;
     const amountLeftForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal);
     const freeShippingProgress = Math.min(100, (subtotal / FREE_SHIPPING_THRESHOLD) * 100);
+    
+    // Total count of items for the mobile floating button
+    const totalItemsCount = useMemo(() => orderItems.reduce((acc, item) => acc + item.quantity, 0), [orderItems]);
 
+    const scrollToSummary = () => {
+        summaryRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
 
     const groupedProducts = useMemo(() => {
         const lineOrder = ['ULTRAHISNE', 'BODYTAN CARIBEAN', 'SECRET', 'ESSENS', 'General'];
@@ -352,7 +361,7 @@ const PublicPriceListPage: React.FC = () => {
                     )}
                 </div>
 
-                <div className="lg:w-1/3">
+                <div className="lg:w-1/3" ref={summaryRef}>
                     <div className="sticky top-24 bg-white p-6 rounded-lg shadow-lg">
                          <h3 className="text-2xl font-bold text-gray-800 mb-4 flex items-center"><IconShoppingCart className="h-6 w-6 mr-2 text-primary"/> Tu Pedido</h3>
                          
@@ -414,6 +423,22 @@ const PublicPriceListPage: React.FC = () => {
                     subtotal={subtotal}
                     shippingCost={shippingCost}
                 />
+            )}
+
+            {/* Mobile Floating Cart Button */}
+            {!user && totalItemsCount > 0 && (
+                <button
+                    onClick={scrollToSummary}
+                    className="lg:hidden fixed bottom-4 right-4 z-50 bg-secondary text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 hover:bg-secondary-dark transition-all transform hover:scale-105 active:scale-95"
+                >
+                    <div className="relative">
+                        <IconShoppingCart className="w-6 h-6" />
+                        <span className="absolute -top-2 -right-2 bg-white text-secondary text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full border border-secondary">
+                            {totalItemsCount}
+                        </span>
+                    </div>
+                    <span className="font-bold text-sm">Ver Pedido</span>
+                </button>
             )}
         </>
     );

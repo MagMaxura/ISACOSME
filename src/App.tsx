@@ -180,6 +180,10 @@ const App: React.FC = () => {
                   }
                 />
               <Route path="/lista-publica" element={<PublicPriceListPage />} />
+              {/* Payment Routes for Authenticated Users (e.g. Admins testing flow) */}
+              <Route path="/payment-success" element={<PaymentSuccessPage />} />
+              <Route path="/payment-failure" element={<PaymentFailurePage />} />
+              
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </main>
