@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
@@ -204,27 +203,28 @@ const CrearVenta: React.FC = () => {
                 }
 
                 // 1. Fetch valid lots directly from DB (bypassing potentially stale aggregation)
-                // This ensures we get the absolute latest stock state.
                 const lotesDisponibles = await fetchLotesParaVenta(item.productoId, item.depositoId);
                 
-                // 2. Filter lots strictly. Ignore "dust" or empty lots that DB sees as 0.
-                const usableLotes = lotesDisponibles.filter(l => l.cantidad_actual >= 1);
+                // 2. Strict client-side filtering and flooring.
+                // We use Math.floor() to treat stock as integers. Ideally, DB should be int, but if it has floats (0.999), 
+                // Math.floor prevents assigning "ghost" stock that fails in DB triggers.
+                const usableLotes = lotesDisponibles
+                    .map(l => ({...l, cantidad_actual: Math.floor(l.cantidad_actual)}))
+                    .filter(l => l.cantidad_actual >= 1);
                 
-                // 3. Calculate real available stock from these lots
                 const stockInDeposito = usableLotes.reduce((sum, l) => sum + l.cantidad_actual, 0);
 
                 if (item.cantidad > stockInDeposito) {
-                    throw new Error(`Stock insuficiente para "${item.productoNombre}" en el depósito seleccionado. Solicitado: ${item.cantidad}, Disponible real: ${Math.floor(stockInDeposito)}.`);
+                    throw new Error(`Stock insuficiente para "${item.productoNombre}" en el depósito seleccionado. Solicitado: ${item.cantidad}, Disponible real: ${stockInDeposito}. (Los lotes con cantidades fraccionarias < 1 se ignoran).`);
                 }
 
                 let cantidadRestante = item.cantidad;
                 
-                // 4. Allocate stock from lots
+                // 3. Allocate stock from lots
                 for (const lote of usableLotes) {
                     if (cantidadRestante <= 0) break;
                     
-                    const stockLote = lote.cantidad_actual;
-                    const cantidadDeLote = Math.min(cantidadRestante, stockLote);
+                    const cantidadDeLote = Math.min(cantidadRestante, lote.cantidad_actual);
                     
                     if (cantidadDeLote > 0) {
                         itemsParaCrear.push({
@@ -238,8 +238,7 @@ const CrearVenta: React.FC = () => {
                 }
                 
                 if (cantidadRestante > 0) {
-                    // This theoretically shouldn't happen if check passed, but acts as a safety net
-                    throw new Error(`Error de asignación de lotes para "${item.productoNombre}". El sistema detectó stock pero no pudo asignarlo a lotes válidos (quizás son decimales pequeños). Por favor, intente nuevamente.`);
+                    throw new Error(`Error de asignación de lotes para "${item.productoNombre}". Por favor intente nuevamente.`);
                 }
             }
 

@@ -1,4 +1,3 @@
-
 import { supabase } from '../supabase';
 import { Insumo, Lote } from '../types';
 
@@ -60,20 +59,17 @@ export const fetchStockProductos = async (): Promise<StockProducto[]> => {
 
 /**
  * Fetches available lots directly from the 'lotes' table.
- * This bypasses aggregated views/RPCs to ensure we get the absolute latest stock state.
- * CRITICAL: Filters out lots with < 1 quantity (or negligible decimal amounts) to prevent DB triggers 
- * (which cast to INT) from seeing 0 stock when a decimal residue like 0.4 exists.
+ * Updated to return ALL lots for the product/deposito, allowing the frontend logic
+ * (via Math.floor) to strictly determine what is sellable.
  */
 export const fetchLotesParaVenta = async (productoId: string, depositoId?: string): Promise<Lote[]> => {
-    console.log(`[${SERVICE_NAME}] Fetching valid lots for product ${productoId} ${depositoId ? `in deposit ${depositoId}` : ''}`);
+    console.log(`[${SERVICE_NAME}] Fetching lots for product ${productoId} ${depositoId ? `in deposit ${depositoId}` : ''}`);
     
     let query = supabase
         .from('lotes')
         .select('*')
-        .eq('producto_id', productoId)
-        // Strict DB-level filter. Assuming units are integers for finished products. 
-        // If 0.5 is valid, use 0.01, but "stock disponible: 0" error implies integer rounding of <1 values.
-        .gte('cantidad_actual', 1); 
+        .eq('producto_id', productoId);
+        // Removed server-side .gte filter to allow JS to handle floating point precision safely
 
     if (depositoId) {
         query = query.eq('deposito_id', depositoId);
