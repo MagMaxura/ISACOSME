@@ -148,13 +148,13 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error creating sale:`, error);
 
-        // DETECCIÓN DE ERROR DE STOCK P0001 (TRIGGER DB)
+        // ERROR DE STOCK P0001 (RAISE EXCEPTION desde la DB)
         if (error.code === 'P0001' || error.message?.includes('Stock insuficiente')) {
              throw {
                 ...error,
-                message: "Error de Stock en Base de Datos: El sistema rechazó la operación por falta de existencias reales.",
-                details: `Detalles técnicos: "${error.message}". Es probable que existiera un trigger antiguo. Si ya ejecutaste el SQL "Nuke & Rebuild", este error no debería aparecer.`,
-                hint: "Asegúrate de haber ejecutado el script SQL que elimina triggers antiguos.",
+                message: "Error de Stock en Base de Datos: La transacción fue rechazada por falta de unidades reales.",
+                details: `Detalles técnicos: "${error.message}". Esto ocurre cuando el disparador (trigger) detecta que el lote no tiene suficientes unidades.`,
+                hint: "Asegúrate de haber ejecutado el script SQL 'Nuke & Rebuild' en Supabase para limpiar disparadores antiguos y corregir los permisos de seguridad.",
                 sql: `-- REPARACIÓN DE CONTROL DE STOCK (DEFINITIVO)
 BEGIN;
 DROP TRIGGER IF EXISTS on_venta_item_created ON public.venta_items;
@@ -171,7 +171,7 @@ DECLARE
     v_stock_actual numeric;
 BEGIN
     SELECT cantidad_actual INTO v_stock_actual FROM public.lotes WHERE id = NEW.lote_id FOR UPDATE;
-    IF v_stock_actual IS NULL OR v_stock_actual < NEW.cantidad THEN
+    IF v_stock_actual IS NULL OR (v_stock_actual + 0.001) < NEW.cantidad THEN
         RAISE EXCEPTION 'Stock insuficiente en DB para lote %. Disponible: %, Requerido: %', NEW.lote_id, COALESCE(v_stock_actual, 0), NEW.cantidad;
     END IF;
     UPDATE public.lotes SET cantidad_actual = cantidad_actual - NEW.cantidad WHERE id = NEW.lote_id;
@@ -214,14 +214,15 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
     const itemsParaCrear: VentaItemParaCrear[] = [];
     for (const item of cartItems) {
         const lotesDisponibles = await fetchLotesParaVenta(item.id); 
-        // Filtramos lotes que realmente tengan stock >= 1
+        
+        // CRITICAL FIX: Floor stock values to avoid phantom units (e.g. 0.99 seen as 1)
         const usableLotes = lotesDisponibles
             .map(l => ({ ...l, cantidad_actual: Math.floor(l.cantidad_actual) }))
             .filter(l => l.cantidad_actual >= 1);
         
         const stockTotal = usableLotes.reduce((acc, l) => acc + l.cantidad_actual, 0);
         if (stockTotal < item.quantity) {
-             throw new Error(`Stock insuficiente para "${item.nombre}". Solicitado: ${item.quantity}, Disponible real: ${stockTotal}`);
+             throw new Error(`Stock insuficiente para "${item.nombre}". Solicitado: ${item.quantity}, Disponible real (entero): ${stockTotal}`);
         }
 
         let cantidadRestante = item.quantity;
@@ -239,7 +240,7 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
             }
         }
         if (cantidadRestante > 0) {
-             throw new Error(`No se pudo asignar el stock completo para "${item.nombre}" desde los lotes disponibles.`);
+             throw new Error(`Error de asignación: No se pudieron cubrir las ${item.quantity} unidades de "${item.nombre}" con los lotes disponibles.`);
         }
     }
     return itemsParaCrear;
