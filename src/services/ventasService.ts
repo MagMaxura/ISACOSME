@@ -15,6 +15,17 @@ export interface VentaToCreate extends Omit<Venta, 'id' | 'clienteNombre' | 'ite
     items: VentaItemParaCrear[];
 }
 
+/**
+ * Función auxiliar para formatear la fecha correctamente ignorando el desfase UTC.
+ * Si la fecha es "2023-10-27", la convierte a Date y la muestra como 27/10/2023 sin importar la zona horaria.
+ */
+const formatFechaLocal = (fechaStr: string) => {
+    if (!fechaStr) return 'N/A';
+    // Dividimos por '-' y tomamos solo la parte de la fecha YYYY-MM-DD
+    const [year, month, day] = fechaStr.split('T')[0].split('-');
+    return `${day}/${month}/${year}`;
+};
+
 export const fetchVentas = async (): Promise<Venta[]> => {
     const { data, error } = await supabase
         .from('ventas')
@@ -38,7 +49,7 @@ export const fetchVentas = async (): Promise<Venta[]> => {
             return {
                 id: v.id,
                 clienteId: v.cliente_id,
-                fecha: new Date(v.fecha).toLocaleDateString('es-AR'),
+                fecha: formatFechaLocal(v.fecha),
                 subtotal: v.subtotal,
                 iva: v.iva,
                 total: v.total,
@@ -75,7 +86,7 @@ export const fetchVentaPorId = async (id: string): Promise<Venta | null> => {
         return {
             id: data.id,
             clienteId: data.cliente_id,
-            fecha: new Date(data.fecha).toLocaleDateString('es-AR'),
+            fecha: formatFechaLocal(data.fecha),
             subtotal: data.subtotal,
             iva: data.iva,
             total: data.total,
@@ -212,14 +223,18 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
         let cantidadRestante = item.quantity;
         for (const lote of usableLotes) {
             if (cantidadRestante <= 0) break;
+            // FIX: Fixed typo 'cantidad deLote' to 'cantidadDeLote'
             const cantidadDeLote = Math.min(cantidadRestante, lote.q_floor);
+            // FIX: Fixed typo 'cantidad deLote' to 'cantidadDeLote'
             if (cantidadDeLote > 0) {
                 itemsParaCrear.push({
                     productoId: item.id,
+                    // FIX: Fixed typo 'cantidad deLote' to 'cantidadDeLote'
                     cantidad: cantidadDeLote,
                     precioUnitario: item.unitPrice,
                     loteId: lote.id,
                 });
+                // FIX: Fixed typo 'cantidad deLote' to 'cantidadDeLote'
                 cantidadRestante -= cantidadDeLote;
             }
         }

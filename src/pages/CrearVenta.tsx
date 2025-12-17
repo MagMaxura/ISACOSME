@@ -26,7 +26,17 @@ const CrearVenta: React.FC = () => {
 
     const [selectedClienteId, setSelectedClienteId] = useState<string>('');
     const [items, setItems] = useState<VentaItemUI[]>([]);
-    const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+    
+    // CORRECCIÓN DE FECHA: Obtener YYYY-MM-DD local
+    const getLocalDateString = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const [fecha, setFecha] = useState(getLocalDateString());
     const [tipo, setTipo] = useState<'Venta' | 'Consignacion'>('Venta');
     const [puntoDeVenta, setPuntoDeVenta] = useState<PuntoDeVenta>('Tienda física');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -205,19 +215,11 @@ const CrearVenta: React.FC = () => {
                 // 1. Fetch ALL lots (no server-side filtering) to debug status
                 const allLotes = await fetchLotesParaVenta(item.productoId, item.depositoId);
                 
-                // DEBUG LOGS
-                console.log(`[CrearVenta] All lots for product ${item.productoNombre} (ID: ${item.productoId}):`, allLotes);
-
                 // 2. Strict client-side filtering. 
-                // We map to floor first, then filter. This handles cases where DB has 0.9999.
                 const usableLotes = allLotes
                     .map(l => ({...l, cantidad_actual: Math.floor(l.cantidad_actual)}))
                     .filter(l => l.cantidad_actual >= 1);
                 
-                // DEBUG LOGS
-                console.log(`[CrearVenta] Usable lots after filtering (>=1):`, usableLotes);
-
-                // If we found lots but they are all "dust" (0 < quantity < 1), we must block here.
                 if (usableLotes.length === 0) {
                      const totalRawStock = allLotes.reduce((sum, l) => sum + l.cantidad_actual, 0);
                      throw new Error(`Stock insuficiente para "${item.productoNombre}". El sistema detecta ${totalRawStock.toFixed(2)} unidades, pero ninguna alcanza la unidad entera mínima requerida (>= 1) para la venta.`);
@@ -244,7 +246,6 @@ const CrearVenta: React.FC = () => {
                             precioUnitario: item.precioUnitario,
                             loteId: lote.id,
                         });
-                        console.log(`[CrearVenta] Allocating ${cantidadDeLote} from lot ${lote.id} (${lote.numero_lote})`);
                         cantidadRestante -= cantidadDeLote;
                     }
                 }
