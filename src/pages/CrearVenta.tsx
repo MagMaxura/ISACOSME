@@ -202,20 +202,25 @@ const CrearVenta: React.FC = () => {
                     throw new Error(`Debe seleccionar un depósito para el producto "${item.productoNombre}".`);
                 }
 
-                // 1. Fetch valid lots directly from DB (bypassing potentially stale aggregation)
-                const lotesDisponibles = await fetchLotesParaVenta(item.productoId, item.depositoId);
+                // 1. Fetch ALL lots (no server-side filtering) to debug status
+                const allLotes = await fetchLotesParaVenta(item.productoId, item.depositoId);
                 
-                // 2. Strict client-side filtering and flooring.
-                // We use Math.floor() to treat stock as integers. Ideally, DB should be int, but if it has floats (0.999), 
-                // Math.floor prevents assigning "ghost" stock that fails in DB triggers.
-                const usableLotes = lotesDisponibles
+                // 2. Strict client-side filtering. 
+                // We map to floor first, then filter. This handles cases where DB has 0.9999.
+                const usableLotes = allLotes
                     .map(l => ({...l, cantidad_actual: Math.floor(l.cantidad_actual)}))
                     .filter(l => l.cantidad_actual >= 1);
                 
+                // If we found lots but they are all "dust" (0 < quantity < 1), we must block here.
+                if (usableLotes.length === 0) {
+                     const totalRawStock = allLotes.reduce((sum, l) => sum + l.cantidad_actual, 0);
+                     throw new Error(`Stock insuficiente para "${item.productoNombre}". El sistema detecta ${totalRawStock.toFixed(2)} unidades, pero ninguna alcanza la unidad entera mínima requerida (>= 1) para la venta.`);
+                }
+
                 const stockInDeposito = usableLotes.reduce((sum, l) => sum + l.cantidad_actual, 0);
 
                 if (item.cantidad > stockInDeposito) {
-                    throw new Error(`Stock insuficiente para "${item.productoNombre}" en el depósito seleccionado. Solicitado: ${item.cantidad}, Disponible real: ${stockInDeposito}. (Los lotes con cantidades fraccionarias < 1 se ignoran).`);
+                    throw new Error(`Stock insuficiente para "${item.productoNombre}" en el depósito seleccionado. Solicitado: ${item.cantidad}, Disponible real: ${stockInDeposito}.`);
                 }
 
                 let cantidadRestante = item.cantidad;

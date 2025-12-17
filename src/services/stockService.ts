@@ -59,17 +59,18 @@ export const fetchStockProductos = async (): Promise<StockProducto[]> => {
 
 /**
  * Fetches available lots directly from the 'lotes' table.
- * Updated to return ALL lots for the product/deposito, allowing the frontend logic
- * (via Math.floor) to strictly determine what is sellable.
+ * We fetch ALL lots (even those with 0 or decimals) and let the frontend logic
+ * strictly determine eligibility using Math.floor(). This prevents discrepancies
+ * where a .gte(1) filter might pass a float that the DB trigger later rejects.
  */
 export const fetchLotesParaVenta = async (productoId: string, depositoId?: string): Promise<Lote[]> => {
-    console.log(`[${SERVICE_NAME}] Fetching lots for product ${productoId} ${depositoId ? `in deposit ${depositoId}` : ''}`);
+    console.log(`[${SERVICE_NAME}] Fetching raw lots for product ${productoId} ${depositoId ? `in deposit ${depositoId}` : ''}`);
     
     let query = supabase
         .from('lotes')
         .select('*')
         .eq('producto_id', productoId);
-        // Removed server-side .gte filter to allow JS to handle floating point precision safely
+        // Removed .gte('cantidad_actual', 1) to ensure we get the full picture and filter in JS.
 
     if (depositoId) {
         query = query.eq('deposito_id', depositoId);
