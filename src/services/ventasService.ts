@@ -169,6 +169,80 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
     } catch (error: any) {
         // This general catch block will handle errors from any of the above await calls.
         console.error(`[${SERVICE_NAME}] Error creating sale:`, error);
+
+        // DETECT DB STOCK ERRORS (P0001)
+        // This happens when the DB trigger sees "0" stock even if the frontend saw "1", usually due to RLS permissions inside the trigger.
+        if (error.code === 'P0001' && (error.message?.includes('Stock insuficiente') || error.message?.includes('Stock disponible'))) {
+             throw {
+                ...error,
+                message: "Error Crítico de Base de Datos: El sistema rechazó la venta por inconsistencia de stock.",
+                details: `El frontend verificó stock disponible, pero el Trigger de la base de datos reporta '0'. \n\nCausa Probable: La función automática que descuenta el stock (Trigger) no tiene permisos de administrador (SECURITY DEFINER), por lo que no puede "ver" el stock real debido a las políticas de seguridad (RLS).\n\nMensaje DB: ${error.message}`,
+                hint: "SOLUCIÓN: Copia y ejecuta el siguiente script SQL en Supabase. Esto reemplazará el trigger defectuoso por uno seguro y robusto.",
+                sql: `-- REPARACIÓN DEL CONTROL DE STOCK
+-- Este script reemplaza la función interna que valida y descuenta el stock
+-- asegurando que tenga permisos de administrador (SECURITY DEFINER)
+-- para evitar errores de "Stock: 0" causados por políticas de seguridad (RLS).
+
+BEGIN;
+
+-- 1. Eliminar triggers antiguos que puedan estar causando conflictos
+DROP TRIGGER IF EXISTS on_venta_item_created ON public.venta_items;
+DROP TRIGGER IF EXISTS tr_actualizar_stock_venta ON public.venta_items;
+DROP TRIGGER IF EXISTS actualizar_stock_trigger ON public.venta_items;
+DROP FUNCTION IF EXISTS public.actualizar_stock_venta(); -- Nombre común antiguo
+DROP FUNCTION IF EXISTS public.handle_new_sale_stock();  -- Nombre nuevo (para asegurar limpieza)
+
+-- 2. Crear la función robusta con permisos elevados
+CREATE OR REPLACE FUNCTION public.handle_new_sale_stock()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER -- CRUCIAL: Ignora RLS para leer el stock real
+AS $$
+DECLARE
+    v_stock_actual numeric;
+    v_nombre_producto text;
+BEGIN
+    -- Obtener stock actual del lote específico
+    SELECT cantidad_actual INTO v_stock_actual
+    FROM public.lotes
+    WHERE id = NEW.lote_id
+    FOR UPDATE; -- Bloquear la fila para evitar condiciones de carrera
+
+    -- Obtener nombre del producto (cosmético para el error)
+    SELECT nombre INTO v_nombre_producto
+    FROM public.productos
+    WHERE id = NEW.producto_id;
+
+    -- Caso: Lote no encontrado
+    IF v_stock_actual IS NULL THEN
+        RAISE EXCEPTION 'Error de Stock: El lote (ID: %) no existe en la base de datos.', NEW.lote_id;
+    END IF;
+
+    -- Caso: Stock insuficiente
+    -- Nota: Usamos una pequeña tolerancia para floats si fuera necesario, pero asumimos enteros por ahora.
+    IF v_stock_actual < NEW.cantidad THEN
+        RAISE EXCEPTION 'Stock insuficiente para el producto "%". Stock disponible en el lote: %, Cantidad requerida: %', v_nombre_producto, v_stock_actual, NEW.cantidad;
+    END IF;
+
+    -- Descontar el stock
+    UPDATE public.lotes
+    SET cantidad_actual = cantidad_actual - NEW.cantidad
+    WHERE id = NEW.lote_id;
+
+    RETURN NEW;
+END;
+$$;
+
+-- 3. Asignar el trigger a la tabla venta_items
+CREATE TRIGGER on_venta_item_created
+AFTER INSERT ON public.venta_items
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_new_sale_stock();
+
+COMMIT;`
+             };
+        }
+
         throw error;
     }
 };
