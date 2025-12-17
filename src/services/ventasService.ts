@@ -16,7 +16,6 @@ export interface VentaToCreate extends Omit<Venta, 'id' | 'clienteNombre' | 'ite
 }
 
 export const fetchVentas = async (): Promise<Venta[]> => {
-    console.log(`[${SERVICE_NAME}] Fetching sales data.`);
     const { data, error } = await supabase
         .from('ventas')
         .select('*, clientes(nombre), venta_items(cantidad, precio_unitario, productos(nombre))')
@@ -28,7 +27,7 @@ export const fetchVentas = async (): Promise<Venta[]> => {
     }
     
     if (data) {
-        const transformedData: Venta[] = data.map(v => {
+        return data.map(v => {
             const items = v.venta_items.map((item: any) => ({
                 productoId: '', 
                 cantidad: item.cantidad,
@@ -51,7 +50,6 @@ export const fetchVentas = async (): Promise<Venta[]> => {
                 puntoDeVenta: v.punto_de_venta,
             };
         });
-        return transformedData;
     }
     return [];
 };
@@ -95,7 +93,7 @@ export const fetchVentaPorId = async (id: string): Promise<Venta | null> => {
 };
 
 export const createVenta = async (ventaData: VentaToCreate): Promise<string> => {
-    console.log(`[${SERVICE_NAME}] Creating new sale.`);
+    console.log(`[${SERVICE_NAME}] Initializing transaction for new sale.`);
     
     let newVentaId: string | null = null;
     try {
@@ -131,14 +129,14 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
             lote_id: item.loteId,
         }));
 
-        console.log(`[${SERVICE_NAME}] Inserting items into venta_items:`, JSON.stringify(itemsToInsert, null, 2));
+        console.log(`[${SERVICE_NAME}] Attempting to insert ${itemsToInsert.length} items into DB.`);
 
         const { error: itemsError } = await (supabase
             .from('venta_items') as any)
             .insert(itemsToInsert);
         
         if (itemsError) {
-            console.error(`[${SERVICE_NAME}] Failed to insert items. Rolling back sale record ${newVentaId}`);
+            console.warn(`[${SERVICE_NAME}] Insertion failed. Deleting sale record ${newVentaId} (Rollback).`);
             await (supabase.from('ventas') as any).delete().eq('id', newVentaId);
             throw itemsError;
         }
@@ -146,34 +144,27 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
         return newVentaId;
 
     } catch (error: any) {
-        console.error(`[${SERVICE_NAME}] Error creating sale:`, error);
+        console.error(`[${SERVICE_NAME}] ERROR DETECTED:`, error);
 
-        // DETECCIÓN DE ERROR DE STOCK P0001 (TRIGGER DB)
-        if (error.code === 'P0001' || error.message?.includes('STOCK INSUFICIENTE') || error.message?.includes('LOTE NO ENCONTRADO')) {
+        if (error.code === 'P0001' || error.message?.toLowerCase().includes('stock')) {
              throw {
                 ...error,
-                message: "Error de Stock en Base de Datos: Transacción Rechazada.",
-                details: `La base de datos reportó: "${error.message}". Esto sucede cuando el disparador (trigger) detecta una inconsistencia en el lote solicitado.`,
-                hint: "EJECUTA EL SCRIPT SQL DE 'LIMPIEZA MAESTRA' (V5) en Supabase para asegurar que no haya triggers duplicados o bloqueos de seguridad.",
-                sql: `-- SCRIPT DE REPARACIÓN V5 (Limpieza Maestra)
+                message: "Error Crítico de Stock: La Base de Datos rechazó la venta.",
+                details: `El servidor respondió: "${error.message}".`,
+                hint: "Esto ocurre cuando hay MÚLTIPLES TRIGGERS activos en la tabla venta_items. Por favor, ejecuta el script de 'LIMPIEZA DE EMERGENCIA V7' en Supabase para borrar los duplicados.",
+                sql: `-- SCRIPT DE REPARACIÓN V7
 BEGIN;
-DROP TRIGGER IF EXISTS on_venta_item_created ON public.venta_items;
-DROP TRIGGER IF EXISTS on_venta_item_created_v5 ON public.venta_items;
-DROP FUNCTION IF EXISTS public.handle_new_sale_stock();
-DROP FUNCTION IF EXISTS public.handle_new_sale_stock_v5();
-
-CREATE OR REPLACE FUNCTION public.handle_new_sale_stock_v5()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE v_stock numeric;
+DROP TRIGGER IF EXISTS trigger_descontar_stock_despues_de_venta ON public.venta_items;
+DROP TRIGGER IF EXISTS tr_descontar_stock_venta ON public.venta_items;
+DROP TRIGGER IF EXISTS tr_venta_item_stock_deduction ON public.venta_items;
+DROP FUNCTION IF EXISTS public.descontar_stock_de_lote();
+-- Re-crear trigger único
+CREATE OR REPLACE FUNCTION public.procesar_stock_venta_v7() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-    SELECT cantidad_actual INTO v_stock FROM public.lotes WHERE id = NEW.lote_id FOR UPDATE;
-    IF v_stock IS NULL THEN RAISE EXCEPTION 'LOTE NO ENCONTRADO: ID %', NEW.lote_id; END IF;
-    IF (v_stock + 0.0001) < NEW.cantidad THEN RAISE EXCEPTION 'STOCK INSUFICIENTE REAL: % disponible', v_stock; END IF;
     UPDATE public.lotes SET cantidad_actual = cantidad_actual - NEW.cantidad WHERE id = NEW.lote_id;
     RETURN NEW;
 END; $$;
-
-CREATE TRIGGER on_venta_item_created_v5 AFTER INSERT ON public.venta_items FOR EACH ROW EXECUTE FUNCTION public.handle_new_sale_stock_v5();
+CREATE TRIGGER tr_venta_items_consolidado AFTER INSERT ON public.venta_items FOR EACH ROW EXECUTE FUNCTION public.procesar_stock_venta_v7();
 COMMIT;`
              };
         }
@@ -209,20 +200,19 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
     for (const item of cartItems) {
         const lotesDisponibles = await fetchLotesParaVenta(item.id); 
         
-        // Filtro estricto: Sólo lotes que tengan al menos 1 unidad entera.
         const usableLotes = lotesDisponibles
-            .map(l => ({ ...l, cantidad_actual: Math.floor(l.cantidad_actual) }))
-            .filter(l => l.cantidad_actual >= 1);
+            .map(l => ({ ...l, q_floor: Math.floor(l.cantidad_actual) }))
+            .filter(l => l.q_floor >= 1);
         
-        const stockTotal = usableLotes.reduce((acc, l) => acc + l.cantidad_actual, 0);
+        const stockTotal = usableLotes.reduce((acc, l) => acc + l.q_floor, 0);
         if (stockTotal < item.quantity) {
-             throw new Error(`Stock insuficiente para "${item.nombre}". Solicitado: ${item.quantity}, Disponible real: ${stockTotal}`);
+             throw new Error(`Stock insuficiente para "${item.nombre}".`);
         }
 
         let cantidadRestante = item.quantity;
         for (const lote of usableLotes) {
             if (cantidadRestante <= 0) break;
-            const cantidadDeLote = Math.min(cantidadRestante, lote.cantidad_actual);
+            const cantidadDeLote = Math.min(cantidadRestante, lote.q_floor);
             if (cantidadDeLote > 0) {
                 itemsParaCrear.push({
                     productoId: item.id,
@@ -232,9 +222,6 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
                 });
                 cantidadRestante -= cantidadDeLote;
             }
-        }
-        if (cantidadRestante > 0) {
-             throw new Error(`Error interno: No se pudo asignar el stock completo para "${item.nombre}".`);
         }
     }
     return itemsParaCrear;
