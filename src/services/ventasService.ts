@@ -226,17 +226,17 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
              throw new Error(`Stock insuficiente para "${item.nombre}". Solicitado: ${item.quantity}, Disponible: ${stockTotal}`);
         }
 
-        let cantidad de restancia = item.quantity;
+        let cantidadRestante = item.quantity;
         for (const lote of usableLotes) {
-            if (cantidad de restancia <= 0) break;
-            const cantidadDeLote = Math.min(cantidad de restancia, lote.cantidad_actual);
+            if (cantidadRestante <= 0) break;
+            const cantidadDeLote = Math.min(cantidadRestante, lote.cantidad_actual);
             itemsParaCrear.push({
                 productoId: item.id,
                 cantidad: cantidadDeLote,
                 precioUnitario: item.unitPrice,
                 loteId: lote.id,
             });
-            cantidad de restancia -= cantidadDeLote;
+            cantidadRestante -= cantidadDeLote;
         }
     }
     return itemsParaCrear;
