@@ -114,7 +114,6 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
                     tipo_de_cambio: ventaData.tipoDeCambio,
                     pago_1: ventaData.pago1,
                     observaciones: ventaData.observaciones,
-                    // FIX: Use correctly named property from VentaToCreate/Venta interface
                     punto_de_venta: ventaData.puntoDeVenta,
                 }
             ])
@@ -132,14 +131,14 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
             lote_id: item.loteId,
         }));
 
-        console.log(`[${SERVICE_NAME}] Inserting items:`, itemsToInsert);
+        console.log(`[${SERVICE_NAME}] Inserting items into venta_items:`, JSON.stringify(itemsToInsert, null, 2));
 
         const { error: itemsError } = await (supabase
             .from('venta_items') as any)
             .insert(itemsToInsert);
         
         if (itemsError) {
-            console.error(`[${SERVICE_NAME}] Failed to insert items. Rolling back sale ${newVentaId}`);
+            console.error(`[${SERVICE_NAME}] Failed to insert items. Rolling back sale record ${newVentaId}`);
             await (supabase.from('ventas') as any).delete().eq('id', newVentaId);
             throw itemsError;
         }
@@ -149,22 +148,22 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error creating sale:`, error);
 
-        // DETECT DB STOCK ERRORS (P0001) - Provide direct SQL Fix to the Admin
+        // DETECCIÓN DE ERROR DE STOCK P0001 (TRIGGER DB)
         if (error.code === 'P0001' || error.message?.includes('Stock insuficiente')) {
              throw {
                 ...error,
-                message: "Error de Stock en Base de Datos: El trigger falló al verificar existencias.",
-                details: `Error original: ${error.message}`,
-                hint: "Esto ocurre cuando la función automática de stock no tiene permisos 'SECURITY DEFINER'. Copia y ejecuta el siguiente script en el Editor SQL de Supabase para arreglarlo.",
+                message: "Error de Stock en Base de Datos: El sistema rechazó la operación por falta de existencias reales.",
+                details: `El frontend validó stock positivo, pero el Trigger de la base de datos reportó: "${error.message}". Esto suele deberse a que el Trigger no tiene permisos SECURITY DEFINER para leer la tabla de lotes.`,
+                hint: "Como administrador, ejecuta el siguiente script SQL en Supabase para arreglar el trigger permanentemente.",
                 sql: `-- REPARACIÓN DE CONTROL DE STOCK (TRIGGER)
--- Ejecutar este script para que el sistema descuente stock correctamente
+BEGIN;
 DROP TRIGGER IF EXISTS on_venta_item_created ON public.venta_items;
 DROP FUNCTION IF EXISTS public.handle_new_sale_stock();
 
 CREATE OR REPLACE FUNCTION public.handle_new_sale_stock()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-SECURITY DEFINER -- Permite leer tablas restringidas por RLS
+SECURITY DEFINER
 AS $$
 DECLARE
     v_stock_actual numeric;
@@ -173,7 +172,7 @@ BEGIN
     SELECT cantidad_actual INTO v_stock_actual FROM public.lotes WHERE id = NEW.lote_id FOR UPDATE;
     SELECT nombre INTO v_nombre_producto FROM public.productos WHERE id = NEW.producto_id;
 
-    IF v_stock_actual IS NULL THEN RAISE EXCEPTION 'Lote % no encontrado.', NEW.lote_id; END IF;
+    IF v_stock_actual IS NULL THEN RAISE EXCEPTION 'Lote no encontrado.'; END IF;
     IF v_stock_actual < NEW.cantidad THEN
         RAISE EXCEPTION 'Stock insuficiente para "%". Disponible: %, Requerido: %', v_nombre_producto, v_stock_actual, NEW.cantidad;
     END IF;
@@ -183,7 +182,8 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER on_venta_item_created AFTER INSERT ON public.venta_items FOR EACH ROW EXECUTE FUNCTION public.handle_new_sale_stock();`
+CREATE TRIGGER on_venta_item_created AFTER INSERT ON public.venta_items FOR EACH ROW EXECUTE FUNCTION public.handle_new_sale_stock();
+COMMIT;`
              };
         }
         throw error;
@@ -223,20 +223,25 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
         
         const stockTotal = usableLotes.reduce((acc, l) => acc + l.cantidad_actual, 0);
         if (stockTotal < item.quantity) {
-             throw new Error(`Stock insuficiente para "${item.nombre}". Solicitado: ${item.quantity}, Disponible: ${stockTotal}`);
+             throw new Error(`Stock insuficiente para "${item.nombre}". Solicitado: ${item.quantity}, Disponible real: ${stockTotal}`);
         }
 
         let cantidadRestante = item.quantity;
         for (const lote of usableLotes) {
             if (cantidadRestante <= 0) break;
             const cantidadDeLote = Math.min(cantidadRestante, lote.cantidad_actual);
-            itemsParaCrear.push({
-                productoId: item.id,
-                cantidad: cantidadDeLote,
-                precioUnitario: item.unitPrice,
-                loteId: lote.id,
-            });
-            cantidadRestante -= cantidadDeLote;
+            if (cantidadDeLote > 0) {
+                itemsParaCrear.push({
+                    productoId: item.id,
+                    cantidad: cantidadDeLote,
+                    precioUnitario: item.unitPrice,
+                    loteId: lote.id,
+                });
+                cantidadRestante -= cantidadDeLote;
+            }
+        }
+        if (cantidadRestante > 0) {
+             throw new Error(`No se pudo asignar el stock completo para "${item.nombre}" desde los lotes disponibles.`);
         }
     }
     return itemsParaCrear;
