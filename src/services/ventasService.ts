@@ -149,34 +149,31 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
         console.error(`[${SERVICE_NAME}] Error creating sale:`, error);
 
         // DETECCIÓN DE ERROR DE STOCK P0001 (TRIGGER DB)
-        if (error.code === 'P0001' || error.message?.includes('Stock insuficiente')) {
+        if (error.code === 'P0001' || error.message?.includes('STOCK INSUFICIENTE') || error.message?.includes('LOTE NO ENCONTRADO')) {
              throw {
                 ...error,
-                message: "Error de Stock en Base de Datos: La transacción fue rechazada.",
-                details: `La base de datos reportó: "${error.message}". Esto sucede cuando el trigger de stock no ve las mismas unidades que el frontend.`,
-                hint: "EJECUTA EL SCRIPT SQL DE LIMPIEZA TOTAL para borrar triggers antiguos que están causando el conflicto.",
-                sql: `-- REPARACIÓN FINAL (Nuke & Rebuild)
+                message: "Error de Stock en Base de Datos: Transacción Rechazada.",
+                details: `La base de datos reportó: "${error.message}". Esto sucede cuando el disparador (trigger) detecta una inconsistencia en el lote solicitado.`,
+                hint: "EJECUTA EL SCRIPT SQL DE 'LIMPIEZA MAESTRA' (V5) en Supabase para asegurar que no haya triggers duplicados o bloqueos de seguridad.",
+                sql: `-- SCRIPT DE REPARACIÓN V5 (Limpieza Maestra)
 BEGIN;
 DROP TRIGGER IF EXISTS on_venta_item_created ON public.venta_items;
-DROP TRIGGER IF EXISTS trigger_descontar_stock ON public.venta_items;
-DROP TRIGGER IF EXISTS check_stock_trigger ON public.venta_items;
-DROP TRIGGER IF EXISTS on_venta_item_created_final ON public.venta_items;
+DROP TRIGGER IF EXISTS on_venta_item_created_v5 ON public.venta_items;
 DROP FUNCTION IF EXISTS public.handle_new_sale_stock();
-DROP FUNCTION IF EXISTS public.handle_new_sale_stock_v4();
+DROP FUNCTION IF EXISTS public.handle_new_sale_stock_v5();
 
-CREATE OR REPLACE FUNCTION public.handle_new_sale_stock_final()
+CREATE OR REPLACE FUNCTION public.handle_new_sale_stock_v5()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_stock numeric;
 BEGIN
     SELECT cantidad_actual INTO v_stock FROM public.lotes WHERE id = NEW.lote_id FOR UPDATE;
-    IF v_stock IS NULL OR v_stock < NEW.cantidad THEN
-        RAISE EXCEPTION 'Stock insuficiente real: % disponible, % requerido.', COALESCE(v_stock, 0), NEW.cantidad;
-    END IF;
+    IF v_stock IS NULL THEN RAISE EXCEPTION 'LOTE NO ENCONTRADO: ID %', NEW.lote_id; END IF;
+    IF (v_stock + 0.0001) < NEW.cantidad THEN RAISE EXCEPTION 'STOCK INSUFICIENTE REAL: % disponible', v_stock; END IF;
     UPDATE public.lotes SET cantidad_actual = cantidad_actual - NEW.cantidad WHERE id = NEW.lote_id;
     RETURN NEW;
 END; $$;
 
-CREATE TRIGGER on_venta_item_created_final AFTER INSERT ON public.venta_items FOR EACH ROW EXECUTE FUNCTION public.handle_new_sale_stock_final();
+CREATE TRIGGER on_venta_item_created_v5 AFTER INSERT ON public.venta_items FOR EACH ROW EXECUTE FUNCTION public.handle_new_sale_stock_v5();
 COMMIT;`
              };
         }
