@@ -128,6 +128,7 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
                     tipo_de_cambio: ventaData.tipoDeCambio,
                     pago_1: ventaData.pago1,
                     observaciones: ventaData.observaciones,
+                    // FIX: Use correctly named property from VentaToCreate/Venta interface
                     punto_de_venta: ventaData.puntoDeVenta,
                 }
             ])
@@ -276,7 +277,7 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
         }
         
         if (cantidadRestante > 0) {
-             // This theoretically shouldn't happen if stockTotal check passed, but acts as a double safety
+             // This theoretically shouldn't happen if stockTotal check passed, but acts as a deputy safety
              throw new Error(`Error de asignación de lotes para "${item.nombre}". Por favor intente nuevamente.`);
         }
     }
