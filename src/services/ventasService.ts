@@ -153,30 +153,27 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
              throw {
                 ...error,
                 message: "Error de Stock en Base de Datos: El sistema rechazó la operación por falta de existencias reales.",
-                details: `El frontend validó stock positivo, pero el Trigger de la base de datos reportó: "${error.message}". Esto suele deberse a que el Trigger no tiene permisos SECURITY DEFINER para leer la tabla de lotes.`,
-                hint: "Como administrador, ejecuta el siguiente script SQL en Supabase para arreglar el trigger permanentemente.",
-                sql: `-- REPARACIÓN DE CONTROL DE STOCK (TRIGGER)
+                details: `Detalles técnicos: "${error.message}". Es probable que existiera un trigger antiguo. Si ya ejecutaste el SQL "Nuke & Rebuild", este error no debería aparecer.`,
+                hint: "Asegúrate de haber ejecutado el script SQL que elimina triggers antiguos.",
+                sql: `-- REPARACIÓN DE CONTROL DE STOCK (DEFINITIVO)
 BEGIN;
 DROP TRIGGER IF EXISTS on_venta_item_created ON public.venta_items;
+DROP TRIGGER IF EXISTS trigger_descontar_stock ON public.venta_items;
 DROP FUNCTION IF EXISTS public.handle_new_sale_stock();
 
 CREATE OR REPLACE FUNCTION public.handle_new_sale_stock()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     v_stock_actual numeric;
-    v_nombre_producto text;
 BEGIN
     SELECT cantidad_actual INTO v_stock_actual FROM public.lotes WHERE id = NEW.lote_id FOR UPDATE;
-    SELECT nombre INTO v_nombre_producto FROM public.productos WHERE id = NEW.producto_id;
-
-    IF v_stock_actual IS NULL THEN RAISE EXCEPTION 'Lote no encontrado.'; END IF;
-    IF v_stock_actual < NEW.cantidad THEN
-        RAISE EXCEPTION 'Stock insuficiente para "%". Disponible: %, Requerido: %', v_nombre_producto, v_stock_actual, NEW.cantidad;
+    IF v_stock_actual IS NULL OR v_stock_actual < NEW.cantidad THEN
+        RAISE EXCEPTION 'Stock insuficiente en DB para lote %. Disponible: %, Requerido: %', NEW.lote_id, COALESCE(v_stock_actual, 0), NEW.cantidad;
     END IF;
-
     UPDATE public.lotes SET cantidad_actual = cantidad_actual - NEW.cantidad WHERE id = NEW.lote_id;
     RETURN NEW;
 END;
@@ -217,6 +214,7 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
     const itemsParaCrear: VentaItemParaCrear[] = [];
     for (const item of cartItems) {
         const lotesDisponibles = await fetchLotesParaVenta(item.id); 
+        // Filtramos lotes que realmente tengan stock >= 1
         const usableLotes = lotesDisponibles
             .map(l => ({ ...l, cantidad_actual: Math.floor(l.cantidad_actual) }))
             .filter(l => l.cantidad_actual >= 1);
