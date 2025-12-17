@@ -59,9 +59,8 @@ export const fetchStockProductos = async (): Promise<StockProducto[]> => {
 
 /**
  * Fetches available lots directly from the 'lotes' table.
- * We fetch ALL lots (even those with 0 or decimals) and let the frontend logic
- * strictly determine eligibility using Math.floor(). This prevents discrepancies
- * where a .gte(1) filter might pass a float that the DB trigger later rejects.
+ * This bypasses aggregated views/RPCs to ensure we get the absolute latest stock state.
+ * Filters are removed here to allow full inspection in the frontend logic.
  */
 export const fetchLotesParaVenta = async (productoId: string, depositoId?: string): Promise<Lote[]> => {
     console.log(`[${SERVICE_NAME}] Fetching raw lots for product ${productoId} ${depositoId ? `in deposit ${depositoId}` : ''}`);
@@ -84,6 +83,12 @@ export const fetchLotesParaVenta = async (productoId: string, depositoId?: strin
     if (error) {
         console.error(`[${SERVICE_NAME}] Error fetching lots for sale:`, error);
         throw error;
+    }
+    
+    if (data) {
+        console.log(`[${SERVICE_NAME}] DEBUG: DB returned ${data.length} lots for product ${productoId}. Details:`, 
+            data.map(l => `ID: ${l.id}, Lote: ${l.numero_lote}, Cant: ${l.cantidad_actual}, Dep: ${l.deposito_id}`)
+        );
     }
     
     return (data || []) as Lote[];

@@ -205,12 +205,18 @@ const CrearVenta: React.FC = () => {
                 // 1. Fetch ALL lots (no server-side filtering) to debug status
                 const allLotes = await fetchLotesParaVenta(item.productoId, item.depositoId);
                 
+                // DEBUG LOGS
+                console.log(`[CrearVenta] All lots for product ${item.productoNombre} (ID: ${item.productoId}):`, allLotes);
+
                 // 2. Strict client-side filtering. 
                 // We map to floor first, then filter. This handles cases where DB has 0.9999.
                 const usableLotes = allLotes
                     .map(l => ({...l, cantidad_actual: Math.floor(l.cantidad_actual)}))
                     .filter(l => l.cantidad_actual >= 1);
                 
+                // DEBUG LOGS
+                console.log(`[CrearVenta] Usable lots after filtering (>=1):`, usableLotes);
+
                 // If we found lots but they are all "dust" (0 < quantity < 1), we must block here.
                 if (usableLotes.length === 0) {
                      const totalRawStock = allLotes.reduce((sum, l) => sum + l.cantidad_actual, 0);
@@ -238,6 +244,7 @@ const CrearVenta: React.FC = () => {
                             precioUnitario: item.precioUnitario,
                             loteId: lote.id,
                         });
+                        console.log(`[CrearVenta] Allocating ${cantidadDeLote} from lot ${lote.id} (${lote.numero_lote})`);
                         cantidadRestante -= cantidadDeLote;
                     }
                 }

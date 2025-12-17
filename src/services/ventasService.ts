@@ -147,6 +147,8 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
             lote_id: item.loteId,
         }));
 
+        console.log(`[${SERVICE_NAME}] Inserting items into venta_items:`, JSON.stringify(itemsToInsert, null, 2));
+
         const { error: itemsError } = await (supabase
             .from('venta_items') as any)
             .insert(itemsToInsert);
@@ -245,13 +247,11 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
 
     for (const item of cartItems) {
         // 1. Fetch valid lots directly from DB (bypassing aggregated RPCs)
+        // This ensures we get the absolute latest stock state for the default warehouse (or all warehouses if no ID provided)
         const lotesDisponibles = await fetchLotesParaVenta(item.id); 
         
-        // 2. Strict filter: Force integer logic using Math.floor to avoid DB rounding errors.
-        // If a lot has 0.999, we consider it 0.
-        const usableLotes = lotesDisponibles
-            .map(l => ({ ...l, cantidad_actual: Math.floor(l.cantidad_actual) }))
-            .filter(l => l.cantidad_actual >= 1);
+        // 2. Strict filter: Ignore lots with < 1 unit to avoid DB float->int rounding errors (e.g. 0.4 quantity seen as 0)
+        const usableLotes = lotesDisponibles.filter(l => l.cantidad_actual >= 1);
         
         const stockTotal = usableLotes.reduce((acc, l) => acc + l.cantidad_actual, 0);
 
