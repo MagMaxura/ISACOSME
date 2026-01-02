@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
@@ -8,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta } from '@/services/ventasService';
 import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
-// Helper para extraer información estructurada
+// Helper para extraer información estructurada de las observaciones de Mercado Pago
 const extractWebInfo = (obs: string) => {
     if (!obs || !obs.startsWith('WEB MP')) return null;
     const info: any = {};
@@ -69,10 +68,21 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
                 <div className="space-y-3">
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Información del Cliente</h4>
                     <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm space-y-1">
-                        <p className="font-bold text-gray-800">{webInfo?.nombre || venta.clienteNombre}</p>
-                        {webInfo?.dni && <p className="text-sm text-gray-600">DNI: {webInfo.dni}</p>}
-                        <p className="text-sm text-gray-600">Tel: {webInfo?.telefono || venta.clienteTelefono || 'N/A'}</p>
-                        <div className="flex gap-2 mt-2">
+                        <p className="text-lg font-bold text-gray-800">{webInfo?.nombre || venta.clienteNombre}</p>
+                        
+                        {/* Condición fiscal movida aquí debajo del nombre */}
+                        {(webInfo || venta.clienteNombre === 'Consumidor Final') && (
+                            <p className="text-[10px] font-bold text-primary uppercase tracking-tight bg-primary/5 px-2 py-0.5 rounded inline-block">
+                                Condición: Consumidor Final
+                            </p>
+                        )}
+
+                        <div className="mt-2 space-y-1 border-t pt-2">
+                            {webInfo?.dni && <p className="text-sm text-gray-600"><strong>DNI:</strong> {webInfo.dni}</p>}
+                            <p className="text-sm text-gray-600"><strong>Tel:</strong> {webInfo?.telefono || venta.clienteTelefono || 'N/A'}</p>
+                        </div>
+                        
+                        <div className="flex gap-2 mt-3">
                              <StoreBadge tienda={venta.tienda} />
                              {venta.puntoDeVenta && <span className="text-[9px] text-gray-400 uppercase font-medium">PDV: {venta.puntoDeVenta}</span>}
                         </div>
@@ -186,12 +196,20 @@ const Ventas: React.FC = () => {
         }
     };
 
+    // Helper para obtener el nombre a mostrar (prioriza nombre de observaciones si es WEB)
+    const getDisplayName = (venta: any) => {
+        if (venta.observaciones && venta.observaciones.startsWith('WEB MP')) {
+            const webInfo = extractWebInfo(venta.observaciones);
+            if (webInfo?.nombre) return webInfo.nombre;
+        }
+        return venta.clienteNombre || 'Consumidor Final';
+    };
+
     const getContactInfo = (venta: any) => {
-        let nombre = (venta.clienteNombre || 'Cliente').split(' ')[0];
+        let nombre = (getDisplayName(venta)).split(' ')[0];
         let telefono = venta.clienteTelefono || '';
         if (venta.observaciones && venta.observaciones.startsWith('WEB MP')) {
             const webInfo = extractWebInfo(venta.observaciones);
-            if (webInfo?.nombre) nombre = webInfo.nombre.split(' ')[0];
             if (webInfo?.telefono) telefono = webInfo.telefono;
         }
         return { nombre, telefono };
@@ -202,8 +220,16 @@ const Ventas: React.FC = () => {
         if (!telefono) return null;
         const cleanTel = telefono.replace(/\D/g, '');
         const fullTel = cleanTel.startsWith('54') ? cleanTel : '549' + cleanTel;
-        let message = `Hola ${nombre}, recibimos tu pedido de la tienda ${venta.tienda || ''}. ¿Tuviste algún problema con el pago?`;
-        if (venta.estado === 'Pagada') message = `Hola ${nombre}, ya registramos el pago de tu pedido en ${venta.tienda || ''}. ¡Pronto te avisaremos del envío!`;
+        
+        let message = '';
+        if (venta.estado === 'Carrito Abandonado') {
+            message = `Hola ${nombre}, vi que dejaste algunos productos de Isabella de la Perla en tu carrito 🛒. ¿Tuviste algún problema con el pago o alguna duda? ¡Estamos para ayudarte! ✨`;
+        } else if (venta.estado === 'Pagada') {
+            message = `Hola ${nombre}, ya registramos el pago de tu pedido en ${venta.tienda || ''}. ¡Pronto te avisaremos del envío!`;
+        } else {
+            message = `Hola ${nombre}, recibimos tu pedido de la tienda ${venta.tienda || ''}. ¿Tuviste algún problema con el pago?`;
+        }
+
         return `https://wa.me/${fullTel}?text=${encodeURIComponent(message)}`;
     };
 
@@ -238,7 +264,9 @@ const Ventas: React.FC = () => {
                             <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando pedidos...</td></tr>
                         ) : ventas.length === 0 ? (
                             <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No hay pedidos.</td></tr>
-                        ) : ventas.map((item) => (
+                        ) : ventas.map((item) => {
+                            const displayName = getDisplayName(item);
+                            return (
                             <React.Fragment key={item.id}>
                                 <tr 
                                     onClick={() => toggleRow(item.id)}
@@ -251,8 +279,8 @@ const Ventas: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-bold text-gray-900">{item.clienteNombre}</div>
-                                        <div className="text-[10px] text-gray-400 font-medium uppercase">{item.puntoDeVenta || 'Caja'}</div>
+                                        <div className="text-sm font-bold text-gray-900">{displayName}</div>
+                                        <div className="text-[10px] text-gray-400 font-medium uppercase">{item.puntoDeVenta || 'Canal Online'}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.fecha}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-extrabold text-gray-900 text-right">${item.total.toLocaleString('es-AR')}</td>
@@ -292,7 +320,8 @@ const Ventas: React.FC = () => {
                                     <tr><td colSpan={6} className="p-0"><VentaDetailContent venta={item} /></td></tr>
                                 )}
                             </React.Fragment>
-                        ))}
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
