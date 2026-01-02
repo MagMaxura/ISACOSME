@@ -141,35 +141,30 @@ const CrearVenta: React.FC = () => {
         }
     };
 
+    // FIX: Ensure 'field' is handled correctly based on its literal type to resolve TS errors.
     const handleItemChange = (index: number, field: keyof VentaItemUI, value: any) => {
         const newItems = [...items];
         const currentItem = newItems[index];
         const product = productos.find(p => p.id === currentItem.productoId);
 
-        switch (field) {
-            case 'productoId':
-                const newProduct = productos.find(p => p.id === value);
-                if (newProduct) {
-                    const firstDepositoWithStock = newProduct.stockPorDeposito.find(d => d.stock > 0);
-                    currentItem.productoId = value;
-                    currentItem.productoNombre = newProduct.nombre;
-                    currentItem.precioUnitario = getPriceForProduct(newProduct, selectedCliente);
-                    currentItem.cantidad = 1;
-                    currentItem.depositoId = firstDepositoWithStock?.depositoId || '';
-                }
-                break;
-            case 'depositoId':
-                currentItem.depositoId = value;
-                currentItem.cantidad = 1; // Reset quantity on deposit change
-                break;
-            case 'cantidad':
-                const newQuantity = parseInt(value, 10);
-                if (isNaN(newQuantity) || newQuantity < 1) {
-                    currentItem.cantidad = 1;
-                    setItems(newItems);
-                    return;
-                }
-                
+        if (field === 'productoId') {
+            const newProduct = productos.find(p => p.id === value);
+            if (newProduct) {
+                const firstDepositoWithStock = newProduct.stockPorDeposito.find(d => d.stock > 0);
+                currentItem.productoId = value;
+                currentItem.productoNombre = newProduct.nombre;
+                currentItem.precioUnitario = getPriceForProduct(newProduct, selectedCliente);
+                currentItem.cantidad = 1;
+                currentItem.depositoId = firstDepositoWithStock?.depositoId || '';
+            }
+        } else if (field === 'depositoId') {
+            currentItem.depositoId = value;
+            currentItem.cantidad = 1; // Reset quantity on deposit change
+        } else if (field === 'cantidad') {
+            const newQuantity = parseInt(value, 10);
+            if (isNaN(newQuantity) || newQuantity < 1) {
+                currentItem.cantidad = 1;
+            } else {
                 const stockInDeposito = product?.stockPorDeposito.find(d => d.depositoId === currentItem.depositoId)?.stock || 0;
                 if (newQuantity > stockInDeposito) {
                     alert(`Stock insuficiente. Solo quedan ${stockInDeposito} unidades de ${product?.nombre} en este depósito.`);
@@ -177,7 +172,11 @@ const CrearVenta: React.FC = () => {
                 } else {
                      currentItem.cantidad = newQuantity;
                 }
-                break;
+            }
+        } else if (field === 'precioUnitario') {
+            currentItem.precioUnitario = parseFloat(value) || 0;
+        } else if (field === 'productoNombre') {
+            currentItem.productoNombre = value;
         }
 
         setItems(newItems);

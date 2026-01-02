@@ -1,6 +1,5 @@
-
-// FIX: Use `import type` for type-only imports and remove `AuthResponse` which is not an exported member of `@supabase/supabase-js`.
-import type { Session, User, AuthError } from '@supabase/supabase-js';
+// FIX: Use `import type` for type-only imports and ensure User and AuthError are correctly imported.
+import type { User, AuthError } from '@supabase/supabase-js';
 
 export type AppRole = 'superadmin' | 'vendedor' | 'administrativo' | 'analitico' | 'cliente' | 'comex' | 'comex_pending';
 export type PuntoDeVenta = 'Mercado Libre' | 'Tienda física' | 'Redes Sociales';
@@ -15,7 +14,7 @@ export interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  error: any | null; // Changed to 'any' to hold the full error object
+  error: any | null;
   login: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signup: (email: string, password: string, role?: AppRole, metadata?: object) => Promise<{ error: any | null }>;
   logout: () => Promise<{ error: AuthError | null }>;
@@ -24,7 +23,6 @@ export interface AuthContextType {
 
 export type InsumoCategoria = 'VALVULA' | 'ETIQUETA' | 'CAJA' | 'MATERIAL ESPECIAL' | 'ENVASE' | 'OTRO';
 export type InsumoUnidad = 'unidades' | 'gramos' | 'ml';
-
 
 export interface Insumo {
   id: string;
@@ -53,6 +51,7 @@ export interface Lote {
     costo_laboratorio: number;
     deposito_id: string;
     depositoNombre?: string;
+    created_at?: string;
 }
 
 export interface StockPorDeposito {
@@ -62,7 +61,6 @@ export interface StockPorDeposito {
     lotes: Lote[];
 }
 
-// FIX: Add GaleriaImagen interface to be used for the product image gallery.
 export interface GaleriaImagen {
   id: string;
   url: string;
@@ -81,30 +79,24 @@ export interface Producto {
   linea: string | null;
   cantidadMinimaComercio?: number | null;
   cantidadMinimaMayorista?: number | null;
-  // COMEX fields
   boxLengthCm?: number | null;
   boxWidthCm?: number | null;
   boxHeightCm?: number | null;
   productWeightKg?: number | null;
   productsPerBox?: number | null;
-  // Calculated/Joined fields for UI
-  stock: number; // Renamed to stockTotal for clarity
+  stock: number;
   stockTotal: number;
-  lotes: Lote[]; // All lots for the product
-  stockPorDeposito: StockPorDeposito[]; // Detailed stock breakdown
+  lotes: Lote[];
+  stockPorDeposito: StockPorDeposito[];
   insumos: ProductoInsumo[];
-  // FIX: Add the 'imagenesGaleria' property to the Producto interface to fix a type error in ProductGalleryModal.tsx.
   imagenesGaleria: GaleriaImagen[];
 }
 
-// A simplified version for selections
 export type SimpleProducto = Pick<Producto, 'id' | 'nombre' | 'precioPublico' | 'precioComercio' | 'precioMayorista' | 'stockTotal'> & { codigoBarras?: string | null };
-export type SimpleCliente = Pick<Cliente, 'id' | 'nombre' | 'telefono' | 'email' | 'listaPrecioNombre' | 'direccion' | 'localidad' | 'provincia'>;
-
 
 export interface Cliente {
   id: string;
-  nombre: string; // Nombre del Comercio
+  nombre: string;
   representante: string | null;
   provincia: string | null;
   localidad: string | null;
@@ -121,11 +113,11 @@ export interface Cliente {
   fechaEnvioLista: string | null;
   tieneStock: boolean;
   fechaRegistro: string;
-  // Joined field for display
   listaPrecioNombre?: string;
-  // FIX: Add total purchased amount to fix type errors in Clientes.tsx.
   totalComprado?: number;
 }
+
+export type SimpleCliente = Pick<Cliente, 'id' | 'nombre' | 'telefono' | 'email' | 'listaPrecioNombre' | 'direccion' | 'localidad' | 'provincia'>;
 
 export interface VentaItem {
   productoId: string;
@@ -145,10 +137,12 @@ export interface Venta {
   tipo: 'Venta' | 'Consignacion';
   estado: 'Pendiente' | 'Pagada' | 'Enviada' | 'Cancelada' | 'Carrito Abandonado';
   puntoDeVenta?: PuntoDeVenta | null;
+  tienda?: 'Isabella' | 'Ultrashine' | 'Bodytan' | string | null;
   costoTotal?: number;
   tipoDeCambio?: number;
   pago1?: number;
   clienteNombre?: string;
+  clienteTelefono?: string | null;
   observaciones?: string | null;
 }
 
@@ -165,13 +159,11 @@ export interface ListaPrecio {
   productos: ListaPrecioItem[];
 }
 
-// A lightweight version for the list of price lists
 export interface ListMeta {
   id: string;
   nombre: string;
 }
 
-// Type for the price list management page
 export interface ProductoConPrecio {
   id: string;
   nombre:string;
@@ -180,7 +172,6 @@ export interface ProductoConPrecio {
   precioAsignado: number;
 }
 
-// Types for Dashboard stock alerts
 export interface LowStockProducto {
   id: string;
   nombre: string;
@@ -203,8 +194,6 @@ export interface DashboardStats {
   lowStockInsumos: LowStockInsumo[];
 }
 
-// Types for Product Dashboard
-// FIX: Add 'unidad' property to match data from the service and fix UI errors.
 export interface InsumoConCosto {
     id: string;
     nombre: string;
@@ -213,8 +202,6 @@ export interface InsumoConCosto {
     unidad: InsumoUnidad;
 }
 
-// FIX: Update DashboardData to match the new, more detailed data structure from the service.
-// This fixes errors related to missing properties like 'costoLaboratorioReciente', 'totalIngresosProducto', etc.
 export interface DashboardData {
     producto: Producto;
     costoInsumos: number;
@@ -234,7 +221,6 @@ export interface DashboardData {
     ventasPorAnio: { [year: string]: number };
 }
 
-// Types for Multi-Location Inventory
 export interface Deposito {
     id: string;
     nombre: string;
@@ -251,11 +237,9 @@ export interface TransferenciaStock {
     cantidad: number;
     usuarioEmail: string;
     notas: string | null;
-    // FIX: Add numeroLote to fix type errors in TransferenciasStock.tsx.
     numeroLote?: string | null;
 }
 
-// Type for COMEX access requests
 export interface AccessRequest {
     id: string;
     created_at: string;
@@ -267,7 +251,6 @@ export interface AccessRequest {
     status: 'pending' | 'approved' | 'rejected';
 }
 
-// Types for Product Statistics Page
 export interface ProductoEstadistica {
   id: string;
   nombre: string;
@@ -282,7 +265,6 @@ export interface ProductoEstadistica {
   tasaVentasPromedio: number;
 }
 
-// Types for Checkout and Orders
 export interface OrderItem {
   id: string;
   nombre: string;

@@ -16,9 +16,6 @@ export interface VentaToCreate extends Omit<Venta, 'id' | 'clienteNombre' | 'ite
     items: VentaItemParaCrear[];
 }
 
-/**
- * Función auxiliar para formatear la fecha correctamente ignorando el desfase UTC.
- */
 const formatFechaLocal = (fechaStr: string) => {
     if (!fechaStr) return 'N/A';
     const [year, month, day] = fechaStr.split('T')[0].split('-');
@@ -59,6 +56,7 @@ export const fetchVentas = async (): Promise<Venta[]> => {
                 items: items,
                 observaciones: v.observaciones,
                 puntoDeVenta: v.punto_de_venta,
+                tienda: v.tienda || null, // Mapeo de la nueva columna
             };
         });
     }
@@ -96,6 +94,7 @@ export const fetchVentaPorId = async (id: string): Promise<Venta | null> => {
             items: items,
             observaciones: data.observaciones,
             puntoDeVenta: data.punto_de_venta,
+            tienda: data.tienda || null,
         };
     } catch (error) {
         console.error("Error fetching sale by ID:", error);
@@ -104,8 +103,6 @@ export const fetchVentaPorId = async (id: string): Promise<Venta | null> => {
 };
 
 export const createVenta = async (ventaData: VentaToCreate): Promise<string> => {
-    console.log(`[${SERVICE_NAME}] Initializing transaction for new sale.`);
-    
     let newVentaId: string | null = null;
     try {
         const { data: ventaResult, error: ventaError } = await (supabase
@@ -124,6 +121,7 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
                     pago_1: ventaData.pago1,
                     observaciones: ventaData.observaciones,
                     punto_de_venta: ventaData.puntoDeVenta,
+                    tienda: ventaData.tienda, // Guardamos el origen
                 }
             ])
             .select('id')
@@ -154,7 +152,6 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] ERROR DETECTED:`, error);
         
-        // Handle ENUM check constraint for 'Carrito Abandonado'
         if (error.message?.includes('invalid input value for enum venta_estado')) {
             throw {
                 ...error,
@@ -168,14 +165,10 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
              throw {
                 ...error,
                 message: "Error Crítico de Stock: La Base de Datos rechazó la venta.",
-                details: `El servidor respondió: "${error.message}".`,
-                hint: "Esto ocurre cuando hay MÚLTIPLES TRIGGERS activos en la tabla venta_items.",
-                sql: `-- SCRIPT DE REPARACIÓN V7
+                sql: `-- REPARACIÓN STOCK V7
 BEGIN;
 DROP TRIGGER IF EXISTS trigger_descontar_stock_despues_de_venta ON public.venta_items;
 DROP TRIGGER IF EXISTS tr_descontar_stock_venta ON public.venta_items;
-DROP TRIGGER IF EXISTS tr_venta_item_stock_deduction ON public.venta_items;
-DROP FUNCTION IF EXISTS public.descontar_stock_de_lote();
 CREATE OR REPLACE FUNCTION public.procesar_stock_venta_v7() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
     UPDATE public.lotes SET cantidad_actual = cantidad_actual - NEW.cantidad WHERE id = NEW.lote_id;
@@ -195,18 +188,7 @@ export const updateVentaStatus = async (ventaId: string, newStatus: Venta['estad
             .from('ventas') as any)
             .update({ estado: newStatus })
             .eq('id', ventaId);
-        if (error) {
-            // Handle enum update error
-            if (error.message?.includes('invalid input value for enum venta_estado')) {
-                 throw {
-                    ...error,
-                    message: "La base de datos no reconoce el nuevo estado.",
-                    hint: "Asegúrate de que el estado esté en el tipo ENUM 'venta_estado' de PostgreSQL.",
-                    sql: `ALTER TYPE public.venta_estado ADD VALUE '${newStatus}';`
-                };
-            }
-            throw error;
-        }
+        if (error) throw error;
     } catch (error: any) {
         throw error;
     }
@@ -227,7 +209,6 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
     const itemsParaCrear: VentaItemParaCrear[] = [];
     for (const item of cartItems) {
         const lotesDisponibles = await fetchLotesParaVenta(item.id); 
-        
         const usableLotes = lotesDisponibles
             .map(l => ({ ...l, q_floor: Math.floor(l.cantidad_actual) }))
             .filter(l => l.q_floor >= 1);

@@ -90,30 +90,37 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         setPayerInfo(prev => ({ ...prev, [name]: value }));
         validateField(name, value);
     };
+
+    /**
+     * Identifica la tienda basándose en el hostname actual
+     */
+    const getTiendaFromHostname = () => {
+        const host = window.location.hostname;
+        if (host.includes('ultrashineskin')) return 'Ultrashine';
+        if (host.includes('bodytancaribbean')) return 'Bodytan';
+        return 'Isabella'; // Default
+    };
     
     const handleCheckoutRedirect = async () => {
-        // 1. Validar Formulario
         let formIsValid = true;
         for (const key in payerInfo) {
             validateField(key, payerInfo[key as keyof typeof payerInfo]);
             if (!payerInfo[key as keyof typeof payerInfo]) formIsValid = false;
         }
         if (!formIsValid || Object.values(errors).some(e => e !== null)) {
-            setApiError("Por favor, completa todos los campos correctamente antes de continuar.");
+            setApiError("Por favor, completa todos los campos correctamente.");
             return;
         }
 
         setLoading(true);
         setApiError(null);
-        setStatusMessage('Reservando stock y creando pedido...');
+        setStatusMessage('Reservando stock...');
 
         try {
-            // 2. Preparar Items y Stock (Valida stock en backend)
             const itemsParaVenta = await prepareVentaItemsFromCart(orderItems);
-            const shippingNote = shippingCost > 0 ? ` [Incluye Envío: $${shippingCost}]` : ' [Envío Gratis]';
+            const shippingNote = shippingCost > 0 ? ` [Envío: $${shippingCost}]` : ' [Envío Gratis]';
             const direccionCompleta = `${payerInfo.street_name} ${payerInfo.street_number}, ${payerInfo.city}, ${payerInfo.province} (CP: ${payerInfo.zip_code})`;
             
-            // 3. Crear Venta en Base de Datos (Estado Pendiente)
             const saleData: VentaToCreate = {
                 clienteId: null,
                 fecha: new Date().toISOString().split('T')[0],
@@ -124,24 +131,20 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 iva: 0,
                 total: total,
                 observaciones: `WEB MP${shippingNote} - ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Tel: ${payerInfo.phone} - Dirección: ${direccionCompleta}`,
-                puntoDeVenta: 'Tienda física', 
+                puntoDeVenta: 'Tienda física',
+                tienda: getTiendaFromHostname(), // Identificador de tienda
             };
 
             const newSaleId = await createVenta(saleData);
             
-            // 4. Crear Preferencia de Mercado Pago (Llama a mercadopago-proxy)
-            setStatusMessage('Generando link de pago seguro...');
+            setStatusMessage('Generando link de pago...');
             const initPoint = await createPreference(orderItems, payerInfo, newSaleId, shippingCost);
             
-            // 5. Redirigir a Mercado Pago
-            setStatusMessage('Redirigiendo a Mercado Pago...');
             window.location.href = initPoint;
 
         } catch (err: any) {
             console.error("Checkout error:", err);
-            let msg = err.message || 'Ocurrió un error al procesar el pedido.';
-            if (msg.includes('insufficient stock')) msg = 'Lo sentimos, el stock es insuficiente para completar el pedido.';
-            setApiError(msg);
+            setApiError(err.message || 'Error al procesar el pedido.');
             setLoading(false);
         }
     };
@@ -151,13 +154,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     return ReactDOM.createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[9999] p-4 backdrop-blur-sm">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col animate-fade-in overflow-hidden">
-                {/* Header */}
                 <div className="flex justify-between items-center p-5 border-b bg-gray-50">
                     <div>
                         <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                             Checkout Seguro
                         </h3>
-                        <p className="text-sm text-gray-500">Completa tus datos para el envío y facturación</p>
+                        <p className="text-sm text-gray-500">Tienda: {getTiendaFromHostname()}</p>
                     </div>
                     <button onClick={onClose} disabled={loading} className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors">
                         <IconX className="w-8 h-8" />
@@ -165,7 +167,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 </div>
                 
                 <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
-                    {/* Left Column: Form */}
                     <div className="lg:w-3/5 p-6 overflow-y-auto custom-scrollbar">
                         <div className="space-y-6">
                             <section>
@@ -175,7 +176,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     <InputField name="surname" label="Apellido" value={payerInfo.surname} onChange={handleInputChange} error={errors.surname} disabled={loading} />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                                    <InputField name="email" label="Email" type="email" value={payerInfo.email} onChange={handleInputChange} error={errors.email} disabled={loading} placeholder="Para enviarte el comprobante" />
+                                    <InputField name="email" label="Email" type="email" value={payerInfo.email} onChange={handleInputChange} error={errors.email} disabled={loading} />
                                     <InputField name="phone" label="Teléfono / WhatsApp" type="number" value={payerInfo.phone} onChange={handleInputChange} error={errors.phone} disabled={loading} />
                                 </div>
                                 <div className="mt-4">
@@ -193,12 +194,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                         <InputField name="street_number" label="Altura" type="number" value={payerInfo.street_number} onChange={handleInputChange} error={errors.street_number} disabled={loading} />
                                     </div>
                                 </div>
-                                
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                                     <InputField name="city" label="Ciudad" value={payerInfo.city} onChange={handleInputChange} error={errors.city} disabled={loading} />
                                     <InputField name="province" label="Provincia" value={payerInfo.province} onChange={handleInputChange} error={errors.province} disabled={loading} />
                                 </div>
-                                
                                 <div className="mt-4">
                                     <InputField name="zip_code" label="Código Postal" type="number" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} disabled={loading} />
                                 </div>
@@ -206,36 +205,26 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                         </div>
                     </div>
 
-                    {/* Right Column: Summary & Pay */}
                     <div className="lg:w-2/5 bg-gray-50 border-l border-gray-200 p-6 flex flex-col justify-between overflow-y-auto">
                         <div>
-                            <h4 className="text-lg font-bold text-gray-800 mb-4">Resumen del Pedido</h4>
+                            <h4 className="text-lg font-bold text-gray-800 mb-4">Resumen</h4>
                             <div className="bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-200 max-h-60 overflow-y-auto custom-scrollbar">
                                 {orderItems.map(item => (
                                     <div key={item.id} className="flex justify-between py-2 border-b last:border-0 border-gray-100 text-sm">
-                                        <div>
-                                            <span className="font-medium text-gray-700">{item.quantity} x {item.nombre}</span>
-                                        </div>
+                                        <span className="font-medium text-gray-700">{item.quantity} x {item.nombre}</span>
                                         <span className="font-semibold text-gray-900">{formatPrice(item.lineTotal)}</span>
                                     </div>
                                 ))}
                             </div>
 
                             <div className="space-y-3 text-sm">
-                                <div className="flex justify-between text-gray-600">
-                                    <span>Subtotal Productos</span>
-                                    <span>{formatPrice(subtotal)}</span>
-                                </div>
+                                <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
                                 <div className="flex justify-between text-gray-600">
                                     <span>Envío</span>
-                                    {shippingCost === 0 ? (
-                                        <span className="text-green-600 font-bold">Gratis</span>
-                                    ) : (
-                                        <span>{formatPrice(shippingCost)}</span>
-                                    )}
+                                    {shippingCost === 0 ? <span className="text-green-600 font-bold">Gratis</span> : <span>{formatPrice(shippingCost)}</span>}
                                 </div>
                                 <div className="flex justify-between items-center pt-4 border-t border-gray-300">
-                                    <span className="text-xl font-bold text-gray-800">Total a Pagar</span>
+                                    <span className="text-xl font-bold text-gray-800">Total</span>
                                     <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
                                 </div>
                             </div>
@@ -243,7 +232,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
 
                         <div className="mt-8">
                             {apiError && (
-                                <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded text-sm flex items-start animate-pulse">
+                                <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded text-sm flex items-start">
                                     <IconAlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
                                     <div>{apiError}</div>
                                 </div>
@@ -252,7 +241,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                             <button 
                                 onClick={handleCheckoutRedirect} 
                                 disabled={loading}
-                                className="w-full bg-[#009EE3] hover:bg-[#0089C7] text-white py-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.01] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center gap-3 relative overflow-hidden group"
+                                className="w-full bg-[#009EE3] hover:bg-[#0089C7] text-white py-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.01] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center gap-3"
                             >
                                 {loading ? (
                                     <>
@@ -264,26 +253,11 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     </>
                                 ) : (
                                     <>
-                                        <span>Ir a Pagar con Mercado Pago</span>
+                                        <span>Pagar con Mercado Pago</span>
                                         <IconMercadoPago className="w-6 h-6 text-white" />
                                     </>
                                 )}
                             </button>
-                            
-                            {!loading && (
-                                <div className="mt-4 text-center">
-                                    <p className="text-xs text-gray-500 flex items-center justify-center gap-1">
-                                        <IconCheck className="w-3 h-3 text-green-500" />
-                                        Pagos seguros y encriptados
-                                    </p>
-                                    <div className="flex justify-center gap-2 mt-2 opacity-60 grayscale hover:grayscale-0 transition-all">
-                                        {/* Simple visual cues for payment methods */}
-                                        <img src="https://http2.mlstatic.com/storage/logos-api-admin/a5f047d0-9be0-11ec-aad4-c3381f368aaf-m.svg" alt="Visa" className="h-6" />
-                                        <img src="https://http2.mlstatic.com/storage/logos-api-admin/aa2b8f70-5c85-11ec-ae75-df2bef173be2-m.svg" alt="Mastercard" className="h-6" />
-                                        <img src="https://http2.mlstatic.com/storage/logos-api-admin/fbf867c0-9108-11ed-87b1-fd4dd99db511-m.svg" alt="Rapipago" className="h-6" />
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
@@ -292,13 +266,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 .label-style { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 600; color: #4B5563; }
                 .input-style { display: block; width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; background-color: #F9FAFB; transition: all 0.2s; font-size: 0.95rem; } 
                 .input-style:focus { outline: none; border-color: #8a5cf6; background-color: #fff; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1); }
-                .input-style.border-red-500 { border-color: #EF4444; background-color: #FEF2F2; }
                 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
-                @keyframes fade-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
-                .animate-fade-in { animation: fade-in 0.2s ease-out; }
             `}</style>
         </div>,
         document.body

@@ -3,12 +3,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
 import { Venta } from '@/types';
-import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock } from '@/components/Icons';
+import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta } from '@/services/ventasService';
 import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
-// Helper to extract structured data from observations for WEB sales
+// Helper para extraer información estructurada
 const extractWebInfo = (obs: string) => {
     if (!obs || !obs.startsWith('WEB MP')) return null;
     const info: any = {};
@@ -25,14 +25,46 @@ const extractWebInfo = (obs: string) => {
     return info;
 };
 
-// --- Expanded Detail Row Component ---
+// Componente Badge de Estado
+const StatusBadge: React.FC<{ estado: Venta['estado'] }> = ({ estado }) => {
+    const configs: Record<string, string> = {
+        'Pendiente': 'bg-amber-100 text-amber-800 border-amber-200',
+        'Pagada': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        'Enviada': 'bg-sky-100 text-sky-800 border-sky-200',
+        'Cancelada': 'bg-rose-100 text-rose-800 border-rose-200',
+        'Carrito Abandonado': 'bg-orange-100 text-orange-800 border-orange-200',
+    };
+    return (
+        <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider border ${configs[estado] || 'bg-gray-100 text-gray-800 border-gray-200'}`}>
+            {estado}
+        </span>
+    );
+};
+
+// Componente Badge de Tienda
+const StoreBadge: React.FC<{ tienda: string | null | undefined }> = ({ tienda }) => {
+    if (!tienda) return <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-[9px] font-bold rounded border uppercase">Manual</span>;
+    
+    const configs: Record<string, string> = {
+        'Isabella': 'bg-violet-100 text-violet-700 border-violet-200',
+        'Ultrashine': 'bg-cyan-100 text-cyan-700 border-cyan-200',
+        'Bodytan': 'bg-orange-100 text-orange-700 border-orange-200',
+    };
+    
+    return (
+        <span className={`px-2 py-0.5 text-[9px] font-bold rounded border uppercase flex items-center gap-1 ${configs[tienda] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+            <IconWorld className="w-2.5 h-2.5" />
+            {tienda}
+        </span>
+    );
+};
+
 const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
     const webInfo = extractWebInfo(venta.observaciones || '');
     const formatPrice = (p: number) => `$${p.toLocaleString('es-AR')}`;
 
     return (
-        <div className="bg-gray-50 border-x-2 border-b-2 border-violet-100 p-6 space-y-6 animate-fade-in-down rounded-b-lg shadow-inner">
-            {/* Customer & Shipping Section */}
+        <div className="bg-gray-50 border-x-2 border-b-2 border-primary/10 p-6 space-y-6 animate-fade-in-down rounded-b-lg shadow-inner">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Información del Cliente</h4>
@@ -40,7 +72,10 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
                         <p className="font-bold text-gray-800">{webInfo?.nombre || venta.clienteNombre}</p>
                         {webInfo?.dni && <p className="text-sm text-gray-600">DNI: {webInfo.dni}</p>}
                         <p className="text-sm text-gray-600">Tel: {webInfo?.telefono || venta.clienteTelefono || 'N/A'}</p>
-                        {venta.puntoDeVenta && <p className="text-[10px] font-semibold text-primary mt-2 uppercase">Origen: {venta.puntoDeVenta}</p>}
+                        <div className="flex gap-2 mt-2">
+                             <StoreBadge tienda={venta.tienda} />
+                             {venta.puntoDeVenta && <span className="text-[9px] text-gray-400 uppercase font-medium">PDV: {venta.puntoDeVenta}</span>}
+                        </div>
                     </div>
                 </div>
                 <div className="space-y-3">
@@ -61,7 +96,6 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
                 </div>
             </div>
 
-            {/* Items Section */}
             <div className="space-y-3">
                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center">
                     <IconPackage className="w-4 h-4 mr-2" />
@@ -96,14 +130,6 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
                     </table>
                 </div>
             </div>
-
-            {/* Manual Observations */}
-            {(!webInfo && venta.observaciones) && (
-                <div className="p-4 bg-yellow-50 border border-yellow-100 rounded-lg">
-                    <h4 className="text-xs font-bold text-yellow-700 uppercase mb-1">Notas del Pedido</h4>
-                    <p className="text-sm text-yellow-800 italic">{venta.observaciones}</p>
-                </div>
-            )}
         </div>
     );
 };
@@ -125,7 +151,6 @@ const Ventas: React.FC = () => {
             const data = await fetchVentasService();
             setVentas(data);
         } catch (err: any) {
-            console.error("[VentasPage] Failed to fetch data:", err);
             setError(err);
         } finally {
             setLoading(false);
@@ -138,14 +163,8 @@ const Ventas: React.FC = () => {
 
     const handleStatusChange = async (ventaId: string, newStatus: Venta['estado']) => {
         setUpdatingStatus(prev => ({ ...prev, [ventaId]: true }));
-        const originalVentas = JSON.parse(JSON.stringify(ventas));
-
-        setVentas(prevVentas =>
-            prevVentas.map(venta =>
-                venta.id === ventaId ? { ...venta, estado: newStatus } : venta
-            )
-        );
-
+        const originalVentas = [...ventas];
+        setVentas(prev => prev.map(v => v.id === ventaId ? { ...v, estado: newStatus } : v));
         try {
             await updateVentaStatus(ventaId, newStatus);
         } catch (err: any) {
@@ -157,8 +176,7 @@ const Ventas: React.FC = () => {
     };
 
     const handleDelete = async (ventaId: string, clienteNombre: string | undefined) => {
-        const saleIdentifier = clienteNombre && clienteNombre !== 'Consumidor Final' ? `la venta a "${clienteNombre}"` : `esta venta`;
-        if (window.confirm(`¿Estás seguro de que quieres eliminar ${saleIdentifier}? Esta acción restaurará el stock y no se puede deshacer.`)) {
+        if (window.confirm(`¿Seguro que quieres eliminar la venta? Se restaurará el stock.`)) {
             try {
                 await deleteVenta(ventaId);
                 await loadVentas();
@@ -171,13 +189,11 @@ const Ventas: React.FC = () => {
     const getContactInfo = (venta: any) => {
         let nombre = (venta.clienteNombre || 'Cliente').split(' ')[0];
         let telefono = venta.clienteTelefono || '';
-
         if (venta.observaciones && venta.observaciones.startsWith('WEB MP')) {
             const webInfo = extractWebInfo(venta.observaciones);
             if (webInfo?.nombre) nombre = webInfo.nombre.split(' ')[0];
             if (webInfo?.telefono) telefono = webInfo.telefono;
         }
-
         return { nombre, telefono };
     };
 
@@ -185,32 +201,21 @@ const Ventas: React.FC = () => {
         const { nombre, telefono } = getContactInfo(venta);
         if (!telefono) return null;
         const cleanTel = telefono.replace(/\D/g, '');
-        
-        const firstProd = venta.items.length > 0 ? venta.items[0].productoNombre : 'productos';
-        const prodText = venta.items.length > 1 ? `${firstProd} y otros` : firstProd;
-
-        let message = '';
-        if (venta.estado === 'Carrito Abandonado') {
-            message = `Hola ${nombre}, vi que dejaste algunos productos de Isabella de la Perla en tu carrito 🛒. ¿Tuviste algún problema con el pago o alguna duda con los productos? ¡Estamos para ayudarte a completar tu pedido! ✨`;
-        } else {
-            message = `Hola ${nombre}, hemos recibido tu pedido de ${prodText}, ¿podrías enviarnos el comprobante de pago? o en caso de que no hayas podido pagar, ¿si tuviste alguna dificultad de en la web que pueda ayudarte?`;
-        }
-
         const fullTel = cleanTel.startsWith('54') ? cleanTel : '549' + cleanTel;
+        let message = `Hola ${nombre}, recibimos tu pedido de la tienda ${venta.tienda || ''}. ¿Tuviste algún problema con el pago?`;
+        if (venta.estado === 'Pagada') message = `Hola ${nombre}, ya registramos el pago de tu pedido en ${venta.tienda || ''}. ¡Pronto te avisaremos del envío!`;
         return `https://wa.me/${fullTel}?text=${encodeURIComponent(message)}`;
     };
 
-    useEffect(() => {
-        loadVentas();
-    }, [loadVentas]);
+    useEffect(() => { loadVentas(); }, [loadVentas]);
 
     return (
         <div className="space-y-6">
-            <PageHeader title="Ventas y Pedidos Online">
+            <PageHeader title="Gestión de Pedidos Multi-Tienda">
                 {canManage && (
                     <Link to="/ventas/crear" className="flex items-center bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark transition-all transform hover:scale-105">
                         <IconPlus className="h-5 w-5 mr-2" />
-                        Nueva Venta Manual
+                        Venta Manual
                     </Link>
                 )}
             </PageHeader>
@@ -220,51 +225,39 @@ const Ventas: React.FC = () => {
                 <table className="min-w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Venta</th>
-                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cliente</th>
-                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Fecha</th>
-                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Total</th>
-                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</th>
-                            <th className="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Acciones</th>
+                            <th className="th-style">Origen</th>
+                            <th className="th-style">Cliente</th>
+                            <th className="th-style">Fecha</th>
+                            <th className="th-style text-right">Total</th>
+                            <th className="th-style">Estado</th>
+                            <th className="th-style text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
                         {loading ? (
-                            <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">Cargando ventas...</td></tr>
+                            <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando pedidos...</td></tr>
                         ) : ventas.length === 0 ? (
-                            <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No hay ventas registradas.</td></tr>
+                            <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No hay pedidos.</td></tr>
                         ) : ventas.map((item) => (
                             <React.Fragment key={item.id}>
                                 <tr 
                                     onClick={() => toggleRow(item.id)}
-                                    className={`cursor-pointer transition-colors hover:bg-violet-50/50 ${expandedRows[item.id] ? 'bg-violet-50' : ''}`}
+                                    className={`cursor-pointer transition-colors group ${expandedRows[item.id] ? 'bg-violet-50/50' : 'hover:bg-gray-50'}`}
                                 >
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            <div className={`p-2 rounded-lg mr-3 ${expandedRows[item.id] ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
-                                                <IconEye className="h-4 w-4" />
-                                            </div>
-                                            <span className="font-mono text-xs font-bold text-gray-500">#{item.id.substring(0,6).toUpperCase()}</span>
+                                        <div className="flex flex-col gap-1">
+                                            <StoreBadge tienda={item.tienda} />
+                                            <span className="text-[10px] font-mono text-gray-400 group-hover:text-primary transition-colors">#{item.id.substring(0,6).toUpperCase()}</span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-semibold text-gray-900">{item.clienteNombre}</div>
-                                        <div className="text-[10px] text-gray-400 font-medium uppercase tracking-tight">{item.puntoDeVenta || 'Canal Manual'}</div>
+                                        <div className="text-sm font-bold text-gray-900">{item.clienteNombre}</div>
+                                        <div className="text-[10px] text-gray-400 font-medium uppercase">{item.puntoDeVenta || 'Caja'}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.fecha}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">${item.total.toLocaleString('es-AR')}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-extrabold text-gray-900 text-right">${item.total.toLocaleString('es-AR')}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        {(() => {
-                                            let colors = 'bg-gray-100 text-gray-800';
-                                            switch (item.estado) {
-                                                case 'Pendiente': colors = 'bg-yellow-100 text-yellow-800'; break;
-                                                case 'Pagada': colors = 'bg-green-100 text-green-800'; break;
-                                                case 'Enviada': colors = 'bg-blue-100 text-blue-800'; break;
-                                                case 'Cancelada': colors = 'bg-red-100 text-red-800'; break;
-                                                case 'Carrito Abandonado': colors = 'bg-orange-100 text-orange-800 border border-orange-200'; break;
-                                            }
-                                            return <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${colors}`}>{item.estado}</span>
-                                        })()}
+                                        <StatusBadge estado={item.estado} />
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex items-center justify-center space-x-3">
@@ -273,17 +266,15 @@ const Ventas: React.FC = () => {
                                                     href={constructWhatsappUrl(item)!} 
                                                     target="_blank" 
                                                     rel="noopener noreferrer"
-                                                    className={`p-2 rounded-full text-white transition-all transform hover:scale-110 shadow-sm ${item.estado === 'Carrito Abandonado' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600'}`}
-                                                    title={item.estado === 'Carrito Abandonado' ? 'Recuperar Carrito' : 'Contactar por WhatsApp'}
+                                                    className={`p-2 rounded-full text-white transition-all transform hover:scale-110 shadow-sm ${item.estado === 'Carrito Abandonado' ? 'bg-orange-500' : 'bg-green-500'}`}
                                                 >
                                                     <IconBrandWhatsapp className="h-4 w-4" />
                                                 </a>
                                             )}
                                             <select
                                                 value={item.estado}
-                                                onChange={(e) => handleStatusChange(item.id, e.target.value as Venta['estado'])}
-                                                disabled={updatingStatus[item.id]}
-                                                className="p-1.5 bg-gray-50 border border-gray-200 rounded-lg text-[10px] font-bold uppercase focus:ring-primary focus:border-primary disabled:opacity-50"
+                                                onChange={(e) => handleStatusChange(item.id, e.target.value as any)}
+                                                className="p-1.5 bg-gray-50 border border-gray-200 rounded-lg text-[10px] font-bold uppercase focus:ring-primary"
                                             >
                                                 <option value="Pendiente">Pendiente</option>
                                                 <option value="Pagada">Pagada</option>
@@ -292,23 +283,13 @@ const Ventas: React.FC = () => {
                                                 <option value="Cancelada">Cancelada</option>
                                             </select>
                                             {canManage && (
-                                                <button
-                                                    onClick={() => handleDelete(item.id, item.clienteNombre)}
-                                                    className="text-gray-400 hover:text-red-500 p-2 transition-colors"
-                                                    title="Eliminar y Restaurar Stock"
-                                                >
-                                                    <IconTrash className="h-4 w-4" />
-                                                </button>
+                                                <button onClick={() => handleDelete(item.id, item.clienteNombre)} className="text-gray-300 hover:text-red-500 p-2"><IconTrash className="h-4 w-4" /></button>
                                             )}
                                         </div>
                                     </td>
                                 </tr>
                                 {expandedRows[item.id] && (
-                                    <tr>
-                                        <td colSpan={6} className="p-0">
-                                            <VentaDetailContent venta={item} />
-                                        </td>
-                                    </tr>
+                                    <tr><td colSpan={6} className="p-0"><VentaDetailContent venta={item} /></td></tr>
                                 )}
                             </React.Fragment>
                         ))}
@@ -316,7 +297,8 @@ const Ventas: React.FC = () => {
                 </table>
             </div>
             <style>{`
-                @keyframes fade-in-down { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+                .th-style { padding: 1rem 1.5rem; text-align: left; font-size: 0.7rem; font-weight: 800; color: #6B7280; text-transform: uppercase; letter-spacing: 0.1em; }
+                @keyframes fade-in-down { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
                 .animate-fade-in-down { animation: fade-in-down 0.2s ease-out; }
             `}</style>
         </div>
