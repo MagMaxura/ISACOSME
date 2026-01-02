@@ -1,3 +1,4 @@
+
 import { supabase } from '../supabase';
 import { Venta, VentaItem, PuntoDeVenta, OrderItem } from '../types';
 import { fetchLotesParaVenta } from './stockService';
@@ -25,7 +26,6 @@ const formatFechaLocal = (fechaStr: string) => {
 };
 
 export const fetchVentas = async (): Promise<Venta[]> => {
-    // FIX: Se agrega "telefono" a la selección de la tabla clientes
     const { data, error } = await supabase
         .from('ventas')
         .select('*, clientes(nombre, telefono), venta_items(cantidad, precio_unitario, productos(nombre))')
@@ -55,9 +55,6 @@ export const fetchVentas = async (): Promise<Venta[]> => {
                 tipo: v.tipo,
                 estado: v.estado,
                 clienteNombre: v.clientes?.nombre || 'Consumidor Final',
-                // FIX: Guardamos el teléfono en observaciones si no existe otro lugar, 
-                // pero lo ideal es extender la interfaz Venta para manejarlo.
-                // Por ahora lo pasamos para que el componente lo use si existe el vínculo.
                 clienteTelefono: v.clientes?.telefono || null,
                 items: items,
                 observaciones: v.observaciones,
@@ -143,14 +140,11 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
             lote_id: item.loteId,
         }));
 
-        console.log(`[${SERVICE_NAME}] Attempting to insert ${itemsToInsert.length} items into DB.`);
-
         const { error: itemsError } = await (supabase
             .from('venta_items') as any)
             .insert(itemsToInsert);
         
         if (itemsError) {
-            console.warn(`[${SERVICE_NAME}] Insertion failed. Deleting sale record ${newVentaId} (Rollback).`);
             await (supabase.from('ventas') as any).delete().eq('id', newVentaId);
             throw itemsError;
         }
@@ -159,20 +153,29 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
 
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] ERROR DETECTED:`, error);
+        
+        // Handle ENUM check constraint for 'Carrito Abandonado'
+        if (error.message?.includes('invalid input value for enum venta_estado')) {
+            throw {
+                ...error,
+                message: "La base de datos no reconoce el estado 'Carrito Abandonado'.",
+                hint: "Ejecuta este script SQL para actualizar el tipo ENUM de estados de venta.",
+                sql: `ALTER TYPE public.venta_estado ADD VALUE 'Carrito Abandonado';`
+            };
+        }
 
         if (error.code === 'P0001' || error.message?.toLowerCase().includes('stock')) {
              throw {
                 ...error,
                 message: "Error Crítico de Stock: La Base de Datos rechazó la venta.",
                 details: `El servidor respondió: "${error.message}".`,
-                hint: "Esto ocurre cuando hay MÚLTIPLES TRIGGERS activos en la tabla venta_items. Por favor, ejecuta el script de 'LIMPIEZA DE EMERGENCIA V7' en Supabase para borrar los duplicados.",
+                hint: "Esto ocurre cuando hay MÚLTIPLES TRIGGERS activos en la tabla venta_items.",
                 sql: `-- SCRIPT DE REPARACIÓN V7
 BEGIN;
 DROP TRIGGER IF EXISTS trigger_descontar_stock_despues_de_venta ON public.venta_items;
 DROP TRIGGER IF EXISTS tr_descontar_stock_venta ON public.venta_items;
 DROP TRIGGER IF EXISTS tr_venta_item_stock_deduction ON public.venta_items;
 DROP FUNCTION IF EXISTS public.descontar_stock_de_lote();
--- Re-crear trigger único
 CREATE OR REPLACE FUNCTION public.procesar_stock_venta_v7() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
     UPDATE public.lotes SET cantidad_actual = cantidad_actual - NEW.cantidad WHERE id = NEW.lote_id;
@@ -192,7 +195,18 @@ export const updateVentaStatus = async (ventaId: string, newStatus: Venta['estad
             .from('ventas') as any)
             .update({ estado: newStatus })
             .eq('id', ventaId);
-        if (error) throw error;
+        if (error) {
+            // Handle enum update error
+            if (error.message?.includes('invalid input value for enum venta_estado')) {
+                 throw {
+                    ...error,
+                    message: "La base de datos no reconoce el nuevo estado.",
+                    hint: "Asegúrate de que el estado esté en el tipo ENUM 'venta_estado' de PostgreSQL.",
+                    sql: `ALTER TYPE public.venta_estado ADD VALUE '${newStatus}';`
+                };
+            }
+            throw error;
+        }
     } catch (error: any) {
         throw error;
     }

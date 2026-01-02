@@ -143,7 +143,7 @@ export interface Venta {
   iva: number;
   total: number;
   tipo: 'Venta' | 'Consignacion';
-  estado: 'Pendiente' | 'Pagada' | 'Enviada' | 'Cancelada';
+  estado: 'Pendiente' | 'Pagada' | 'Enviada' | 'Cancelada' | 'Carrito Abandonado';
   puntoDeVenta?: PuntoDeVenta | null;
   costoTotal?: number;
   tipoDeCambio?: number;
