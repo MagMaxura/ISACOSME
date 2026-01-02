@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
 import { Venta } from '@/types';
-import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld } from '@/components/Icons';
+import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld, IconFileText } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta } from '@/services/ventasService';
 import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
@@ -65,12 +65,12 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
     return (
         <div className="bg-gray-50 border-x-2 border-b-2 border-primary/10 p-6 space-y-6 animate-fade-in-down rounded-b-lg shadow-inner">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Columna Izquierda: Información del Cliente */}
                 <div className="space-y-3">
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Información del Cliente</h4>
                     <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm space-y-1">
                         <p className="text-lg font-bold text-gray-800">{webInfo?.nombre || venta.clienteNombre}</p>
                         
-                        {/* Condición fiscal movida aquí debajo del nombre */}
                         {(webInfo || venta.clienteNombre === 'Consumidor Final') && (
                             <p className="text-[10px] font-bold text-primary uppercase tracking-tight bg-primary/5 px-2 py-0.5 rounded inline-block">
                                 Condición: Consumidor Final
@@ -88,6 +88,8 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
                         </div>
                     </div>
                 </div>
+
+                {/* Columna Derecha: Datos de Entrega y Notas Relevantes */}
                 <div className="space-y-3">
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Datos de Entrega</h4>
                     <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm flex items-start">
@@ -103,6 +105,18 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
                             )}
                         </div>
                     </div>
+
+                    {/* Nota del pedido redundante para asegurar visibilidad en caso de errores de extracción */}
+                    {venta.observaciones && (
+                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg shadow-sm">
+                            <h5 className="text-[10px] font-bold text-amber-600 uppercase mb-1 flex items-center gap-1">
+                                <IconFileText className="w-3 h-3" /> Nota del Pedido / Observaciones:
+                            </h5>
+                            <p className="text-xs text-amber-900 italic leading-relaxed whitespace-pre-wrap">
+                                {venta.observaciones}
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
 
