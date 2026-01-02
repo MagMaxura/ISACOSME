@@ -17,19 +17,18 @@ export interface VentaToCreate extends Omit<Venta, 'id' | 'clienteNombre' | 'ite
 
 /**
  * Función auxiliar para formatear la fecha correctamente ignorando el desfase UTC.
- * Si la fecha es "2023-10-27", la convierte a Date y la muestra como 27/10/2023 sin importar la zona horaria.
  */
 const formatFechaLocal = (fechaStr: string) => {
     if (!fechaStr) return 'N/A';
-    // Dividimos por '-' y tomamos solo la parte de la fecha YYYY-MM-DD
     const [year, month, day] = fechaStr.split('T')[0].split('-');
     return `${day}/${month}/${year}`;
 };
 
 export const fetchVentas = async (): Promise<Venta[]> => {
+    // FIX: Se agrega "telefono" a la selección de la tabla clientes
     const { data, error } = await supabase
         .from('ventas')
-        .select('*, clientes(nombre), venta_items(cantidad, precio_unitario, productos(nombre))')
+        .select('*, clientes(nombre, telefono), venta_items(cantidad, precio_unitario, productos(nombre))')
         .order('fecha', { ascending: false });
     
     if (error) {
@@ -56,6 +55,10 @@ export const fetchVentas = async (): Promise<Venta[]> => {
                 tipo: v.tipo,
                 estado: v.estado,
                 clienteNombre: v.clientes?.nombre || 'Consumidor Final',
+                // FIX: Guardamos el teléfono en observaciones si no existe otro lugar, 
+                // pero lo ideal es extender la interfaz Venta para manejarlo.
+                // Por ahora lo pasamos para que el componente lo use si existe el vínculo.
+                clienteTelefono: v.clientes?.telefono || null,
                 items: items,
                 observaciones: v.observaciones,
                 puntoDeVenta: v.punto_de_venta,
@@ -69,7 +72,7 @@ export const fetchVentaPorId = async (id: string): Promise<Venta | null> => {
     try {
         const { data, error } = await supabase
             .from('ventas')
-            .select('*, clientes(nombre), venta_items(cantidad, precio_unitario, productos(nombre))')
+            .select('*, clientes(nombre, telefono), venta_items(cantidad, precio_unitario, productos(nombre))')
             .eq('id', id)
             .single();
 
@@ -223,18 +226,14 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
         let cantidadRestante = item.quantity;
         for (const lote of usableLotes) {
             if (cantidadRestante <= 0) break;
-            // FIX: Fixed typo 'cantidad deLote' to 'cantidadDeLote'
             const cantidadDeLote = Math.min(cantidadRestante, lote.q_floor);
-            // FIX: Fixed typo 'cantidad deLote' to 'cantidadDeLote'
             if (cantidadDeLote > 0) {
                 itemsParaCrear.push({
                     productoId: item.id,
-                    // FIX: Fixed typo 'cantidad deLote' to 'cantidadDeLote'
                     cantidad: cantidadDeLote,
                     precioUnitario: item.unitPrice,
                     loteId: lote.id,
                 });
-                // FIX: Fixed typo 'cantidad deLote' to 'cantidadDeLote'
                 cantidadRestante -= cantidadDeLote;
             }
         }

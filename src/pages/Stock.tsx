@@ -81,6 +81,7 @@ const ProductionModal: React.FC<ProductionModalProps> = ({ onClose, onSuccess, p
             onSuccess();
             resetAndClose();
         } catch (err: any) {
+            console.error("Submit error:", err);
             setError(err);
         } finally {
             setIsSubmitting(false);
@@ -89,7 +90,7 @@ const ProductionModal: React.FC<ProductionModalProps> = ({ onClose, onSuccess, p
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-y-auto max-h-full">
                 <div className="flex justify-between items-center p-5 border-b">
                     <h3 className="text-xl font-semibold text-gray-800">
                       {isEditMode ? 'Editar Producción' : 'Registrar Nueva Producción'}
@@ -99,7 +100,7 @@ const ProductionModal: React.FC<ProductionModalProps> = ({ onClose, onSuccess, p
                     </button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {error && <DatabaseErrorDisplay error={error} />}
+                    <DatabaseErrorDisplay error={error} />
                     
                     <div>
                         <label htmlFor="productoId" className="block text-sm font-medium text-gray-700 mb-1">Producto Terminado</label>
@@ -121,8 +122,11 @@ const ProductionModal: React.FC<ProductionModalProps> = ({ onClose, onSuccess, p
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor="cantidad" className="block text-sm font-medium text-gray-700 mb-1">Cantidad Producida</label>
+                            <label htmlFor="cantidad" className="block text-sm font-medium text-gray-700 mb-1">Cantidad Inicial Total</label>
                             <input type="number" name="cantidad" id="cantidad" value={cantidad} onChange={(e) => setCantidad(parseFloat(e.target.value) || 0)} required min="1" step="1" className="w-full input-style" />
+                            {isEditMode && loteToEdit && (
+                                <p className="text-[10px] text-gray-500 mt-1">Ya vendidos: {loteToEdit.cantidad_inicial - loteToEdit.cantidad_actual} u.</p>
+                            )}
                         </div>
                         <div>
                             <label htmlFor="numeroLote" className="block text-sm font-medium text-gray-700 mb-1">Número de Lote</label>
@@ -133,7 +137,7 @@ const ProductionModal: React.FC<ProductionModalProps> = ({ onClose, onSuccess, p
                             <input type="date" name="fechaVencimiento" id="fechaVencimiento" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} className="w-full input-style" />
                         </div>
                          <div>
-                            <label htmlFor="costoLaboratorio" className="block text-sm font-medium text-gray-700 mb-1">Costo Laboratorio (por Unidad)</label>
+                            <label htmlFor="costoLaboratorio" className="block text-sm font-medium text-gray-700 mb-1">Costo Lab. (por Unidad)</label>
                             <input type="number" name="costoLaboratorio" id="costoLaboratorio" value={costoLaboratorio} onChange={(e) => setCostoLaboratorio(parseFloat(e.target.value) || 0)} min="0" step="0.01" className="w-full input-style" />
                         </div>
                     </div>

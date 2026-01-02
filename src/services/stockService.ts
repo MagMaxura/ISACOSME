@@ -59,7 +59,6 @@ export const fetchStockProductos = async (): Promise<StockProducto[]> => {
 
 /**
  * Fetches available lots directly from the 'lotes' table.
- * This bypasses aggregated views/RPCs to ensure we get the absolute latest stock state.
  */
 export const fetchLotesParaVenta = async (productoId: string, depositoId?: string): Promise<Lote[]> => {
     console.log(`[${SERVICE_NAME}] Fetching raw lots for product ${productoId} ${depositoId ? `in deposit ${depositoId}` : ''}`);
@@ -82,12 +81,6 @@ export const fetchLotesParaVenta = async (productoId: string, depositoId?: strin
         throw error;
     }
     
-    if (data) {
-        console.log(`[${SERVICE_NAME}] DEBUG: DB returned ${data.length} lots. Exact values:`, 
-            data.map(l => ({ id: l.id, lote: l.numero_lote, cant_raw: l.cantidad_actual }))
-        );
-    }
-    
     return (data || []) as Lote[];
 }
 
@@ -100,8 +93,6 @@ export interface ProductionData {
 }
 
 export const registerProduction = async (data: ProductionData): Promise<void> => {
-    console.log(`[${SERVICE_NAME}] Registering new production for product ID: ${data.productoId}`);
-    
     const { error } = await supabase.rpc('registrar_produccion', {
         p_producto_id: data.productoId,
         p_cantidad_producida: data.cantidadProducida,
@@ -111,46 +102,28 @@ export const registerProduction = async (data: ProductionData): Promise<void> =>
     });
 
     if (error) {
-        console.error(`[${SERVICE_NAME}] RPC call 'registrar_produccion' failed:`, JSON.stringify(error, null, 2));
-        
-        const functionNotFound = error.code === '42883' || error.message?.includes('function registrar_produccion does not exist') || error.message?.includes('Could not find the function');
+        const functionNotFound = error.code === '42883' || error.message?.includes('function registrar_produccion does not exist');
         if (functionNotFound) {
             throw {
-                message: "Error de base de datos: La función 'registrar_produccion' no existe o está desactualizada.",
-                details: "Esta función es necesaria para registrar la producción de nuevos lotes. La versión actual en la app soluciona un problema que impedía agregar stock a un lote ya existente.",
+                message: "La función 'registrar_produccion' no existe o es antigua.",
                 hint: "Ejecuta el script SQL 'registrar_produccion' actualizado.",
-                sql: `CREATE OR REPLACE FUNCTION registrar_produccion(
-    p_producto_id uuid,
-    p_cantidad_producida integer,
-    p_numero_lote text,
-    p_fecha_vencimiento date,
-    p_costo_laboratorio numeric
-)
+                sql: `CREATE OR REPLACE FUNCTION registrar_produccion(p_producto_id uuid, p_cantidad_producida integer, p_numero_lote text, p_fecha_vencimiento date, p_costo_laboratorio numeric)
 RETURNS void AS $$
-DECLARE
-    v_deposito_id uuid;
+DECLARE v_dep_id uuid;
 BEGIN
-    SELECT id INTO v_deposito_id FROM depositos WHERE es_predeterminado = TRUE LIMIT 1;
-    IF v_deposito_id IS NULL THEN
-        RAISE EXCEPTION 'No se encontró un depósito predeterminado.';
-    END IF;
-
+    SELECT id INTO v_dep_id FROM depositos WHERE es_predeterminado = TRUE LIMIT 1;
+    IF v_dep_id IS NULL THEN RAISE EXCEPTION 'No hay depósito predeterminado.'; END IF;
     INSERT INTO lotes (producto_id, numero_lote, cantidad_inicial, cantidad_actual, fecha_vencimiento, costo_laboratorio, deposito_id)
-    VALUES (p_producto_id, p_numero_lote, p_cantidad_producida, p_cantidad_producida, p_fecha_vencimiento, p_costo_laboratorio, v_deposito_id)
-    ON CONFLICT (producto_id, numero_lote, deposito_id) DO UPDATE
-    SET
+    VALUES (p_producto_id, p_numero_lote, p_cantidad_producida, p_cantidad_producida, p_fecha_vencimiento, p_costo_laboratorio, v_dep_id)
+    ON CONFLICT (producto_id, numero_lote, deposito_id) DO UPDATE SET
         cantidad_inicial = lotes.cantidad_inicial + EXCLUDED.cantidad_inicial,
         cantidad_actual = lotes.cantidad_actual + EXCLUDED.cantidad_actual,
-        fecha_vencimiento = GREATEST(lotes.fecha_vencimiento, EXCLUDED.fecha_vencimiento),
         costo_laboratorio = lotes.costo_laboratorio + EXCLUDED.costo_laboratorio;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;`
+END; $$ LANGUAGE plpgsql SECURITY DEFINER;`
             };
         }
-        throw new Error(`Error al registrar la producción: ${error?.message}`);
+        throw error;
     }
-
-    console.log(`[${SERVICE_NAME}] Successfully registered production via RPC.`);
 };
 
 export interface UpdateProductionData {
@@ -173,9 +146,40 @@ export const updateProduction = async (data: UpdateProductionData): Promise<void
     });
     
     if (error) {
-        console.error(`[${SERVICE_NAME}] RPC call 'modificar_produccion' failed:`, JSON.stringify(error, null, 2));
-        throw new Error(`Error al modificar la producción: ${error?.message}`);
-    }
+        console.error(`[${SERVICE_NAME}] Error en modificar_produccion:`, error);
+        
+        // Manejo específico del error de stock negativo
+        if (error.code === '23514') {
+             throw {
+                ...error,
+                message: "No se puede reducir la cantidad inicial por debajo de lo ya vendido.",
+                details: "Estás intentando establecer una cantidad total que es menor a las ventas que ya se realizaron de este lote.",
+                hint: "Verifica cuántas unidades se han vendido de este lote antes de reducir su cantidad inicial."
+             };
+        }
 
-    console.log(`[${SERVICE_NAME}] Successfully updated production via RPC.`);
+        const functionNotFound = error.code === '42883' || error.message?.includes('function modificar_produccion does not exist');
+        if (functionNotFound) {
+            throw {
+                message: "La función 'modificar_produccion' no existe o es antigua.",
+                sql: `CREATE OR REPLACE FUNCTION modificar_produccion(p_lote_id uuid, p_nuevo_numero_lote text, p_nueva_cantidad_inicial integer, p_nueva_fecha_vencimiento date, p_nuevo_costo_laboratorio numeric)
+RETURNS void AS $$
+DECLARE v_vendido integer;
+BEGIN
+    SELECT (cantidad_inicial - cantidad_actual) INTO v_vendido FROM lotes WHERE id = p_lote_id;
+    IF p_nueva_cantidad_inicial < v_vendido THEN
+        RAISE EXCEPTION 'La nueva cantidad (%) es menor a lo ya vendido (%)', p_nueva_cantidad_inicial, v_vendido;
+    END IF;
+    UPDATE lotes SET
+        numero_lote = p_nuevo_numero_lote,
+        cantidad_inicial = p_nueva_cantidad_inicial,
+        cantidad_actual = p_nueva_cantidad_inicial - v_vendido,
+        fecha_vencimiento = p_nueva_fecha_vencimiento,
+        costo_laboratorio = p_nuevo_costo_laboratorio
+    WHERE id = p_lote_id;
+END; $$ LANGUAGE plpgsql SECURITY DEFINER;`
+            };
+        }
+        throw error;
+    }
 };
