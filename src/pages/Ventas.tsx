@@ -247,6 +247,12 @@ const Ventas: React.FC = () => {
         return `https://wa.me/${fullTel}?text=${encodeURIComponent(message)}`;
     };
 
+    // Helper para generar el resumen de productos de una venta
+    const getProductsSummary = (items: any[]) => {
+        if (!items || items.length === 0) return 'Sin productos';
+        return items.map(item => `${item.productoNombre} x ${item.cantidad}`).join(', ');
+    };
+
     useEffect(() => { loadVentas(); }, [loadVentas]);
 
     return (
@@ -266,7 +272,7 @@ const Ventas: React.FC = () => {
                     <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
                             <th className="th-style">Origen</th>
-                            <th className="th-style">Cliente</th>
+                            <th className="th-style">Cliente / Pedido</th>
                             <th className="th-style">Fecha</th>
                             <th className="th-style text-right">Total</th>
                             <th className="th-style">Estado</th>
@@ -280,6 +286,7 @@ const Ventas: React.FC = () => {
                             <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No hay pedidos.</td></tr>
                         ) : ventas.map((item) => {
                             const displayName = getDisplayName(item);
+                            const productsSummary = getProductsSummary(item.items);
                             return (
                             <React.Fragment key={item.id}>
                                 <tr 
@@ -294,7 +301,10 @@ const Ventas: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm font-bold text-gray-900">{displayName}</div>
-                                        <div className="text-[10px] text-gray-400 font-medium uppercase">{item.puntoDeVenta || 'Canal Online'}</div>
+                                        {/* RESUMEN DE PRODUCTOS: Se muestra aquí para facilitar el despacho rápido */}
+                                        <div className="text-[10px] text-primary font-bold uppercase truncate max-w-[200px]" title={productsSummary}>
+                                            {productsSummary}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.fecha}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-extrabold text-gray-900 text-right">${item.total.toLocaleString('es-AR')}</td>
