@@ -30,6 +30,17 @@ export const fetchVentas = async (): Promise<Venta[]> => {
     
     if (error) {
         console.error(`[${SERVICE_NAME}] Error fetching sales:`, error);
+        
+        // Manejo de error de columna faltante en la lectura
+        if (error.message?.includes("column \"tienda\" does not exist") || error.message?.includes("'tienda' column")) {
+            throw {
+                ...error,
+                message: "La columna 'tienda' no existe en la tabla 'ventas'.",
+                details: "El sistema ha sido actualizado para rastrear el origen de las ventas (Isabella, Ultrashine, Bodytan), pero la base de datos no tiene el campo necesario.",
+                hint: "Ejecuta el script SQL para agregar la columna faltante.",
+                sql: `ALTER TABLE public.ventas ADD COLUMN IF NOT EXISTS tienda TEXT;`
+            };
+        }
         throw error;
     }
     
@@ -56,7 +67,7 @@ export const fetchVentas = async (): Promise<Venta[]> => {
                 items: items,
                 observaciones: v.observaciones,
                 puntoDeVenta: v.punto_de_venta,
-                tienda: v.tienda || null, // Mapeo de la nueva columna
+                tienda: v.tienda || null,
             };
         });
     }
@@ -121,7 +132,7 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
                     pago_1: ventaData.pago1,
                     observaciones: ventaData.observaciones,
                     punto_de_venta: ventaData.puntoDeVenta,
-                    tienda: ventaData.tienda, // Guardamos el origen
+                    tienda: ventaData.tienda,
                 }
             ])
             .select('id')
@@ -152,6 +163,17 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] ERROR DETECTED:`, error);
         
+        // Manejo de error de columna faltante en la inserción
+        if (error.message?.includes("column \"tienda\" of relation \"ventas\" does not exist") || error.message?.includes("'tienda' column")) {
+            throw {
+                ...error,
+                message: "La columna 'tienda' no existe en la base de datos.",
+                details: "El sistema intentó guardar el origen de la venta, pero la tabla 'ventas' no tiene la columna 'tienda'.",
+                hint: "SOLUCIÓN: Copia y ejecuta el código SQL de abajo en tu editor de Supabase para corregir la estructura de la tabla.",
+                sql: `ALTER TABLE public.ventas ADD COLUMN IF NOT EXISTS tienda TEXT;`
+            };
+        }
+
         if (error.message?.includes('invalid input value for enum venta_estado')) {
             throw {
                 ...error,
