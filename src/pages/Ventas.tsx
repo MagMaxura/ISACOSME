@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
 import { Venta } from '@/types';
-import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld, IconFileText, IconCheck } from '@/components/Icons';
+import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld, IconFileText, IconCheck, IconUsers } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta } from '@/services/ventasService';
 import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
@@ -166,8 +166,9 @@ const Ventas: React.FC = () => {
     const [updatingStatus, setUpdatingStatus] = useState<Record<string, boolean>>({});
     const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
     
-    // Estado para la pestaña activa
+    // Estado para la pestaña activa y buscador
     const [activeTab, setActiveTab] = useState<SalesTab>('PENDIENTE');
+    const [searchTerm, setSearchTerm] = useState('');
 
     const canManage = profile?.roles?.some(role => ['superadmin', 'vendedor'].includes(role));
 
@@ -184,15 +185,22 @@ const Ventas: React.FC = () => {
         }
     }, []);
 
-    // Agrupación de ventas por pestaña para los contadores
-    const groupedVentas = useMemo(() => {
+    // Filtrado por buscador y luego por pestañas
+    const filteredVentas = useMemo(() => {
+        const s = searchTerm.toLowerCase().trim();
+        const baseFiltered = s === '' ? ventas : ventas.filter(v => 
+            (v.clienteNombre?.toLowerCase() || '').includes(s) ||
+            (v.observaciones?.toLowerCase() || '').includes(s) ||
+            (v.id?.toLowerCase() || '').includes(s)
+        );
+
         return {
-            PENDIENTE: ventas.filter(v => v.estado === 'Pendiente'),
-            PAGADA: ventas.filter(v => v.estado === 'Pagada'),
-            ENVIADA: ventas.filter(v => v.estado === 'Enviada'),
-            OTROS: ventas.filter(v => !['Pendiente', 'Pagada', 'Enviada'].includes(v.estado)),
+            PENDIENTE: baseFiltered.filter(v => v.estado === 'Pendiente'),
+            PAGADA: baseFiltered.filter(v => v.estado === 'Pagada'),
+            ENVIADA: baseFiltered.filter(v => v.estado === 'Enviada'),
+            OTROS: baseFiltered.filter(v => !['Pendiente', 'Pagada', 'Enviada'].includes(v.estado)),
         };
-    }, [ventas]);
+    }, [ventas, searchTerm]);
 
     const toggleRow = (id: string) => {
         setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
@@ -276,30 +284,56 @@ const Ventas: React.FC = () => {
             </PageHeader>
             <DatabaseErrorDisplay error={error} />
             
-            {/* Sistema de Pestañas (Tabs) */}
-            <div className="flex border-b border-gray-200 gap-2 sm:gap-6 overflow-x-auto pb-px">
-                {[
-                    { id: 'PENDIENTE', label: 'Pendientes', icon: <IconClock className="w-4 h-4" /> },
-                    { id: 'PAGADA', label: 'Pagados', icon: <IconCheck className="w-4 h-4" /> },
-                    { id: 'ENVIADA', label: 'Enviados', icon: <IconTruck className="w-4 h-4" /> },
-                    { id: 'OTROS', label: 'Otros', icon: <IconFileText className="w-4 h-4" /> },
-                ].map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as SalesTab)}
-                        className={`flex items-center gap-2 px-4 py-3 text-sm font-bold transition-all whitespace-nowrap border-b-2 ${
-                            activeTab === tab.id 
-                                ? 'border-primary text-primary bg-primary/5' 
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                        }`}
-                    >
-                        {tab.icon}
-                        {tab.label}
-                        <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab.id ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
-                            {groupedVentas[tab.id as SalesTab].length}
-                        </span>
-                    </button>
-                ))}
+            {/* BUSCADOR Y TABS */}
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-b border-gray-200">
+                <div className="flex gap-2 sm:gap-6 overflow-x-auto pb-px">
+                    {[
+                        { id: 'PENDIENTE', label: 'Pendientes', icon: <IconClock className="w-4 h-4" /> },
+                        { id: 'PAGADA', label: 'Pagados', icon: <IconCheck className="w-4 h-4" /> },
+                        { id: 'ENVIADA', label: 'Enviados', icon: <IconTruck className="w-4 h-4" /> },
+                        { id: 'OTROS', label: 'Otros', icon: <IconFileText className="w-4 h-4" /> },
+                    ].map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as SalesTab)}
+                            className={`flex items-center gap-2 px-4 py-3 text-sm font-bold transition-all whitespace-nowrap border-b-2 ${
+                                activeTab === tab.id 
+                                    ? 'border-primary text-primary bg-primary/5' 
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                            }`}
+                        >
+                            {tab.icon}
+                            {tab.label}
+                            <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab.id ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                {filteredVentas[tab.id as SalesTab].length}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+
+                {/* BUSCADOR GLOBAL */}
+                <div className="pb-3 px-4 lg:px-0">
+                    <div className="relative group">
+                        <input
+                            type="text"
+                            placeholder="Buscar cliente, nota o ID..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full lg:w-80 pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-full text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition-all group-hover:border-primary"
+                        />
+                        <div className="absolute left-3 top-2.5 text-gray-400 group-hover:text-primary transition-colors">
+                            <IconUsers className="w-4 h-4" />
+                        </div>
+                        {searchTerm && (
+                            <button 
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-3 top-2.5 text-gray-400 hover:text-red-500"
+                            >
+                                <IconX className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
             </div>
 
             <div className="bg-surface rounded-xl shadow-lg border border-gray-100 overflow-hidden">
@@ -317,40 +351,47 @@ const Ventas: React.FC = () => {
                     <tbody className="bg-white divide-y divide-gray-100">
                         {loading ? (
                             <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando pedidos...</td></tr>
-                        ) : groupedVentas[activeTab].length === 0 ? (
-                            <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No hay pedidos en esta categoría.</td></tr>
-                        ) : groupedVentas[activeTab].map((item) => {
+                        ) : filteredVentas[activeTab].length === 0 ? (
+                            <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No hay pedidos que coincidan.</td></tr>
+                        ) : filteredVentas[activeTab].map((item) => {
                             const displayName = getDisplayName(item);
                             const productsSummary = getProductsSummary(item.items);
+                            // Verificamos si en esta pestaña mostramos la nota completa
+                            const showFullNote = activeTab === 'PENDIENTE' || activeTab === 'ENVIADA';
+
                             return (
                             <React.Fragment key={item.id}>
                                 <tr 
                                     onClick={() => toggleRow(item.id)}
                                     className={`cursor-pointer transition-colors group ${expandedRows[item.id] ? 'bg-violet-50/50' : 'hover:bg-gray-50'}`}
                                 >
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                    <td className="px-6 py-4 whitespace-nowrap align-top">
                                         <div className="flex flex-col gap-1">
                                             <StoreBadge tienda={item.tienda} />
                                             <span className="text-[10px] font-mono text-gray-400 group-hover:text-primary transition-colors">#{item.id.substring(0,6).toUpperCase()}</span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                    <td className="px-6 py-4 align-top">
                                         <div className="text-sm font-bold text-gray-900">{displayName}</div>
                                         <div className="text-[10px] text-primary font-bold uppercase truncate max-w-[200px]" title={productsSummary}>
                                             {productsSummary}
                                         </div>
                                         {item.observaciones && (
-                                            <div className="text-[9px] text-gray-500 italic mt-0.5 truncate max-w-[300px]" title={item.observaciones}>
+                                            <div className={`mt-1 text-[10px] text-gray-600 leading-tight border-t border-gray-50 pt-1 ${
+                                                showFullNote 
+                                                    ? 'bg-amber-50/50 p-1.5 rounded italic font-medium text-gray-700 whitespace-pre-wrap max-w-md' 
+                                                    : 'truncate max-w-[300px] italic'
+                                            }`} title={!showFullNote ? item.observaciones : undefined}>
                                                 {item.observaciones}
                                             </div>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.fecha}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-extrabold text-gray-900 text-right">${item.total.toLocaleString('es-AR')}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 align-top">{item.fecha}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-extrabold text-gray-900 text-right align-top">${item.total.toLocaleString('es-AR')}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap align-top">
                                         <StatusBadge estado={item.estado} />
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center align-top" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex items-center justify-center space-x-3">
                                             {constructWhatsappUrl(item) && (
                                                 <a 
