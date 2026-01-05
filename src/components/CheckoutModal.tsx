@@ -1,10 +1,10 @@
-
 import React, { useState, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { IconX, IconMercadoPago, IconAlertCircle, IconCheck, IconCashBanknote, IconTruck } from './Icons';
 import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
 import { createPreference } from '../services/mercadoPagoService';
 import { OrderItem } from '@/types';
+import DatabaseErrorDisplay from './DatabaseErrorDisplay';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -60,7 +60,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
     });
     const [errors, setErrors] = useState<Record<string, string | null>>({});
     const [loading, setLoading] = useState(false);
-    const [apiError, setApiError] = useState<string | null>(null);
+    const [apiError, setApiError] = useState<any | null>(null);
     const [statusMessage, setStatusMessage] = useState<string>('');
     const [orderFinished, setOrderFinished] = useState(false);
 
@@ -112,7 +112,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
             if (!payerInfo[key as keyof typeof payerInfo]) formIsValid = false;
         }
         if (!formIsValid || Object.values(errors).some(e => e !== null)) {
-            setApiError("Por favor, completa todos los campos correctamente.");
+            setApiError({ message: "Por favor, completa todos los campos correctamente." });
             return;
         }
 
@@ -158,7 +158,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
 
         } catch (err: any) {
             console.error("Checkout error:", err);
-            setApiError(err.message || 'Error al procesar el pedido.');
+            setApiError(err);
             setLoading(false);
         }
     };
@@ -276,9 +276,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                     </div>
 
                     <div className="lg:w-2/5 bg-gray-50 border-l border-gray-200 p-6 flex flex-col justify-between overflow-y-auto">
-                        <div>
+                        <div className="flex flex-col flex-1">
                             <h4 className="text-lg font-bold text-gray-800 mb-4">Resumen de Compra</h4>
-                            <div className="bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-200 max-h-60 overflow-y-auto custom-scrollbar">
+                            
+                            <DatabaseErrorDisplay error={apiError} />
+
+                            <div className="bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-200 max-h-48 overflow-y-auto custom-scrollbar">
                                 {orderItems.map(item => (
                                     <div key={item.id} className="flex justify-between py-2 border-b last:border-0 border-gray-100 text-sm">
                                         <span className="font-medium text-gray-700">{item.quantity} x {item.nombre}</span>
@@ -309,13 +312,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                         </div>
 
                         <div className="mt-8">
-                            {apiError && (
-                                <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded text-sm flex items-start">
-                                    <IconAlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
-                                    <div>{apiError}</div>
-                                </div>
-                            )}
-
                             <button 
                                 onClick={handleProcessOrder} 
                                 disabled={loading}

@@ -22,7 +22,7 @@ const CrearVenta: React.FC = () => {
     const [clientes, setClientes] = useState<SimpleCliente[]>([]);
     const [productos, setProductos] = useState<Producto[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<any | null>(null);
 
     const [selectedClienteId, setSelectedClienteId] = useState<string>('');
     const [items, setItems] = useState<VentaItemUI[]>([]);
@@ -69,7 +69,7 @@ const CrearVenta: React.FC = () => {
                 setProductos(productosData);
                 setSelectedClienteId(''); // Default to Consumidor Final
             } catch (err: any) {
-                setError(`Error al cargar datos: ${err.message}`);
+                setError(err);
             } finally {
                 setLoading(false);
             }
@@ -141,7 +141,6 @@ const CrearVenta: React.FC = () => {
         }
     };
 
-    // FIX: Ensure 'field' is handled correctly based on its literal type to resolve TS errors.
     const handleItemChange = (index: number, field: keyof VentaItemUI, value: any) => {
         const newItems = [...items];
         const currentItem = newItems[index];
@@ -197,7 +196,7 @@ const CrearVenta: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (items.length === 0) {
-            setError('Debe agregar al menos un producto.');
+            setError({ message: 'Debe agregar al menos un producto.' });
             return;
         }
 
@@ -270,7 +269,9 @@ const CrearVenta: React.FC = () => {
             await createVenta(ventaData);
             navigate('/ventas');
         } catch (err: any) {
-            setError(`Error al guardar la venta: ${err.message}`);
+            console.error("Venta Save Error:", err);
+            // PASAR EL OBJETO COMPLETO PARA QUE DatabaseErrorDisplay MUESTRE EL SQL
+            setError(err);
         } finally {
             setIsSubmitting(false);
         }
@@ -278,7 +279,7 @@ const CrearVenta: React.FC = () => {
     
     const formatPrice = (price: number) => price.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
 
-    if (loading) return <div>Cargando...</div>;
+    if (loading) return <div className="p-8 text-center text-gray-500">Cargando formulario...</div>;
     
     return (
         <div>
