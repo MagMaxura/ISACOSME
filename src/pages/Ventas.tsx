@@ -1,15 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
 import { Venta } from '@/types';
-import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld, IconFileText } from '@/components/Icons';
+import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld, IconFileText, IconCheck } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta } from '@/services/ventasService';
 import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
-// Helper para extraer información estructurada de las observaciones de Mercado Pago
+// Tipos para las pestañas
+type SalesTab = 'PENDIENTE' | 'PAGADA' | 'ENVIADA' | 'OTROS';
+
+// Helper para extraer información estructurada de las observaciones
 const extractWebInfo = (obs: string) => {
-    if (!obs || !obs.startsWith('WEB MP')) return null;
+    if (!obs || (!obs.startsWith('WEB MP') && !obs.startsWith('WEB TRANSFERENCIA'))) return null;
     const info: any = {};
     const nameMatch = obs.match(/ - (.*?) \(DNI/);
     if (nameMatch) info.nombre = nameMatch[1];
@@ -65,7 +68,6 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
     return (
         <div className="bg-gray-50 border-x-2 border-b-2 border-primary/10 p-6 space-y-6 animate-fade-in-down rounded-b-lg shadow-inner">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Columna Izquierda: Información del Cliente */}
                 <div className="space-y-3">
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Información del Cliente</h4>
                     <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm space-y-1">
@@ -89,7 +91,6 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
                     </div>
                 </div>
 
-                {/* Columna Derecha: Datos de Entrega y Notas Relevantes */}
                 <div className="space-y-3">
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Datos de Entrega</h4>
                     <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm flex items-start">
@@ -106,7 +107,6 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
                         </div>
                     </div>
 
-                    {/* Nota del pedido redundante para asegurar visibilidad en caso de errores de extracción */}
                     {venta.observaciones && (
                         <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg shadow-sm">
                             <h5 className="text-[10px] font-bold text-amber-600 uppercase mb-1 flex items-center gap-1">
@@ -165,6 +165,9 @@ const Ventas: React.FC = () => {
     const [error, setError] = useState<any | null>(null);
     const [updatingStatus, setUpdatingStatus] = useState<Record<string, boolean>>({});
     const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+    
+    // Estado para la pestaña activa
+    const [activeTab, setActiveTab] = useState<SalesTab>('PENDIENTE');
 
     const canManage = profile?.roles?.some(role => ['superadmin', 'vendedor'].includes(role));
 
@@ -180,6 +183,16 @@ const Ventas: React.FC = () => {
             setLoading(false);
         }
     }, []);
+
+    // Agrupación de ventas por pestaña para los contadores
+    const groupedVentas = useMemo(() => {
+        return {
+            PENDIENTE: ventas.filter(v => v.estado === 'Pendiente'),
+            PAGADA: ventas.filter(v => v.estado === 'Pagada'),
+            ENVIADA: ventas.filter(v => v.estado === 'Enviada'),
+            OTROS: ventas.filter(v => !['Pendiente', 'Pagada', 'Enviada'].includes(v.estado)),
+        };
+    }, [ventas]);
 
     const toggleRow = (id: string) => {
         setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
@@ -210,44 +223,40 @@ const Ventas: React.FC = () => {
         }
     };
 
-    // Helper para obtener el nombre a mostrar (prioriza nombre de observaciones si es WEB)
     const getDisplayName = (venta: any) => {
-        if (venta.observaciones && venta.observaciones.startsWith('WEB MP')) {
+        if (venta.observaciones && (venta.observaciones.startsWith('WEB MP') || venta.observaciones.startsWith('WEB TRANSFERENCIA'))) {
             const webInfo = extractWebInfo(venta.observaciones);
             if (webInfo?.nombre) return webInfo.nombre;
         }
         return venta.clienteNombre || 'Consumidor Final';
     };
 
-    const getContactInfo = (venta: any) => {
-        let nombre = (getDisplayName(venta)).split(' ')[0];
+    const constructWhatsappUrl = (venta: any) => {
+        const displayName = getDisplayName(venta);
+        const firstName = displayName.split(' ')[0];
         let telefono = venta.clienteTelefono || '';
-        if (venta.observaciones && venta.observaciones.startsWith('WEB MP')) {
+        
+        if (venta.observaciones && (venta.observaciones.startsWith('WEB MP') || venta.observaciones.startsWith('WEB TRANSFERENCIA'))) {
             const webInfo = extractWebInfo(venta.observaciones);
             if (webInfo?.telefono) telefono = webInfo.telefono;
         }
-        return { nombre, telefono };
-    };
 
-    const constructWhatsappUrl = (venta: any) => {
-        const { nombre, telefono } = getContactInfo(venta);
         if (!telefono) return null;
         const cleanTel = telefono.replace(/\D/g, '');
         const fullTel = cleanTel.startsWith('54') ? cleanTel : '549' + cleanTel;
         
         let message = '';
         if (venta.estado === 'Carrito Abandonado') {
-            message = `Hola ${nombre}, vi que dejaste algunos productos de Isabella de la Perla en tu carrito 🛒. ¿Tuviste algún problema con el pago o alguna duda? ¡Estamos para ayudarte! ✨`;
+            message = `Hola ${firstName}, vi que dejaste algunos productos de Isabella de la Perla en tu carrito 🛒. ¿Tuviste algún problema con el pago? ✨`;
         } else if (venta.estado === 'Pagada') {
-            message = `Hola ${nombre}, ya registramos el pago de tu pedido en ${venta.tienda || ''}. ¡Pronto te avisaremos del envío!`;
+            message = `Hola ${firstName}, ya registramos el pago de tu pedido. ¡Pronto te avisaremos del envío!`;
         } else {
-            message = `Hola ${nombre}, recibimos tu pedido de la tienda ${venta.tienda || ''}. ¿Tuviste algún problema con el pago?`;
+            message = `Hola ${firstName}, recibimos tu pedido. ¿Tuviste algún problema con el pago?`;
         }
 
         return `https://wa.me/${fullTel}?text=${encodeURIComponent(message)}`;
     };
 
-    // Helper para generar el resumen de productos de una venta
     const getProductsSummary = (items: any[]) => {
         if (!items || items.length === 0) return 'Sin productos';
         return items.map(item => `${item.productoNombre} x ${item.cantidad}`).join(', ');
@@ -257,7 +266,7 @@ const Ventas: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <PageHeader title="Gestión de Pedidos Multi-Tienda">
+            <PageHeader title="Pedidos Multi-Tienda">
                 {canManage && (
                     <Link to="/ventas/crear" className="flex items-center bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark transition-all transform hover:scale-105">
                         <IconPlus className="h-5 w-5 mr-2" />
@@ -267,6 +276,32 @@ const Ventas: React.FC = () => {
             </PageHeader>
             <DatabaseErrorDisplay error={error} />
             
+            {/* Sistema de Pestañas (Tabs) */}
+            <div className="flex border-b border-gray-200 gap-2 sm:gap-6 overflow-x-auto pb-px">
+                {[
+                    { id: 'PENDIENTE', label: 'Pendientes', icon: <IconClock className="w-4 h-4" /> },
+                    { id: 'PAGADA', label: 'Pagados', icon: <IconCheck className="w-4 h-4" /> },
+                    { id: 'ENVIADA', label: 'Enviados', icon: <IconTruck className="w-4 h-4" /> },
+                    { id: 'OTROS', label: 'Otros', icon: <IconFileText className="w-4 h-4" /> },
+                ].map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as SalesTab)}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-bold transition-all whitespace-nowrap border-b-2 ${
+                            activeTab === tab.id 
+                                ? 'border-primary text-primary bg-primary/5' 
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`}
+                    >
+                        {tab.icon}
+                        {tab.label}
+                        <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab.id ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
+                            {groupedVentas[tab.id as SalesTab].length}
+                        </span>
+                    </button>
+                ))}
+            </div>
+
             <div className="bg-surface rounded-xl shadow-lg border border-gray-100 overflow-hidden">
                 <table className="min-w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
@@ -282,9 +317,9 @@ const Ventas: React.FC = () => {
                     <tbody className="bg-white divide-y divide-gray-100">
                         {loading ? (
                             <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando pedidos...</td></tr>
-                        ) : ventas.length === 0 ? (
-                            <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No hay pedidos.</td></tr>
-                        ) : ventas.map((item) => {
+                        ) : groupedVentas[activeTab].length === 0 ? (
+                            <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No hay pedidos en esta categoría.</td></tr>
+                        ) : groupedVentas[activeTab].map((item) => {
                             const displayName = getDisplayName(item);
                             const productsSummary = getProductsSummary(item.items);
                             return (
@@ -301,10 +336,14 @@ const Ventas: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm font-bold text-gray-900">{displayName}</div>
-                                        {/* RESUMEN DE PRODUCTOS: Se muestra aquí para facilitar el despacho rápido */}
                                         <div className="text-[10px] text-primary font-bold uppercase truncate max-w-[200px]" title={productsSummary}>
                                             {productsSummary}
                                         </div>
+                                        {item.observaciones && (
+                                            <div className="text-[9px] text-gray-500 italic mt-0.5 truncate max-w-[300px]" title={item.observaciones}>
+                                                {item.observaciones}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.fecha}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-extrabold text-gray-900 text-right">${item.total.toLocaleString('es-AR')}</td>
