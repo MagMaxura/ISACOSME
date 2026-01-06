@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
-import { Venta } from '@/types';
-import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld, IconFileText, IconCheck, IconUsers } from '@/components/Icons';
+import { Venta, SimpleCliente } from '@/types';
+import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld, IconFileText, IconCheck, IconUsers, IconUserPlus, IconUserCheck, IconArrowLeft } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta } from '@/services/ventasService';
+import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta, assignClientToVenta } from '@/services/ventasService';
+import { fetchSimpleClientes, createCliente } from '@/services/clientesService';
 import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
 // Tipos para las pestañas
@@ -13,7 +14,7 @@ type SalesTab = 'PENDIENTE' | 'CONTACTADO' | 'PAGADA' | 'ENVIADA' | 'OTROS';
 // Helper para extraer información estructurada de las observaciones
 const extractWebInfo = (obs: string) => {
     if (!obs || (!obs.startsWith('WEB MP') && !obs.startsWith('WEB TRANSFERENCIA'))) return null;
-    const info: any = {};
+    const info: any = { raw: obs };
     const nameMatch = obs.match(/ - (.*?) \(DNI/);
     if (nameMatch) info.nombre = nameMatch[1];
     const dniMatch = obs.match(/\(DNI:\s*(\d+)\)/);
@@ -21,7 +22,16 @@ const extractWebInfo = (obs: string) => {
     const telMatch = obs.match(/Tel:\s*(\d+)/);
     if (telMatch) info.telefono = telMatch[1];
     const addrMatch = obs.match(/Dirección:\s*(.*)/);
-    if (addrMatch) info.direccionCompleta = addrMatch[1];
+    if (addrMatch) {
+        info.direccionCompleta = addrMatch[1];
+        // Intentar parsear dirección
+        const parts = info.direccionCompleta.split(',').map((p: string) => p.trim());
+        info.direccion = parts[0] || '';
+        info.localidad = parts[1] || '';
+        info.provincia = parts[2] || '';
+        const cpMatch = info.direccionCompleta.match(/\(CP:\s*(\d+)\)/);
+        if (cpMatch) info.codigoPostal = cpMatch[1];
+    }
     const shipMatch = obs.match(/\[(.*?)\]/);
     if (shipMatch) info.envioStatus = shipMatch[1];
     return info;
@@ -59,6 +69,86 @@ const StoreBadge: React.FC<{ tienda: string | null | undefined }> = ({ tienda })
             <IconWorld className="w-2.5 h-2.5" />
             {tienda}
         </span>
+    );
+};
+
+// MODAL PARA VINCULAR CLIENTE
+const AssignClientModal: React.FC<{
+    venta: Venta;
+    onClose: () => void;
+    onSuccess: () => void;
+}> = ({ venta, onClose, onSuccess }) => {
+    const [clients, setClients] = useState<SimpleCliente[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetchSimpleClientes()
+            .then(setClients)
+            .catch(err => setError(err.message))
+            .finally(() => setLoading(false));
+    }, []);
+
+    const filteredClients = useMemo(() => {
+        return clients.filter(c => 
+            c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            (c.email || '').toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [clients, searchTerm]);
+
+    const handleAssign = async (clientId: string) => {
+        setLoading(true);
+        try {
+            await assignClientToVenta(venta.id, clientId);
+            onSuccess();
+        } catch (err: any) {
+            setError(err.message);
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[100] p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                    <h3 className="font-bold text-gray-800">Vincular a Cliente</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><IconX className="w-5 h-5" /></button>
+                </div>
+                <div className="p-4 border-b">
+                    <input 
+                        type="text" 
+                        placeholder="Buscar cliente por nombre o email..." 
+                        className="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        autoFocus
+                    />
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                    {loading ? (
+                        <div className="text-center py-8 text-gray-400 text-sm">Cargando clientes...</div>
+                    ) : filteredClients.length > 0 ? (
+                        filteredClients.map(c => (
+                            <button 
+                                key={c.id} 
+                                onClick={() => handleAssign(c.id)}
+                                className="w-full text-left p-3 rounded-lg hover:bg-violet-50 transition-colors flex justify-between items-center group"
+                            >
+                                <div>
+                                    <p className="font-bold text-gray-800 group-hover:text-primary">{c.nombre}</p>
+                                    <p className="text-xs text-gray-500">{c.email || 'Sin email'}</p>
+                                </div>
+                                <IconUserCheck className="w-4 h-4 text-gray-300 group-hover:text-primary" />
+                            </button>
+                        ))
+                    ) : (
+                        <div className="text-center py-8 text-gray-400 text-sm">No se encontraron clientes.</div>
+                    )}
+                </div>
+                {error && <div className="p-3 bg-red-50 text-red-600 text-xs">{error}</div>}
+            </div>
+        </div>
     );
 };
 
@@ -167,6 +257,10 @@ const Ventas: React.FC = () => {
     const [updatingStatus, setUpdatingStatus] = useState<Record<string, boolean>>({});
     const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
     
+    // Estados para vinculación
+    const [selectedVentaForAssign, setSelectedVentaForAssign] = useState<Venta | null>(null);
+    const [creatingClientId, setCreatingClientId] = useState<string | null>(null);
+
     // Estado para la pestaña activa y buscador
     const [activeTab, setActiveTab] = useState<SalesTab>('PENDIENTE');
     const [searchTerm, setSearchTerm] = useState('');
@@ -230,6 +324,54 @@ const Ventas: React.FC = () => {
             } catch (err: any) {
                 setError(err);
             }
+        }
+    };
+
+    const handleCreateClientFromWeb = async (venta: Venta) => {
+        const info = extractWebInfo(venta.observaciones || '');
+        if (!info) return;
+
+        if (!window.confirm(`¿Quieres crear el cliente "${info.nombre}" en la base de datos y vincular este pedido?`)) return;
+
+        setCreatingClientId(venta.id);
+        try {
+            // Creamos el cliente
+            const newClientData = {
+                nombre: info.nombre,
+                telefono: info.telefono,
+                dni: info.dni,
+                direccion: info.direccion,
+                localidad: info.localidad,
+                provincia: info.provincia,
+                codigoPostal: info.codigoPostal,
+                email: null, // No viene en la nota típicamente
+                rubro: 'Venta Minorista Web',
+            };
+            
+            // Usamos el servicio existente de clientes
+            await createCliente(newClientData as any);
+            
+            // Necesitamos el ID del cliente recién creado. 
+            // Para simplicidad, volvemos a cargar ventas y pedimos al usuario que lo vincule o 
+            // mejoramos el servicio para que devuelva el ID.
+            // Dado el sistema actual, lo más robusto es recargar y pedir que elija, 
+            // pero vamos a intentar buscarlo por DNI o Nombre.
+            
+            const simpleClients = await fetchSimpleClientes();
+            const found = simpleClients.find(c => c.nombre === info.nombre);
+            
+            if (found) {
+                await assignClientToVenta(venta.id, found.id);
+                alert("Cliente creado y pedido vinculado con éxito.");
+                await loadVentas();
+            } else {
+                alert("Cliente creado. Por favor vincúlalo manualmente ahora.");
+                setSelectedVentaForAssign(venta);
+            }
+        } catch (err: any) {
+            alert("Error: " + err.message);
+        } finally {
+            setCreatingClientId(null);
         }
     };
 
@@ -361,6 +503,9 @@ const Ventas: React.FC = () => {
                         ) : filteredVentas[activeTab].map((item) => {
                             const displayName = getDisplayName(item);
                             const productsSummary = getProductsSummary(item.items);
+                            const webInfo = extractWebInfo(item.observaciones || '');
+                            const isConsumidorFinal = item.clienteNombre === 'Consumidor Final';
+
                             // Verificamos si en esta pestaña mostramos la nota completa
                             const showFullNote = activeTab === 'PENDIENTE' || activeTab === 'CONTACTADO' || activeTab === 'ENVIADA';
 
@@ -377,7 +522,34 @@ const Ventas: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 align-top">
-                                        <div className="text-sm font-bold text-gray-900">{displayName}</div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-sm font-bold text-gray-900">{displayName}</div>
+                                            {isConsumidorFinal && (
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setSelectedVentaForAssign(item); }}
+                                                        className="p-1 text-gray-400 hover:text-primary transition-colors"
+                                                        title="Vincular a cliente existente"
+                                                    >
+                                                        <IconUserCheck className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    {webInfo && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleCreateClientFromWeb(item); }}
+                                                            disabled={creatingClientId === item.id}
+                                                            className="p-1 text-gray-400 hover:text-primary transition-colors"
+                                                            title="Crear nuevo cliente con estos datos"
+                                                        >
+                                                            {creatingClientId === item.id ? (
+                                                                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                                                            ) : (
+                                                                <IconUserPlus className="w-3.5 h-3.5" />
+                                                            )}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                         <div className="text-[10px] text-primary font-bold uppercase truncate max-w-[200px]" title={productsSummary}>
                                             {productsSummary}
                                         </div>
@@ -435,6 +607,16 @@ const Ventas: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+
+            {/* MODAL DE VINCULACIÓN */}
+            {selectedVentaForAssign && (
+                <AssignClientModal 
+                    venta={selectedVentaForAssign} 
+                    onClose={() => setSelectedVentaForAssign(null)} 
+                    onSuccess={() => { setSelectedVentaForAssign(null); loadVentas(); }}
+                />
+            )}
+
             <style>{`
                 .th-style { padding: 1rem 1.5rem; text-align: left; font-size: 0.7rem; font-weight: 800; color: #6B7280; text-transform: uppercase; letter-spacing: 0.1em; }
                 @keyframes fade-in-down { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }

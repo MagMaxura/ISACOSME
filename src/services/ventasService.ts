@@ -130,7 +130,7 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
                     tipo_de_cambio: ventaData.tipoDeCambio,
                     pago_1: ventaData.pago1,
                     observaciones: ventaData.observaciones,
-                    punto_de_venta: ventaData.puntoDeVenta,
+                    punto_de_venta: ventaData.punto_de_venta,
                     tienda: ventaData.tienda,
                 }
             ])
@@ -177,7 +177,7 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
             throw {
                 ...error,
                 message: "La base de datos no reconoce los nuevos estados ('Carrito Abandonado' o 'Contactado').",
-                hint: "Ejecuta este script SQL para actualizar el tipo ENUM de estados de venta.",
+                hint: "Ejecuta el script SQL para actualizar el tipo ENUM de estados de venta.",
                 sql: `ALTER TYPE public.venta_estado ADD VALUE IF NOT EXISTS 'Carrito Abandonado';
                       ALTER TYPE public.venta_estado ADD VALUE IF NOT EXISTS 'Contactado';`
             };
@@ -216,13 +216,27 @@ export const updateVentaStatus = async (ventaId: string, newStatus: Venta['estad
                 throw {
                     ...error,
                     message: "La base de datos no reconoce el nuevo estado de venta.",
-                    hint: "Ejecuta este script SQL para actualizar el tipo ENUM.",
+                    hint: "Ejecuta el script SQL para actualizar el tipo ENUM.",
                     sql: `ALTER TYPE public.venta_estado ADD VALUE IF NOT EXISTS 'Contactado';`
                 };
             }
             throw error;
         }
     } catch (error: any) {
+        throw error;
+    }
+};
+
+// FIX: Added explicit export to resolve the import error in src/pages/Ventas.tsx.
+export const assignClientToVenta = async (ventaId: string, clienteId: string): Promise<void> => {
+    try {
+        const { error } = await supabase
+            .from('ventas')
+            .update({ cliente_id: clienteId })
+            .eq('id', ventaId);
+        if (error) throw error;
+    } catch (error: any) {
+        console.error(`[${SERVICE_NAME}] Error assigning client to sale:`, error);
         throw error;
     }
 };
