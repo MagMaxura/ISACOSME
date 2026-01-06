@@ -8,7 +8,7 @@ import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta } fro
 import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 
 // Tipos para las pestañas
-type SalesTab = 'PENDIENTE' | 'PAGADA' | 'ENVIADA' | 'OTROS';
+type SalesTab = 'PENDIENTE' | 'CONTACTADO' | 'PAGADA' | 'ENVIADA' | 'OTROS';
 
 // Helper para extraer información estructurada de las observaciones
 const extractWebInfo = (obs: string) => {
@@ -31,6 +31,7 @@ const extractWebInfo = (obs: string) => {
 const StatusBadge: React.FC<{ estado: Venta['estado'] }> = ({ estado }) => {
     const configs: Record<string, string> = {
         'Pendiente': 'bg-amber-100 text-amber-800 border-amber-200',
+        'Contactado': 'bg-indigo-100 text-indigo-800 border-indigo-200',
         'Pagada': 'bg-emerald-100 text-emerald-800 border-emerald-200',
         'Enviada': 'bg-sky-100 text-sky-800 border-sky-200',
         'Cancelada': 'bg-rose-100 text-rose-800 border-rose-200',
@@ -196,9 +197,10 @@ const Ventas: React.FC = () => {
 
         return {
             PENDIENTE: baseFiltered.filter(v => v.estado === 'Pendiente'),
+            CONTACTADO: baseFiltered.filter(v => v.estado === 'Contactado'),
             PAGADA: baseFiltered.filter(v => v.estado === 'Pagada'),
             ENVIADA: baseFiltered.filter(v => v.estado === 'Enviada'),
-            OTROS: baseFiltered.filter(v => !['Pendiente', 'Pagada', 'Enviada'].includes(v.estado)),
+            OTROS: baseFiltered.filter(v => !['Pendiente', 'Contactado', 'Pagada', 'Enviada'].includes(v.estado)),
         };
     }, [ventas, searchTerm]);
 
@@ -258,6 +260,8 @@ const Ventas: React.FC = () => {
             message = `Hola ${firstName}, vi que dejaste algunos productos de Isabella de la Perla en tu carrito 🛒. ¿Tuviste algún problema con el pago? ✨`;
         } else if (venta.estado === 'Pagada') {
             message = `Hola ${firstName}, ya registramos el pago de tu pedido. ¡Pronto te avisaremos del envío!`;
+        } else if (venta.estado === 'Contactado') {
+            message = `Hola ${firstName}, ¡un gusto seguir en contacto! ¿Pudiste ver los detalles del pedido que hablamos? 😊`;
         } else {
             message = `Hola ${firstName}, recibimos tu pedido. ¿Tuviste algún problema con el pago?`;
         }
@@ -289,6 +293,7 @@ const Ventas: React.FC = () => {
                 <div className="flex gap-2 sm:gap-6 overflow-x-auto pb-px">
                     {[
                         { id: 'PENDIENTE', label: 'Pendientes', icon: <IconClock className="w-4 h-4" /> },
+                        { id: 'CONTACTADO', label: 'Contactados', icon: <IconBrandWhatsapp className="w-4 h-4" /> },
                         { id: 'PAGADA', label: 'Pagados', icon: <IconCheck className="w-4 h-4" /> },
                         { id: 'ENVIADA', label: 'Enviados', icon: <IconTruck className="w-4 h-4" /> },
                         { id: 'OTROS', label: 'Otros', icon: <IconFileText className="w-4 h-4" /> },
@@ -357,7 +362,7 @@ const Ventas: React.FC = () => {
                             const displayName = getDisplayName(item);
                             const productsSummary = getProductsSummary(item.items);
                             // Verificamos si en esta pestaña mostramos la nota completa
-                            const showFullNote = activeTab === 'PENDIENTE' || activeTab === 'ENVIADA';
+                            const showFullNote = activeTab === 'PENDIENTE' || activeTab === 'CONTACTADO' || activeTab === 'ENVIADA';
 
                             return (
                             <React.Fragment key={item.id}>
@@ -409,6 +414,7 @@ const Ventas: React.FC = () => {
                                                 className="p-1.5 bg-gray-50 border border-gray-200 rounded-lg text-[10px] font-bold uppercase focus:ring-primary"
                                             >
                                                 <option value="Pendiente">Pendiente</option>
+                                                <option value="Contactado">Contactado</option>
                                                 <option value="Pagada">Pagada</option>
                                                 <option value="Enviada">Enviada</option>
                                                 <option value="Carrito Abandonado">Abandonado</option>

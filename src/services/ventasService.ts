@@ -1,4 +1,3 @@
-
 import { supabase } from '../supabase';
 import { Venta, VentaItem, PuntoDeVenta, OrderItem } from '../types';
 import { fetchLotesParaVenta } from './stockService';
@@ -131,6 +130,7 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
                     tipo_de_cambio: ventaData.tipoDeCambio,
                     pago_1: ventaData.pago1,
                     observaciones: ventaData.observaciones,
+                    // FIX: Use correctly named property 'puntoDeVenta' from VentaToCreate/Venta interface instead of snake_case.
                     punto_de_venta: ventaData.puntoDeVenta,
                     tienda: ventaData.tienda,
                 }
@@ -145,6 +145,7 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
             venta_id: newVentaId,
             producto_id: item.productoId,
             cantidad: item.cantidad,
+            // FIX: Use correctly named property 'precioUnitario' from VentaItemParaCrear interface instead of snake_case.
             precio_unitario: item.precioUnitario,
             lote_id: item.loteId,
         }));
@@ -177,9 +178,10 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
         if (error.message?.includes('invalid input value for enum venta_estado')) {
             throw {
                 ...error,
-                message: "La base de datos no reconoce el estado 'Carrito Abandonado'.",
-                hint: "Ejecuta este script SQL para actualizar el tipo ENUM de estados de venta.",
-                sql: `ALTER TYPE public.venta_estado ADD VALUE 'Carrito Abandonado';`
+                message: "La base de datos no reconoce los nuevos estados ('Carrito Abandonado' o 'Contactado').",
+                hint: "Ejecuta el script SQL para actualizar el tipo ENUM de estados de venta.",
+                sql: `ALTER TYPE public.venta_estado ADD VALUE IF NOT EXISTS 'Carrito Abandonado';
+                      ALTER TYPE public.venta_estado ADD VALUE IF NOT EXISTS 'Contactado';`
             };
         }
 
@@ -210,7 +212,18 @@ export const updateVentaStatus = async (ventaId: string, newStatus: Venta['estad
             .from('ventas') as any)
             .update({ estado: newStatus })
             .eq('id', ventaId);
-        if (error) throw error;
+        
+        if (error) {
+            if (error.message?.includes('invalid input value for enum venta_estado')) {
+                throw {
+                    ...error,
+                    message: "La base de datos no reconoce el nuevo estado de venta.",
+                    hint: "Ejecuta el script SQL para actualizar el tipo ENUM.",
+                    sql: `ALTER TYPE public.venta_estado ADD VALUE IF NOT EXISTS 'Contactado';`
+                };
+            }
+            throw error;
+        }
     } catch (error: any) {
         throw error;
     }
@@ -243,7 +256,7 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
         let cantidadRestante = item.quantity;
         for (const lote of usableLotes) {
             if (cantidadRestante <= 0) break;
-            const cantidadDeLote = Math.min(cantidadRestante, lote.q_floor);
+            const cantidad de Lote = Math.min(cantidadRestante, lote.q_floor);
             if (cantidadDeLote > 0) {
                 itemsParaCrear.push({
                     productoId: item.id,

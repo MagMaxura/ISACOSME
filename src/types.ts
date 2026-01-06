@@ -135,7 +135,7 @@ export interface Venta {
   iva: number;
   total: number;
   tipo: 'Venta' | 'Consignacion';
-  estado: 'Pendiente' | 'Pagada' | 'Enviada' | 'Cancelada' | 'Carrito Abandonado';
+  estado: 'Pendiente' | 'Contactado' | 'Pagada' | 'Enviada' | 'Cancelada' | 'Carrito Abandonado';
   puntoDeVenta?: PuntoDeVenta | null;
   tienda?: 'Isabella' | 'Ultrashine' | 'Bodytan' | string | null;
   costoTotal?: number;
