@@ -27,8 +27,8 @@ const Comex: React.FC = () => {
     const [usdExchangeRate, setUsdExchangeRate] = useState<number>(1000);
     const [brlExchangeRate, setBrlExchangeRate] = useState<number>(180);
 
-    // Permitir gestión a Superadmin y al rol específico de Comex
-    const canManage = profile?.roles?.some(role => ['superadmin', 'comex'].includes(role));
+    // FIX: El botón y el panel ahora solo están disponibles para superadmin
+    const isSuperAdmin = profile?.roles?.includes('superadmin');
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -162,7 +162,7 @@ const Comex: React.FC = () => {
             <PageHeader title="COMEX - Cotización Internacional" />
             <DatabaseErrorDisplay error={error} />
             
-            {canManage && (
+            {isSuperAdmin && (
                 <div className="bg-surface p-6 rounded-xl shadow-md mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6 border-l-4 border-primary items-center">
                     <div className="flex items-center gap-4">
                         <div className="p-3 bg-violet-100 rounded-full text-primary">
@@ -170,7 +170,7 @@ const Comex: React.FC = () => {
                         </div>
                         <div>
                             <h4 className="font-bold text-gray-800">Panel de Cotizaciones</h4>
-                            <p className="text-xs text-gray-500">Define las tasas de cambio para exportación (Persistente).</p>
+                            <p className="text-xs text-gray-500">Define las tasas de cambio para exportación (Solo Administradores).</p>
                         </div>
                     </div>
                     
