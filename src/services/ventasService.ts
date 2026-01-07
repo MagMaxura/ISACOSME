@@ -130,7 +130,8 @@ export const createVenta = async (ventaData: VentaToCreate): Promise<string> => 
                     tipo_de_cambio: ventaData.tipoDeCambio,
                     pago_1: ventaData.pago1,
                     observaciones: ventaData.observaciones,
-                    punto_de_venta: ventaData.punto_de_venta,
+                    // FIX: Use correctly named property from VentaToCreate/Venta interface to avoid line 133 error.
+                    punto_de_venta: ventaData.puntoDeVenta,
                     tienda: ventaData.tienda,
                 }
             ])
@@ -268,7 +269,7 @@ export const prepareVentaItemsFromCart = async (cartItems: OrderItem[]): Promise
         let cantidadRestante = item.quantity;
         for (const lote of usableLotes) {
             if (cantidadRestante <= 0) break;
-            const cantidadDeLote = Math.min(cantidadRestante, lote.q_floor);
+            const cantidad deLote = Math.min(cantidadRestante, lote.q_floor);
             if (cantidadDeLote > 0) {
                 itemsParaCrear.push({
                     productoId: item.id,
