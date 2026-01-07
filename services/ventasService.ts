@@ -190,6 +190,20 @@ export const updateVentaStatus = async (ventaId: string, newStatus: Venta['estad
     }
 };
 
+// FIX: Added missing assignClientToVenta export to resolve import error in Ventas.tsx.
+export const assignClientToVenta = async (ventaId: string, clienteId: string): Promise<void> => {
+    try {
+        const { error } = await supabase
+            .from('ventas')
+            .update({ cliente_id: clienteId })
+            .eq('id', ventaId);
+        if (error) throw error;
+    } catch (error: any) {
+        console.error(`[${SERVICE_NAME}] Error assigning client to sale:`, error);
+        throw error;
+    }
+};
+
 export const deleteVenta = async (ventaId: string): Promise<void> => {
     console.log(`[${SERVICE_NAME}] Deleting sale ID: ${ventaId} and restoring stock via RPC.`);
     try {

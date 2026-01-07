@@ -3,9 +3,10 @@ import PageHeader from '../components/PageHeader';
 import Table, { Column } from '../components/Table';
 import { Producto } from '../types';
 import { fetchProductosConStock } from '../services/productosService';
+import { fetchCotizaciones, saveCotizaciones } from '../services/ajustesService';
 import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
 import { useAuth } from '../contexts/AuthContext';
-import { IconWorld } from '../components/Icons';
+import { IconWorld, IconDeviceFloppy, IconCheck } from '../components/Icons';
 
 interface ComexProducto extends Producto {
     precioUSD: number;
@@ -19,34 +20,58 @@ const Comex: React.FC = () => {
     const { profile } = useAuth();
     const [productos, setProductos] = useState<Producto[]>([]);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
     const [error, setError] = useState<any | null>(null);
+    
     const [usdExchangeRate, setUsdExchangeRate] = useState<number>(1000);
     const [brlExchangeRate, setBrlExchangeRate] = useState<number>(180);
 
-    const isSuperAdmin = profile?.roles?.includes('superadmin');
+    // Permitir gestión a Superadmin y al rol específico de Comex
+    const canManage = profile?.roles?.some(role => ['superadmin', 'comex'].includes(role));
 
     useEffect(() => {
-        const loadProductos = async () => {
+        const loadInitialData = async () => {
             setLoading(true);
             setError(null);
             try {
-                const data = await fetchProductosConStock();
-                setProductos(data);
+                const [productosData, ratesData] = await Promise.all([
+                    fetchProductosConStock(),
+                    fetchCotizaciones()
+                ]);
+                setProductos(productosData);
+                setUsdExchangeRate(ratesData.usd);
+                setBrlExchangeRate(ratesData.brl);
             } catch (err: any) {
                 setError(err);
             } finally {
                 setLoading(false);
             }
         };
-        loadProductos();
+        loadInitialData();
     }, []);
+
+    const handleSaveRates = async () => {
+        setSaving(true);
+        setSaveSuccess(false);
+        try {
+            await saveCotizaciones({ usd: usdExchangeRate, brl: brlExchangeRate });
+            setSaveSuccess(true);
+            // El mensaje de éxito desaparece tras 3 segundos
+            setTimeout(() => setSaveSuccess(false), 3000);
+        } catch (err: any) {
+            setError(err);
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const comexData = useMemo((): ComexProducto[] => {
         return productos.map(p => {
             const hasLogisticsData = p.boxLengthCm && p.boxWidthCm && p.boxHeightCm && p.productWeightKg && p.productsPerBox;
 
-            const precioUSD = (p.precioMayorista || 0) / usdExchangeRate;
-            const precioBRL = (p.precioMayorista || 0) / brlExchangeRate;
+            const precioUSD = (p.precioMayorista || 0) / (usdExchangeRate || 1);
+            const precioBRL = (p.precioMayorista || 0) / (brlExchangeRate || 1);
             
             const boxVolumeM3 = hasLogisticsData
                 ? (p.boxLengthCm! * p.boxWidthCm! * p.boxHeightCm!) / 1_000_000
@@ -137,47 +162,63 @@ const Comex: React.FC = () => {
             <PageHeader title="COMEX - Cotización Internacional" />
             <DatabaseErrorDisplay error={error} />
             
-            {isSuperAdmin && (
-                <div className="bg-surface p-6 rounded-xl shadow-md mb-8 grid grid-cols-1 md:grid-cols-2 gap-6 border-l-4 border-primary">
+            {canManage && (
+                <div className="bg-surface p-6 rounded-xl shadow-md mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6 border-l-4 border-primary items-center">
                     <div className="flex items-center gap-4">
                         <div className="p-3 bg-violet-100 rounded-full text-primary">
                             <IconWorld className="h-6 w-6" />
                         </div>
                         <div>
                             <h4 className="font-bold text-gray-800">Panel de Cotizaciones</h4>
-                            <p className="text-xs text-gray-500">Define las tasas de cambio para exportación.</p>
+                            <p className="text-xs text-gray-500">Define las tasas de cambio para exportación (Persistente).</p>
                         </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="relative">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Cotización Dólar (ARS)</label>
-                            <div className="relative mt-1">
-                                <span className="absolute left-3 inset-y-0 flex items-center text-gray-500 font-bold">$</span>
-                                <input
-                                    type="number"
-                                    value={usdExchangeRate}
-                                    onChange={(e) => setUsdExchangeRate(parseFloat(e.target.value) || 1)}
-                                    className="w-full pl-7 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary outline-none font-semibold"
-                                    min="1"
-                                    step="0.1"
-                                />
+                    <div className="flex flex-col sm:flex-row gap-4 items-end">
+                        <div className="grid grid-cols-2 gap-4 flex-grow w-full">
+                            <div className="relative">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">USD (en ARS)</label>
+                                <div className="relative mt-1">
+                                    <span className="absolute left-3 inset-y-0 flex items-center text-gray-500 font-bold">$</span>
+                                    <input
+                                        type="number"
+                                        value={usdExchangeRate}
+                                        onChange={(e) => setUsdExchangeRate(parseFloat(e.target.value) || 1)}
+                                        className="w-full pl-7 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary outline-none font-semibold"
+                                        min="1"
+                                        step="0.1"
+                                    />
+                                </div>
+                            </div>
+                            <div className="relative">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">BRL (en ARS)</label>
+                                <div className="relative mt-1">
+                                    <span className="absolute left-3 inset-y-0 flex items-center text-gray-500 font-bold">$</span>
+                                    <input
+                                        type="number"
+                                        value={brlExchangeRate}
+                                        onChange={(e) => setBrlExchangeRate(parseFloat(e.target.value) || 1)}
+                                        className="w-full pl-7 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary outline-none font-semibold"
+                                        min="1"
+                                        step="0.1"
+                                    />
+                                </div>
                             </div>
                         </div>
-                        <div className="relative">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Cotización Real (ARS)</label>
-                            <div className="relative mt-1">
-                                <span className="absolute left-3 inset-y-0 flex items-center text-gray-500 font-bold">$</span>
-                                <input
-                                    type="number"
-                                    value={brlExchangeRate}
-                                    onChange={(e) => setBrlExchangeRate(parseFloat(e.target.value) || 1)}
-                                    className="w-full pl-7 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary outline-none font-semibold"
-                                    min="1"
-                                    step="0.1"
-                                />
-                            </div>
-                        </div>
+                        
+                        <button
+                            onClick={handleSaveRates}
+                            disabled={saving}
+                            className={`flex items-center justify-center px-6 py-2 rounded-lg text-white font-bold transition-all h-[42px] min-w-[140px] w-full sm:w-auto ${saveSuccess ? 'bg-green-500' : 'bg-primary hover:bg-primary-dark shadow-md active:scale-95'}`}
+                        >
+                            {saving ? (
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            ) : saveSuccess ? (
+                                <><IconCheck className="w-5 h-5 mr-2" /> ¡Fijado!</>
+                            ) : (
+                                <><IconDeviceFloppy className="w-5 h-5 mr-2" /> Fijar Precios</>
+                            )}
+                        </button>
                     </div>
                 </div>
             )}
