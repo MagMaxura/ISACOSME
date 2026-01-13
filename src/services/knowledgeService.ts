@@ -11,27 +11,25 @@ const handleKnowledgeError = (error: any) => {
     
     if (isRecursion) {
         return {
-            message: "Error de Seguridad Crítico: Bucle en tabla de Perfiles.",
-            details: "La base de datos detectó que las reglas de acceso (RLS) se llaman unas a otras sin fin. Esto ocurre usualmente en la tabla 'profiles'.",
-            hint: "Es necesario resetear las políticas de la tabla 'profiles' además de las de 'knowledge_base'.",
-            sql: `-- EJECUTA ESTO PARA DESBLOQUEAR TODO:
-CREATE OR REPLACE FUNCTION public.es_staff_seguro() RETURNS boolean AS $$
-BEGIN
-  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND ('superadmin' = ANY(roles) OR 'vendedor' = ANY(roles)));
-END; $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+            message: "Error de Seguridad: Bucle en permisos detectado.",
+            details: "La base de datos tiene un problema de recursión. Para solucionarlo, debemos asegurar que la función que ya usas tenga la propiedad SECURITY DEFINER.",
+            hint: "Ejecuta este SQL para arreglar tu función actual y la política de acceso:",
+            sql: `-- 1. Asegurar que TU función existente sea segura
+ALTER FUNCTION public.es_staff_seguro() SECURITY DEFINER;
 
-DROP POLICY IF EXISTS "Acceso seguro perfiles" ON public.profiles;
-CREATE POLICY "Acceso seguro perfiles" ON public.profiles FOR SELECT TO authenticated USING ((id = auth.uid()) OR (public.es_staff_seguro()));
-
+-- 2. Aplicar política a la Base de Conocimiento usando TU función
 DROP POLICY IF EXISTS "Escritura base conocimiento" ON public.knowledge_base;
-CREATE POLICY "Escritura base conocimiento" ON public.knowledge_base FOR ALL TO authenticated USING (public.es_staff_seguro());`
+CREATE POLICY "Escritura base conocimiento" 
+ON public.knowledge_base FOR ALL 
+TO authenticated 
+USING (public.es_staff_seguro());`
         };
     }
 
     if (error.message?.includes('relation "knowledge_base" does not exist')) {
         return {
             message: "La tabla 'knowledge_base' no existe.",
-            hint: "Crea la tabla ejecutando el script SQL inicial.",
+            hint: "Crea la tabla básica para empezar a cargar información.",
             sql: `CREATE TABLE public.knowledge_base (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at timestamptz DEFAULT now(),
@@ -40,7 +38,7 @@ CREATE POLICY "Escritura base conocimiento" ON public.knowledge_base FOR ALL TO 
     categoria text DEFAULT 'General'
 );
 ALTER TABLE public.knowledge_base ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Lectura" ON public.knowledge_base FOR SELECT TO authenticated USING (true);`
+CREATE POLICY "Lectura libre" ON public.knowledge_base FOR SELECT TO authenticated USING (true);`
         };
     }
 
