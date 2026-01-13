@@ -5,8 +5,10 @@ import { IconPlus, IconX, IconPencil, IconTrash, IconMessage2, IconFileText, Ico
 import { KnowledgeItem } from '@/types';
 import { fetchKnowledgeBase, createKnowledgeItem, updateKnowledgeItem, deleteKnowledgeItem } from '@/services/knowledgeService';
 import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
+import { useAuth } from '@/contexts/AuthContext';
 
 const KnowledgeBase: React.FC = () => {
+    const { profile } = useAuth();
     const [items, setItems] = useState<KnowledgeItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any | null>(null);
@@ -20,6 +22,11 @@ const KnowledgeBase: React.FC = () => {
     });
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Permisos de edición: solo Staff
+    const canEdit = profile?.roles?.some(role => 
+        ['superadmin', 'vendedor', 'administrativo', 'analitico'].includes(role)
+    );
 
     const categories = ['General', 'Envíos', 'Pagos', 'Productos', 'Precios', 'Políticas', 'Contacto'];
 
@@ -105,10 +112,12 @@ const KnowledgeBase: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                     </button>
-                    <button onClick={handleOpenCreate} className="flex items-center bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark transition-all transform hover:scale-105">
-                        <IconPlus className="h-5 w-5 mr-2" />
-                        Nueva Pregunta
-                    </button>
+                    {canEdit && (
+                        <button onClick={handleOpenCreate} className="flex items-center bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark transition-all transform hover:scale-105">
+                            <IconPlus className="h-5 w-5 mr-2" />
+                            Nueva Pregunta
+                        </button>
+                    )}
                 </div>
             </PageHeader>
 
@@ -120,7 +129,9 @@ const KnowledgeBase: React.FC = () => {
                     <div>
                         <p className="text-sm font-bold text-primary uppercase tracking-wider">Base de Conocimiento</p>
                         <p className="text-xs text-gray-600 mt-1">
-                            Utiliza las funciones existentes para gestionar la información que el bot usará con los clientes.
+                            {canEdit 
+                                ? "Gestiona la información que el chatbot utiliza para responder a los clientes." 
+                                : "Consulta la información cargada para el entrenamiento del chatbot."}
                         </p>
                     </div>
                 </div>
@@ -156,14 +167,16 @@ const KnowledgeBase: React.FC = () => {
                                 <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-3 py-1 rounded-full">
                                     {item.categoria}
                                 </span>
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => handleOpenEdit(item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-colors">
-                                        <IconPencil className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
-                                        <IconTrash className="w-4 h-4" />
-                                    </button>
-                                </div>
+                                {canEdit && (
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => handleOpenEdit(item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-colors">
+                                            <IconPencil className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+                                            <IconTrash className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div className="p-5 flex-grow space-y-5">
                                 <div className="relative pl-6">
