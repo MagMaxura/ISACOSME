@@ -1,3 +1,4 @@
+
 // FIX: Use `import type` for type-only imports and remove `AuthResponse` which is not an exported member of `@supabase/supabase-js`.
 import type { Session, User, AuthError } from '@supabase/supabase-js';
 
@@ -143,13 +144,25 @@ export interface Venta {
   iva: number;
   total: number;
   tipo: 'Venta' | 'Consignacion';
-  estado: 'Pendiente' | 'Pagada' | 'Enviada' | 'Cancelada';
+  // FIX: Updated status list and added missing fields to match src/types.ts
+  estado: 'Pendiente' | 'Contactado' | 'Pagada' | 'Enviada' | 'Cancelada' | 'Carrito Abandonado';
   puntoDeVenta?: PuntoDeVenta | null;
+  tienda?: 'Isabella' | 'Ultrashine' | 'Bodytan' | string | null;
   costoTotal?: number;
   tipoDeCambio?: number;
   pago1?: number;
   clienteNombre?: string;
+  clienteTelefono?: string | null;
   observaciones?: string | null;
+}
+
+// FIX: Added missing KnowledgeItem interface to resolve import error in KnowledgeBase.tsx
+export interface KnowledgeItem {
+    id: string;
+    pregunta: string;
+    respuesta: string;
+    categoria: string;
+    created_at: string;
 }
 
 export interface ListaPrecioItem {

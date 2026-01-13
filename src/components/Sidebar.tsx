@@ -1,6 +1,7 @@
+
 import React, { Dispatch, SetStateAction } from 'react';
 import { NavLink } from 'react-router-dom';
-import { IconChartPie, IconShoppingCart, IconPackage, IconUsers, IconTag, IconBuildingWarehouse, IconUserCog, IconX, IconCashBanknote, IconBuilding, IconSwitchHorizontal, IconFileText, IconWorld, IconChartBar } from './Icons';
+import { IconChartPie, IconShoppingCart, IconPackage, IconUsers, IconTag, IconBuildingWarehouse, IconUserCog, IconX, IconCashBanknote, IconBuilding, IconSwitchHorizontal, IconFileText, IconWorld, IconChartBar, IconMessage2 } from './Icons';
 import { useAuth } from '../contexts/AuthContext';
 import { AppRole } from '../types';
 
@@ -40,7 +41,8 @@ const navConfig: NavConfigItem[] = [
   { type: 'link', to: '/stock/depositos', text: 'Gestión Depósitos', icon: <IconBuilding className="h-5 w-5" />, allowedRoles: ['superadmin', 'administrativo'] },
   { type: 'link', to: '/stock/transferencias', text: 'Transferencias', icon: <IconSwitchHorizontal className="h-5 w-5" />, allowedRoles: ['superadmin', 'administrativo'] },
 
-  { type: 'header', text: 'Análisis', allowedRoles: ['superadmin', 'analitico', 'administrativo'] },
+  { type: 'header', text: 'Inteligencia', allowedRoles: ['superadmin', 'analitico', 'vendedor', 'administrativo'] },
+  { type: 'link', to: '/base-conocimiento', text: 'Entrenar Chatbot', icon: <IconMessage2 className="h-5 w-5" />, allowedRoles: ['superadmin', 'vendedor', 'administrativo', 'analitico'] },
   { type: 'link', to: '/estadisticas-productos', text: 'Estadísticas Prod.', icon: <IconChartBar className="h-5 w-5" />, allowedRoles: ['superadmin', 'analitico', 'administrativo'] },
 
   { type: 'header', text: 'Administración', allowedRoles: ['superadmin', 'comex'] },

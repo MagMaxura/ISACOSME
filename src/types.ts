@@ -1,3 +1,4 @@
+
 // FIX: Use `import type` for type-only imports and ensure User and AuthError are correctly imported.
 import type { User, AuthError } from '@supabase/supabase-js';
 
@@ -144,6 +145,14 @@ export interface Venta {
   clienteNombre?: string;
   clienteTelefono?: string | null;
   observaciones?: string | null;
+}
+
+export interface KnowledgeItem {
+    id: string;
+    pregunta: string;
+    respuesta: string;
+    categoria: string;
+    created_at: string;
 }
 
 export interface ListaPrecioItem {

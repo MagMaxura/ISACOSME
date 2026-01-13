@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 // Props for any icon component
@@ -25,12 +26,10 @@ export const IconUsers: React.FC<IconProps> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 );
 
-// FIX: Added missing IconUserPlus export to resolve import error in Ventas.tsx.
 export const IconUserPlus: React.FC<IconProps> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
 );
 
-// FIX: Added missing IconUserCheck export to resolve import error in Ventas.tsx.
 export const IconUserCheck: React.FC<IconProps> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
 );
@@ -216,4 +215,8 @@ export const IconTruck: React.FC<IconProps> = (props) => (
         <circle cx="5.5" cy="18.5" r="2.5"></circle>
         <circle cx="18.5" cy="18.5" r="2.5"></circle>
     </svg>
+);
+
+export const IconMessage2: React.FC<IconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M8 9h8" /><path d="M8 13h6" /><path d="M12 21l-3 -3h-4a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-5l-3 3z" /></svg>
 );

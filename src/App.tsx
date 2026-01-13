@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
@@ -29,6 +30,7 @@ import ComexPendingPage from './pages/ComexPendingPage';
 import EstadisticasProductos from './pages/EstadisticasProductos';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import PaymentFailurePage from './pages/PaymentFailurePage';
+import KnowledgeBase from './pages/KnowledgeBase';
 
 // Define roles for each route for clarity
 const routeConfig: { path: string; component: React.ReactElement; roles: AppRole[] }[] = [
@@ -36,6 +38,7 @@ const routeConfig: { path: string; component: React.ReactElement; roles: AppRole
     { path: '/ventas', component: <Ventas />, roles: ['superadmin', 'vendedor', 'analitico'] },
     { path: '/productos', component: <Productos />, roles: ['superadmin', 'administrativo', 'vendedor', 'analitico'] },
     { path: '/estadisticas-productos', component: <EstadisticasProductos />, roles: ['superadmin', 'analitico', 'administrativo'] },
+    { path: '/base-conocimiento', component: <KnowledgeBase />, roles: ['superadmin', 'vendedor', 'administrativo', 'analitico'] },
     { path: '/stock/productos', component: <Stock />, roles: ['superadmin', 'administrativo'] },
     { path: '/stock/insumos', component: <StockInsumos />, roles: ['superadmin', 'administrativo'] },
     { path: '/stock/depositos', component: <GestionDepositos />, roles: ['superadmin', 'administrativo'] },
