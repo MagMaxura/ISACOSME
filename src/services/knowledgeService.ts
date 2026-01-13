@@ -8,18 +8,26 @@ const handleKnowledgeError = (error: any) => {
     console.error(`[${SERVICE_NAME}] Error detectado:`, error);
     
     const isRecursion = error.message?.includes('infinite recursion') || error.code === '42P17';
+    const isForbidden = error.code === '42501' || error.message?.includes('permission denied');
     
     if (isRecursion) {
         return {
             message: "Error de Seguridad: Bucle en permisos detectado.",
             details: "La base de datos tiene un problema de recursión. Para solucionarlo, debemos asegurar que la función que ya usas tenga la propiedad SECURITY DEFINER.",
-            hint: "Ejecuta este SQL para arreglar tu función actual y la política de acceso:",
+            hint: "Ejecuta este SQL para arreglar tu función actual:",
             sql: `-- 1. Asegurar que TU función existente sea segura
-ALTER FUNCTION public.es_staff_seguro() SECURITY DEFINER;
+ALTER FUNCTION public.es_staff_seguro() SECURITY DEFINER;`
+        };
+    }
 
--- 2. Aplicar política a la Base de Conocimiento usando TU función
-DROP POLICY IF EXISTS "Escritura base conocimiento" ON public.knowledge_base;
-CREATE POLICY "Escritura base conocimiento" 
+    if (isForbidden) {
+        return {
+            message: "Acceso Denegado: No tienes permisos para editar.",
+            details: "Tu rol actual no tiene permisos de escritura en la tabla 'knowledge_base'.",
+            hint: "Si eres administrador, ejecuta este SQL en Supabase para habilitar la edición al Staff:",
+            sql: `-- Habilitar edición para superadmin, vendedor, administrativo y analitico
+DROP POLICY IF EXISTS "Edición exclusiva para staff" ON public.knowledge_base;
+CREATE POLICY "Edición exclusiva para staff" 
 ON public.knowledge_base FOR ALL 
 TO authenticated 
 USING (public.es_staff_seguro());`
