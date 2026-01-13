@@ -12,41 +12,43 @@ const handleKnowledgeError = (error: any) => {
     
     if (isRecursion) {
         return {
-            message: "Error de Seguridad: Bucle detectado en las reglas de acceso.",
-            details: "La base de datos está intentando verificar tus permisos de forma infinita.",
-            hint: "SOLUCIÓN DEFINITIVA: Ejecuta este SQL para restringir el acceso SOLO al personal autorizado, eliminando el permiso general:",
-            sql: `-- 1. Habilitar RLS
+            message: "Error de Seguridad Crítico: Bucle de permisos detectado.",
+            details: "La base de datos entró en un ciclo infinito intentando verificar tus roles.",
+            hint: "SOLUCIÓN TÉCNICA: Debes crear una función 'Security Definer' para romper la recursión. Ejecuta este SQL:",
+            sql: `-- 1. Función que consulta roles saltando el RLS
+CREATE OR REPLACE FUNCTION public.check_is_staff()
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid()
+    AND (roles ? 'superadmin' OR roles ? 'vendedor' OR roles ? 'administrativo' OR roles ? 'analitico')
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. Aplicar política limpia
 ALTER TABLE public.knowledge_base ENABLE ROW LEVEL SECURITY;
-
--- 2. Eliminar cualquier política previa
-DROP POLICY IF EXISTS "Lectura de conocimiento" ON public.knowledge_base;
-DROP POLICY IF EXISTS "Edición para personal autorizado" ON public.knowledge_base;
-
--- 3. Única política para TODO (Lectura y Escritura): Solo Staff
+DROP POLICY IF EXISTS "Acceso restringido a personal de gestión" ON public.knowledge_base;
 CREATE POLICY "Acceso restringido a personal de gestión" 
 ON public.knowledge_base FOR ALL 
 TO authenticated 
-USING (
-  (auth.jwt() -> 'user_metadata' -> 'roles')::jsonb ? 'superadmin' OR 
-  (auth.jwt() -> 'user_metadata' -> 'roles')::jsonb ? 'vendedor' OR
-  (auth.jwt() -> 'user_metadata' -> 'roles')::jsonb ? 'administrativo' OR
-  (auth.jwt() -> 'user_metadata' -> 'roles')::jsonb ? 'analitico'
-);`
+USING ( public.check_is_staff() );`
         };
     }
 
     if (isForbidden) {
         return {
             message: "Acceso Denegado.",
-            details: "Tu usuario no tiene permisos para ver o modificar la base de conocimiento.",
-            hint: "Esta sección es privada para el personal de la empresa."
+            details: "No tienes permisos de personal (superadmin, vendedor, etc.) para esta sección.",
+            hint: "Si eres administrativo, pide al administrador que verifique tus roles en la sección de Usuarios."
         };
     }
 
     if (error.message?.includes('relation "knowledge_base" does not exist')) {
         return {
-            message: "La tabla 'knowledge_base' no existe.",
-            hint: "Crea la tabla ejecutando el script inicial en el editor SQL de Supabase.",
+            message: "La tabla de conocimiento no ha sido creada.",
+            hint: "Ejecuta el script de creación de tabla en el editor SQL.",
             sql: `CREATE TABLE public.knowledge_base (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at timestamptz DEFAULT now(),
