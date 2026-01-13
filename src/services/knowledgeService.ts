@@ -12,41 +12,49 @@ const handleKnowledgeError = (error: any) => {
     
     if (isRecursion) {
         return {
-            message: "Error de Seguridad: Bucle en permisos detectado.",
-            details: "La base de datos tiene un problema de recursión. Para solucionarlo, debemos asegurar que la función que ya usas tenga la propiedad SECURITY DEFINER.",
-            hint: "Ejecuta este SQL para arreglar tu función actual:",
-            sql: `-- 1. Asegurar que TU función existente sea segura
-ALTER FUNCTION public.es_staff_seguro() SECURITY DEFINER;`
+            message: "Error de Seguridad: Bucle detectado en las reglas de acceso.",
+            details: "La base de datos está intentando verificar tus permisos de forma infinita. Esto ocurre cuando una regla de 'profiles' se llama a sí misma.",
+            hint: "SOLUCIÓN: Usa la lógica de acceso que ya tienes para Ventas, o ejecuta este SQL que evita la recursión leyendo los roles desde el token de sesión (JWT):",
+            sql: `-- 1. Habilitar RLS
+ALTER TABLE public.knowledge_base ENABLE ROW LEVEL SECURITY;
+
+-- 2. Política de Lectura (Para todos los que ingresan)
+DROP POLICY IF EXISTS "Lectura de conocimiento" ON public.knowledge_base;
+CREATE POLICY "Lectura de conocimiento" ON public.knowledge_base FOR SELECT TO authenticated USING (true);
+
+-- 3. Política de Edición (Usando la lógica de roles que ya tienes en el ERP)
+-- Esta versión evita la recursión al no consultar la tabla 'profiles' directamente
+DROP POLICY IF EXISTS "Edición para personal autorizado" ON public.knowledge_base;
+CREATE POLICY "Edición para personal autorizado" 
+ON public.knowledge_base FOR ALL 
+TO authenticated 
+USING (
+  (auth.jwt() -> 'user_metadata' -> 'roles')::jsonb ? 'superadmin' OR 
+  (auth.jwt() -> 'user_metadata' -> 'roles')::jsonb ? 'vendedor' OR
+  (auth.jwt() -> 'user_metadata' -> 'roles')::jsonb ? 'administrativo'
+);`
         };
     }
 
     if (isForbidden) {
         return {
-            message: "Acceso Denegado: No tienes permisos para editar.",
-            details: "Tu rol actual no tiene permisos de escritura en la tabla 'knowledge_base'.",
-            hint: "Si eres administrador, ejecuta este SQL en Supabase para habilitar la edición al Staff:",
-            sql: `-- Habilitar edición para superadmin, vendedor, administrativo y analitico
-DROP POLICY IF EXISTS "Edición exclusiva para staff" ON public.knowledge_base;
-CREATE POLICY "Edición exclusiva para staff" 
-ON public.knowledge_base FOR ALL 
-TO authenticated 
-USING (public.es_staff_seguro());`
+            message: "Acceso Denegado.",
+            details: "No tienes permisos suficientes para realizar esta acción sobre la base de conocimiento.",
+            hint: "Asegúrate de que tu usuario tenga asignado uno de los roles autorizados (superadmin, vendedor o administrativo)."
         };
     }
 
     if (error.message?.includes('relation "knowledge_base" does not exist')) {
         return {
             message: "La tabla 'knowledge_base' no existe.",
-            hint: "Crea la tabla básica para empezar a cargar información.",
+            hint: "Crea la tabla ejecutando el script inicial.",
             sql: `CREATE TABLE public.knowledge_base (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at timestamptz DEFAULT now(),
     pregunta text NOT NULL,
     respuesta text NOT NULL,
     categoria text DEFAULT 'General'
-);
-ALTER TABLE public.knowledge_base ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Lectura libre" ON public.knowledge_base FOR SELECT TO authenticated USING (true);`
+);`
         };
     }
 
