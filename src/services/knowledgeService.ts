@@ -5,19 +5,23 @@ import { KnowledgeItem } from '../types';
 const SERVICE_NAME = 'KnowledgeService';
 
 const handleKnowledgeError = (error: any) => {
-    console.error(`[${SERVICE_NAME}] Error detected:`, error);
+    console.error(`[${SERVICE_NAME}] Error detectado:`, error);
     
-    // Detectar recursión infinita o errores de RLS comunes
-    if (error.message?.includes('infinite recursion') || error.code === '42P17') {
+    const isRecursion = error.message?.includes('infinite recursion') || error.code === '42P17';
+    
+    if (isRecursion) {
         return {
-            message: "Error de Seguridad (RLS): Recursión infinita detectada.",
-            details: "La base de datos entró en un bucle al intentar verificar tus permisos de acceso.",
-            hint: "Esto se soluciona recreando las políticas de seguridad con una función 'SECURITY DEFINER'.",
-            sql: `-- COPIA Y PEGA ESTO EN SUPABASE SQL EDITOR:
+            message: "Error de Seguridad Crítico: Bucle en tabla de Perfiles.",
+            details: "La base de datos detectó que las reglas de acceso (RLS) se llaman unas a otras sin fin. Esto ocurre usualmente en la tabla 'profiles'.",
+            hint: "Es necesario resetear las políticas de la tabla 'profiles' además de las de 'knowledge_base'.",
+            sql: `-- EJECUTA ESTO PARA DESBLOQUEAR TODO:
 CREATE OR REPLACE FUNCTION public.es_staff_seguro() RETURNS boolean AS $$
 BEGIN
-  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND ('superadmin' = ANY(roles) OR 'vendedor' = ANY(roles) OR 'administrativo' = ANY(roles)));
+  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND ('superadmin' = ANY(roles) OR 'vendedor' = ANY(roles)));
 END; $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP POLICY IF EXISTS "Acceso seguro perfiles" ON public.profiles;
+CREATE POLICY "Acceso seguro perfiles" ON public.profiles FOR SELECT TO authenticated USING ((id = auth.uid()) OR (public.es_staff_seguro()));
 
 DROP POLICY IF EXISTS "Escritura base conocimiento" ON public.knowledge_base;
 CREATE POLICY "Escritura base conocimiento" ON public.knowledge_base FOR ALL TO authenticated USING (public.es_staff_seguro());`
@@ -27,7 +31,7 @@ CREATE POLICY "Escritura base conocimiento" ON public.knowledge_base FOR ALL TO 
     if (error.message?.includes('relation "knowledge_base" does not exist')) {
         return {
             message: "La tabla 'knowledge_base' no existe.",
-            hint: "Ejecuta el script SQL para crear la tabla y sus políticas.",
+            hint: "Crea la tabla ejecutando el script SQL inicial.",
             sql: `CREATE TABLE public.knowledge_base (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at timestamptz DEFAULT now(),

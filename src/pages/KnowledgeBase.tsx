@@ -95,13 +95,33 @@ const KnowledgeBase: React.FC = () => {
     return (
         <div className="animate-fade-in">
             <PageHeader title="Entrenamiento Chatbot">
-                <button onClick={handleOpenCreate} className="flex items-center bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark transition-all transform hover:scale-105">
-                    <IconPlus className="h-5 w-5 mr-2" />
-                    Nueva Pregunta
-                </button>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={loadData} 
+                        className="p-2 text-gray-400 hover:text-primary transition-colors bg-white rounded-lg shadow-sm border border-gray-100"
+                        title="Reintentar carga"
+                    >
+                        <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                    <button onClick={handleOpenCreate} className="flex items-center bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark transition-all transform hover:scale-105">
+                        <IconPlus className="h-5 w-5 mr-2" />
+                        Nueva Pregunta
+                    </button>
+                </div>
             </PageHeader>
 
             <DatabaseErrorDisplay error={error} />
+
+            {error && (
+                <div className="mb-6 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-sm">
+                    <p className="text-sm font-bold text-amber-800">¿Aplicaste el SQL y el error persiste?</p>
+                    <p className="text-xs text-amber-700 mt-1">
+                        A veces el navegador cachea los permisos. Intenta <strong>Cerrar Sesión</strong> e ingresar nuevamente después de ejecutar el script en Supabase.
+                    </p>
+                </div>
+            )}
 
             <div className="mb-6 bg-violet-50 border-l-4 border-primary p-4 rounded-r-lg shadow-sm">
                 <div className="flex gap-3">
@@ -109,7 +129,7 @@ const KnowledgeBase: React.FC = () => {
                     <div>
                         <p className="text-sm font-bold text-primary uppercase tracking-wider">Base de Conocimiento</p>
                         <p className="text-xs text-gray-600 mt-1">
-                            Toda la información cargada aquí será utilizada por el chatbot para responder a los clientes de forma autónoma. Mantén las respuestas claras y actualizadas.
+                            Toda la información cargada aquí será utilizada por el chatbot para responder a los clientes de forma autónoma.
                         </p>
                     </div>
                 </div>
@@ -131,11 +151,11 @@ const KnowledgeBase: React.FC = () => {
                     <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
                     <p className="text-sm font-medium">Sincronizando base de conocimiento...</p>
                 </div>
-            ) : filteredItems.length === 0 ? (
+            ) : filteredItems.length === 0 && !error ? (
                 <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200 text-gray-400">
                     <IconAlertCircle className="w-12 h-12 mx-auto mb-3 opacity-20" />
                     <p className="text-lg font-medium">No se encontraron registros</p>
-                    <p className="text-xs">Intenta con otros términos de búsqueda o agrega una nueva pregunta.</p>
+                    <p className="text-xs">Agrega una nueva pregunta para entrenar al bot.</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -170,11 +190,11 @@ const KnowledgeBase: React.FC = () => {
                             </div>
                             <div className="px-5 py-3 bg-gray-50 border-t flex justify-between items-center">
                                 <span className="text-[9px] text-gray-400 font-medium italic">
-                                    Creado: {new Date(item.created_at).toLocaleDateString()}
+                                    {new Date(item.created_at).toLocaleDateString()}
                                 </span>
-                                <div className="flex gap-1">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
-                                    <span className="text-[9px] text-green-600 font-bold uppercase tracking-tighter">Activa</span>
+                                <div className="flex gap-1 items-center">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>
+                                    <span className="text-[9px] text-green-600 font-bold uppercase tracking-tighter">Entrenado</span>
                                 </div>
                             </div>
                         </div>
@@ -190,7 +210,7 @@ const KnowledgeBase: React.FC = () => {
                                 <h3 className="text-xl font-bold text-gray-800">
                                     {editingId ? 'Editar Entrenamiento' : 'Nuevo Entrenamiento'}
                                 </h3>
-                                <p className="text-xs text-gray-500 font-medium">Configura cómo debe responder el chatbot</p>
+                                <p className="text-xs text-gray-500 font-medium">Configura la respuesta del bot</p>
                             </div>
                             <button onClick={() => setIsModalOpen(false)} className="bg-white p-2 rounded-xl shadow-sm text-gray-400 hover:text-gray-600 transition-all hover:rotate-90">
                                 <IconX className="w-6 h-6" />
