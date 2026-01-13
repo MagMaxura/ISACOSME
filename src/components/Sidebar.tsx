@@ -78,7 +78,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         } lg:translate-x-0`}
       >
         <div className="flex items-center justify-between p-4 border-b">
-          <h1 className="text-xl font-bold text-primary">Isabella de la Perla</h1>
+          <img 
+            src="https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.png" 
+            alt="Logo" 
+            className="h-10 object-contain"
+          />
           <button onClick={() => setIsOpen(false)} className="lg:hidden text-gray-500 hover:text-primary">
             <IconX className="h-6 w-6" />
           </button>
@@ -87,7 +91,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
           <ul>
             {availableItems.map((item, index) => {
                 if (item.type === 'header') {
-                    // Don't render a header if it's the very first item or if the previous item was also a header
                     if (index === 0 || availableItems[index - 1]?.type === 'header') return null;
                     return (
                         <li key={`header-${index}`} className="px-3 pt-4 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
