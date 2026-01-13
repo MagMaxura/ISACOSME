@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import PageHeader from '@/components/PageHeader';
-import { IconPlus, IconX, IconPencil, IconTrash, IconMessage2, IconFileText, IconAlertCircle } from '@/components/Icons';
+import { IconPlus, IconX, IconPencil, IconTrash, IconMessage2, IconFileText, IconAlertCircle, IconArrowLeft } from '@/components/Icons';
 import { KnowledgeItem } from '@/types';
 import { fetchKnowledgeBase, createKnowledgeItem, updateKnowledgeItem, deleteKnowledgeItem } from '@/services/knowledgeService';
 import DatabaseErrorDisplay from '@/components/DatabaseErrorDisplay';
 import { useAuth } from '@/contexts/AuthContext';
+import { Link } from 'react-router-dom';
 
 const KnowledgeBase: React.FC = () => {
     const { profile } = useAuth();
@@ -23,14 +24,15 @@ const KnowledgeBase: React.FC = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Permisos de edición: solo Staff
-    const canEdit = profile?.roles?.some(role => 
+    // Permisos: solo Staff puede VER y EDITAR esta sección
+    const isStaff = profile?.roles?.some(role => 
         ['superadmin', 'vendedor', 'administrativo', 'analitico'].includes(role)
     );
 
     const categories = ['General', 'Envíos', 'Pagos', 'Productos', 'Precios', 'Políticas', 'Contacto'];
 
     const loadData = async () => {
+        if (!isStaff) return;
         setLoading(true);
         setError(null);
         try {
@@ -45,7 +47,7 @@ const KnowledgeBase: React.FC = () => {
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [isStaff]);
 
     const filteredItems = useMemo(() => {
         return items.filter(item => 
@@ -99,6 +101,25 @@ const KnowledgeBase: React.FC = () => {
         }
     };
 
+    // Si no es staff, mostramos pantalla de acceso denegado
+    if (!isStaff) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4">
+                <div className="bg-red-50 p-8 rounded-3xl border border-red-100 shadow-sm max-w-md">
+                    <IconAlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Acceso Restringido</h2>
+                    <p className="text-gray-600 mb-6">
+                        Esta sección es de uso exclusivo para el personal administrativo y de gestión. 
+                        Tus roles actuales no permiten ver el entrenamiento del chatbot.
+                    </p>
+                    <Link to="/" className="inline-flex items-center text-primary font-bold hover:underline">
+                        <IconArrowLeft className="w-4 h-4 mr-2" /> Volver al Inicio
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="animate-fade-in">
             <PageHeader title="Entrenamiento Chatbot">
@@ -112,12 +133,10 @@ const KnowledgeBase: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                     </button>
-                    {canEdit && (
-                        <button onClick={handleOpenCreate} className="flex items-center bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark transition-all transform hover:scale-105">
-                            <IconPlus className="h-5 w-5 mr-2" />
-                            Nueva Pregunta
-                        </button>
-                    )}
+                    <button onClick={handleOpenCreate} className="flex items-center bg-primary text-white px-4 py-2 rounded-lg shadow hover:bg-primary-dark transition-all transform hover:scale-105">
+                        <IconPlus className="h-5 w-5 mr-2" />
+                        Nueva Pregunta
+                    </button>
                 </div>
             </PageHeader>
 
@@ -129,9 +148,7 @@ const KnowledgeBase: React.FC = () => {
                     <div>
                         <p className="text-sm font-bold text-primary uppercase tracking-wider">Base de Conocimiento</p>
                         <p className="text-xs text-gray-600 mt-1">
-                            {canEdit 
-                                ? "Gestiona la información que el chatbot utiliza para responder a los clientes." 
-                                : "Consulta la información cargada para el entrenamiento del chatbot."}
+                            Gestiona la información que el chatbot utiliza para responder a los clientes.
                         </p>
                     </div>
                 </div>
@@ -167,16 +184,14 @@ const KnowledgeBase: React.FC = () => {
                                 <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-3 py-1 rounded-full">
                                     {item.categoria}
                                 </span>
-                                {canEdit && (
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleOpenEdit(item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-colors">
-                                            <IconPencil className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
-                                            <IconTrash className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                )}
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => handleOpenEdit(item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-colors">
+                                        <IconPencil className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+                                        <IconTrash className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                             <div className="p-5 flex-grow space-y-5">
                                 <div className="relative pl-6">

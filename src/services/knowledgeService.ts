@@ -13,18 +13,17 @@ const handleKnowledgeError = (error: any) => {
     if (isRecursion) {
         return {
             message: "Error de Seguridad: Bucle detectado en las reglas de acceso.",
-            details: "La base de datos está intentando verificar tus permisos de forma infinita. Esto ocurre cuando una política intenta consultar la tabla 'profiles' de forma cíclica.",
-            hint: "SOLUCIÓN DEFINITIVA: Ejecuta este SQL que lee los roles directamente del Token (JWT) sin consultar tablas extra, eliminando el bucle:",
+            details: "La base de datos está intentando verificar tus permisos de forma infinita.",
+            hint: "SOLUCIÓN DEFINITIVA: Ejecuta este SQL para restringir el acceso SOLO al personal autorizado, eliminando el permiso general:",
             sql: `-- 1. Habilitar RLS
 ALTER TABLE public.knowledge_base ENABLE ROW LEVEL SECURITY;
 
--- 2. Política de Lectura (Para todos los autenticados)
+-- 2. Eliminar cualquier política previa
 DROP POLICY IF EXISTS "Lectura de conocimiento" ON public.knowledge_base;
-CREATE POLICY "Lectura de conocimiento" ON public.knowledge_base FOR SELECT TO authenticated USING (true);
-
--- 3. Política de Edición (Evita recursión usando metadatos del JWT)
 DROP POLICY IF EXISTS "Edición para personal autorizado" ON public.knowledge_base;
-CREATE POLICY "Edición para personal autorizado" 
+
+-- 3. Única política para TODO (Lectura y Escritura): Solo Staff
+CREATE POLICY "Acceso restringido a personal de gestión" 
 ON public.knowledge_base FOR ALL 
 TO authenticated 
 USING (
@@ -39,8 +38,8 @@ USING (
     if (isForbidden) {
         return {
             message: "Acceso Denegado.",
-            details: "Tu usuario no tiene permisos para realizar cambios en la base de conocimiento.",
-            hint: "Contacta al administrador para que verifique tus roles asignados."
+            details: "Tu usuario no tiene permisos para ver o modificar la base de conocimiento.",
+            hint: "Esta sección es privada para el personal de la empresa."
         };
     }
 
