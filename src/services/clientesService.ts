@@ -7,21 +7,21 @@ const SERVICE_NAME = 'ClientesService';
 // Maps frontend camelCase to backend snake_case
 const toDatabaseFormat = (cliente: Partial<Cliente>) => ({
   nombre: cliente.nombre,
-  representante: cliente.representante,
-  provincia: cliente.provincia,
-  localidad: cliente.localidad,
-  codigo_postal: cliente.codigoPostal,
-  direccion: cliente.direccion,
-  rubro: cliente.rubro,
-  telefono: cliente.telefono,
-  red_social: cliente.redSocial,
-  cuit: cliente.cuit,
-  email: cliente.email,
-  descripcion: cliente.descripcion,
+  representante: cliente.representante || null,
+  provincia: cliente.provincia || null,
+  localidad: cliente.localidad || null,
+  codigo_postal: cliente.codigoPostal || null,
+  direccion: cliente.direccion || null,
+  rubro: cliente.rubro || 'Consumidor Final',
+  telefono: cliente.telefono || null,
+  red_social: cliente.redSocial || null,
+  cuit: cliente.cuit || null,
+  email: cliente.email ? cliente.email.toLowerCase().trim() : null,
+  descripcion: cliente.descripcion || null,
   lista_precio_id: cliente.listaPrecioId || null,
-  lista_enviada: cliente.listaEnviada,
+  lista_enviada: cliente.listaEnviada || false,
   fecha_envio_lista: cliente.fechaEnvioLista || null,
-  tiene_stock: cliente.tieneStock,
+  tiene_stock: cliente.tieneStock || false,
 });
 
 
@@ -55,82 +55,27 @@ export const fetchClientes = async (): Promise<Cliente[]> => {
                 listaPrecioNombre: c.lista_precio_nombre || 'N/A',
                 totalComprado: c.total_comprado || 0,
             }));
-            console.log(`[${SERVICE_NAME}] Successfully fetched and transformed ${transformedData.length} clients.`);
             return transformedData;
         }
-
-        console.log(`[${SERVICE_NAME}] No clients found.`);
         return [];
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error fetching clients:`, error);
         if (error.message?.includes('function get_clientes_con_ventas does not exist')) {
             throw {
-                message: "La función 'get_clientes_con_ventas' no existe en la base de datos.",
-                details: "Esta función es necesaria para mostrar la lista de clientes junto con el total de sus compras, lo cual es usado para la categorización automática.",
-                hint: "Un administrador debe ejecutar el siguiente script SQL para crear la función.",
-                sql: `
-CREATE OR REPLACE FUNCTION get_clientes_con_ventas()
-RETURNS TABLE (
-    id uuid,
-    created_at timestamptz,
-    nombre text,
-    representante text,
-    provincia text,
-    localidad text,
-    codigo_postal text,
-    direccion text,
-    rubro text,
-    telefono text,
-    red_social text,
-    cuit text,
-    email text,
-    descripcion text,
-    lista_precio_id uuid,
-    lista_enviada boolean,
-    fecha_envio_lista date,
-    tiene_stock boolean,
-    lista_precio_nombre text,
-    total_comprado numeric
-) AS $$
+                message: "La función 'get_clientes_con_ventas' no existe.",
+                hint: "Ejecuta el script SQL en Supabase para crear 'get_clientes_con_ventas'.",
+                sql: `CREATE OR REPLACE FUNCTION get_clientes_con_ventas()
+RETURNS TABLE (id uuid, created_at timestamptz, nombre text, representante text, provincia text, localidad text, codigo_postal text, direccion text, rubro text, telefono text, red_social text, cuit text, email text, descripcion text, lista_precio_id uuid, lista_enviada boolean, fecha_envio_lista date, tiene_stock boolean, lista_precio_nombre text, total_comprado numeric) AS $$
 BEGIN
-    RETURN QUERY
-    SELECT
-        c.id,
-        c.created_at,
-        c.nombre,
-        c.representante,
-        c.provincia,
-        c.localidad,
-        c.codigo_postal,
-        c.direccion,
-        c.rubro,
-        c.telefono,
-        c.red_social,
-        c.cuit,
-        c.email,
-        c.descripcion,
-        c.lista_precio_id,
-        c.lista_enviada,
-        c.fecha_envio_lista,
-        c.tiene_stock,
-        lp.nombre as lista_precio_nombre,
-        (SELECT COALESCE(SUM(v.total), 0)
-         FROM public.ventas v
-         WHERE v.cliente_id = c.id AND (v.estado = 'Pagada' OR v.estado = 'Enviada')) as total_comprado
-    FROM public.clientes c
-    LEFT JOIN public.listas_de_precios lp ON c.lista_precio_id = lp.id
-    ORDER BY c.created_at DESC;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-`
+    RETURN QUERY SELECT c.id, c.created_at, c.nombre, c.representante, c.provincia, c.localidad, c.codigo_postal, c.direccion, c.rubro, c.telefono, c.red_social, c.cuit, c.email, c.descripcion, c.lista_precio_id, c.lista_enviada, c.fecha_envio_lista, c.tiene_stock, lp.nombre as lista_precio_nombre, (SELECT COALESCE(SUM(v.total), 0) FROM public.ventas v WHERE v.cliente_id = c.id AND (v.estado = 'Pagada' OR v.estado = 'Enviada')) as total_comprado FROM public.clientes c LEFT JOIN public.listas_de_precios lp ON c.lista_precio_id = lp.id ORDER BY c.created_at DESC;
+END; $$ LANGUAGE plpgsql SECURITY DEFINER;`
             }
         }
-        throw new Error(`No se pudieron cargar los clientes: ${error?.message}`);
+        throw error;
     }
 };
 
 export const fetchSimpleClientes = async (): Promise<SimpleCliente[]> => {
-    console.log(`[${SERVICE_NAME}] Fetching simple clients list.`);
     try {
         const { data, error } = await supabase
             .from('clientes')
@@ -150,106 +95,92 @@ export const fetchSimpleClientes = async (): Promise<SimpleCliente[]> => {
             listaPrecioNombre: c.listas_de_precios?.nombre || 'Público',
         }));
     } catch (error: any) {
-         console.error(`[${SERVICE_NAME}] Error fetching simple clients:`, error);
-        throw new Error(`No se pudieron cargar la lista de clientes: ${error?.message}`);
+        throw error;
     }
 };
 
 export const createCliente = async (clienteData: Partial<Cliente>): Promise<string> => {
-    console.log(`[${SERVICE_NAME}] Creating new client: ${clienteData.nombre}`);
+    console.log(`[${SERVICE_NAME}] Creating client record.`);
     try {
+        const payload = toDatabaseFormat(clienteData);
         const { data, error } = await (supabase.from('clientes') as any)
-            .insert([toDatabaseFormat(clienteData)])
+            .insert([payload])
             .select('id')
             .single();
+            
         if (error) throw error;
-        console.log(`[${SERVICE_NAME}] Client created successfully with ID: ${data.id}`);
         return data.id;
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error creating client:`, error);
-        if (error.message?.includes('security policy')) {
-            throw new Error(`Error de permisos (RLS) al crear el cliente. Revisa las políticas de seguridad.`);
-        }
-        throw new Error(`No se pudo crear el cliente: ${error?.message}`);
+        throw error;
     }
 };
 
 /**
- * Busca un cliente por email. Si no existe, lo crea con la información proporcionada.
- * Utilizado durante el proceso de checkout.
+ * Busca un cliente por email (insensible a mayúsculas). Si no existe, lo crea.
  */
 export const getOrCreateClientByEmail = async (payerInfo: any): Promise<string> => {
-    console.log(`[${SERVICE_NAME}] Identifying client for email: ${payerInfo.email}`);
+    const cleanEmail = payerInfo.email.toLowerCase().trim();
+    console.log(`[${SERVICE_NAME}] Identifying client: ${cleanEmail}`);
     
     try {
-        // 1. Intentar buscar por email
+        // 1. Buscar por email (ilike para mayor seguridad)
         const { data: existing, error: searchError } = await supabase
             .from('clientes')
             .select('id')
-            .eq('email', payerInfo.email.toLowerCase().trim())
+            .ilike('email', cleanEmail)
             .maybeSingle();
             
         if (searchError) throw searchError;
         
         if (existing) {
-            console.log(`[${SERVICE_NAME}] Client already exists with ID: ${existing.id}`);
+            console.log(`[${SERVICE_NAME}] Found existing client ID: ${existing.id}`);
             return existing.id;
         }
         
-        // 2. Si no existe, crear uno nuevo
+        // 2. Crear nuevo si no existe
         console.log(`[${SERVICE_NAME}] Client not found. Creating automatic record.`);
         const newClientData: Partial<Cliente> = {
             nombre: `${payerInfo.name} ${payerInfo.surname}`.trim(),
-            email: payerInfo.email.toLowerCase().trim(),
+            email: cleanEmail,
             telefono: payerInfo.phone,
-            direccion: payerInfo.street_name + ' ' + payerInfo.street_number,
+            direccion: `${payerInfo.street_name} ${payerInfo.street_number}`.trim(),
             localidad: payerInfo.city,
             provincia: payerInfo.province,
             codigoPostal: payerInfo.zip_code,
-            rubro: 'Consumidor Final Web',
-            descripcion: `Cliente creado automáticamente desde Checkout Web (DNI: ${payerInfo.dni})`,
+            rubro: 'Venta Web',
+            descripcion: `Autocreado desde Checkout (DNI: ${payerInfo.dni})`,
         };
         
         return await createCliente(newClientData);
         
     } catch (error: any) {
-        console.error(`[${SERVICE_NAME}] Error in getOrCreateClientByEmail:`, error);
+        console.error(`[${SERVICE_NAME}] getOrCreateClientByEmail Failed:`, error);
         throw error;
     }
 };
 
 export const updateCliente = async (clienteId: string, clienteData: Partial<Cliente>): Promise<void> => {
-    console.log(`[${SERVICE_NAME}] Updating client ID: ${clienteId}`);
     try {
+        const payload = toDatabaseFormat(clienteData);
         const { error } = await (supabase
             .from('clientes') as any)
-            .update(toDatabaseFormat(clienteData))
+            .update(payload)
             .eq('id', clienteId);
         if (error) throw error;
-        console.log(`[${SERVICE_NAME}] Client updated successfully.`);
     } catch (error: any) {
-        console.error(`[${SERVICE_NAME}] Error updating client:`, error);
-        if (error.message?.includes('security policy')) {
-            throw new Error(`Error de permisos (RLS) al actualizar el cliente. Revisa las políticas de seguridad.`);
-        }
-        throw new Error(`No se pudo actualizar el cliente: ${error?.message}`);
+        throw error;
     }
 };
 
 export const deleteCliente = async (clienteId: string): Promise<void> => {
-    console.log(`[${SERVICE_NAME}] Deleting client ID: ${clienteId}`);
     try {
         const { error } = await (supabase
             .from('clientes') as any)
             .delete()
             .eq('id', clienteId);
         if (error) throw error;
-        console.log(`[${SERVICE_NAME}] Client deleted successfully.`);
     } catch (error: any) {
-        console.error(`[${SERVICE_NAME}] Error deleting client:`, error);
-        if (error.message?.includes('security policy')) {
-            throw new Error(`Error de permisos (RLS) al eliminar el cliente. Revisa las políticas de seguridad.`);
-        }
-        throw new Error(`No se pudo eliminar el cliente: ${error?.message}`);
+        throw error;
     }
 };
