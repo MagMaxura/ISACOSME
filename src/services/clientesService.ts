@@ -1,3 +1,4 @@
+
 import { supabase } from '../supabase';
 import { Cliente, SimpleCliente } from '../types';
 
@@ -154,18 +155,66 @@ export const fetchSimpleClientes = async (): Promise<SimpleCliente[]> => {
     }
 };
 
-export const createCliente = async (clienteData: Partial<Cliente>): Promise<void> => {
+export const createCliente = async (clienteData: Partial<Cliente>): Promise<string> => {
     console.log(`[${SERVICE_NAME}] Creating new client: ${clienteData.nombre}`);
     try {
-        const { error } = await (supabase.from('clientes') as any).insert([toDatabaseFormat(clienteData)]);
+        const { data, error } = await (supabase.from('clientes') as any)
+            .insert([toDatabaseFormat(clienteData)])
+            .select('id')
+            .single();
         if (error) throw error;
-        console.log(`[${SERVICE_NAME}] Client created successfully.`);
+        console.log(`[${SERVICE_NAME}] Client created successfully with ID: ${data.id}`);
+        return data.id;
     } catch (error: any) {
         console.error(`[${SERVICE_NAME}] Error creating client:`, error);
         if (error.message?.includes('security policy')) {
             throw new Error(`Error de permisos (RLS) al crear el cliente. Revisa las políticas de seguridad.`);
         }
         throw new Error(`No se pudo crear el cliente: ${error?.message}`);
+    }
+};
+
+/**
+ * Busca un cliente por email. Si no existe, lo crea con la información proporcionada.
+ * Utilizado durante el proceso de checkout.
+ */
+export const getOrCreateClientByEmail = async (payerInfo: any): Promise<string> => {
+    console.log(`[${SERVICE_NAME}] Identifying client for email: ${payerInfo.email}`);
+    
+    try {
+        // 1. Intentar buscar por email
+        const { data: existing, error: searchError } = await supabase
+            .from('clientes')
+            .select('id')
+            .eq('email', payerInfo.email.toLowerCase().trim())
+            .maybeSingle();
+            
+        if (searchError) throw searchError;
+        
+        if (existing) {
+            console.log(`[${SERVICE_NAME}] Client already exists with ID: ${existing.id}`);
+            return existing.id;
+        }
+        
+        // 2. Si no existe, crear uno nuevo
+        console.log(`[${SERVICE_NAME}] Client not found. Creating automatic record.`);
+        const newClientData: Partial<Cliente> = {
+            nombre: `${payerInfo.name} ${payerInfo.surname}`.trim(),
+            email: payerInfo.email.toLowerCase().trim(),
+            telefono: payerInfo.phone,
+            direccion: payerInfo.street_name + ' ' + payerInfo.street_number,
+            localidad: payerInfo.city,
+            provincia: payerInfo.province,
+            codigoPostal: payerInfo.zip_code,
+            rubro: 'Consumidor Final Web',
+            descripcion: `Cliente creado automáticamente desde Checkout Web (DNI: ${payerInfo.dni})`,
+        };
+        
+        return await createCliente(newClientData);
+        
+    } catch (error: any) {
+        console.error(`[${SERVICE_NAME}] Error in getOrCreateClientByEmail:`, error);
+        throw error;
     }
 };
 

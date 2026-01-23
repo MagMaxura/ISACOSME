@@ -24,7 +24,7 @@ const KnowledgeBase: React.FC = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Permisos: solo Staff puede VER y EDITAR esta sección
+    // SEGURIDAD POR OCULTAMIENTO: Solo el staff puede ver esta página en la UI
     const isStaff = profile?.roles?.some(role => 
         ['superadmin', 'vendedor', 'administrativo', 'analitico'].includes(role)
     );
@@ -32,7 +32,9 @@ const KnowledgeBase: React.FC = () => {
     const categories = ['General', 'Envíos', 'Pagos', 'Productos', 'Precios', 'Políticas', 'Contacto'];
 
     const loadData = async () => {
+        // Bloqueo preventivo en el frontend
         if (!isStaff) return;
+        
         setLoading(true);
         setError(null);
         try {
@@ -101,16 +103,15 @@ const KnowledgeBase: React.FC = () => {
         }
     };
 
-    // Si no es staff, mostramos pantalla de acceso denegado
-    if (!isStaff) {
+    // Si no es staff, mostramos pantalla de acceso denegado (Seguridad UI)
+    if (!isStaff && !loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4">
                 <div className="bg-red-50 p-8 rounded-3xl border border-red-100 shadow-sm max-w-md">
                     <IconAlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Acceso Restringido</h2>
                     <p className="text-gray-600 mb-6">
-                        Esta sección es de uso exclusivo para el personal administrativo y de gestión. 
-                        Tus roles actuales no permiten ver el entrenamiento del chatbot.
+                        Esta sección es de uso exclusivo para el personal administrativo y de gestión.
                     </p>
                     <Link to="/" className="inline-flex items-center text-primary font-bold hover:underline">
                         <IconArrowLeft className="w-4 h-4 mr-2" /> Volver al Inicio

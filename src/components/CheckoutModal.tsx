@@ -1,7 +1,9 @@
+
 import React, { useState, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { IconX, IconMercadoPago, IconAlertCircle, IconCheck, IconCashBanknote, IconTruck } from './Icons';
 import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
+import { getOrCreateClientByEmail } from '../services/clientesService';
 import { createPreference } from '../services/mercadoPagoService';
 import { OrderItem } from '@/types';
 import DatabaseErrorDisplay from './DatabaseErrorDisplay';
@@ -118,20 +120,25 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
 
         setLoading(true);
         setApiError(null);
-        setStatusMessage('Reservando stock...');
-
+        
         try {
+            // 1. Registrar o identificar al cliente (Upsert por Email)
+            setStatusMessage('Validando cliente...');
+            const clientId = await getOrCreateClientByEmail(payerInfo);
+            
+            // 2. Preparar items y reservar stock
+            setStatusMessage('Reservando stock...');
             const itemsParaVenta = await prepareVentaItemsFromCart(orderItems);
             
-            // FORMATEO DE NOTA CON TRUNCADO DE DECIMALES
+            // 3. Generar nota para la venta
             const shippingNote = shippingCost > 0 ? ` [Incluye Envío: $${shippingCost.toFixed(2)}]` : ' [Envío Gratis]';
             const discountNote = discountTransfer > 0 ? ` [Descuento Transferencia 5%: -$${discountTransfer.toFixed(2)}]` : '';
             const methodLabel = paymentMethod === 'mercadopago' ? 'WEB MP' : 'WEB TRANSFERENCIA';
-            
             const direccionCompleta = `${payerInfo.street_name} ${payerInfo.street_number}, ${payerInfo.city}, ${payerInfo.province} (CP: ${payerInfo.zip_code})`;
             
+            // 4. Crear la venta vinculada al ID real del cliente
             const saleData: VentaToCreate = {
-                clienteId: null,
+                clienteId: clientId, // <--- AHORA VINCULADO REALMENTE
                 fecha: new Date().toISOString().split('T')[0],
                 tipo: 'Venta',
                 estado: 'Pendiente', 
@@ -139,7 +146,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 subtotal: subtotal,
                 iva: 0,
                 total: total,
-                observaciones: `${methodLabel}${shippingNote}${discountNote} - ${payerInfo.name} ${payerInfo.surname} (DNI: ${payerInfo.dni}) - Tel: ${payerInfo.phone} - Dirección: ${direccionCompleta}`,
+                observaciones: `${methodLabel}${shippingNote}${discountNote} - Tel: ${payerInfo.phone} - Envío a: ${direccionCompleta}`,
                 puntoDeVenta: 'Tienda física',
                 tienda: getTiendaFromHostname(),
             };
@@ -151,7 +158,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 const initPoint = await createPreference(orderItems, payerInfo, newSaleId, shippingCost);
                 window.location.href = initPoint;
             } else {
-                // Flujo de transferencia
                 setOrderFinished(true);
                 setLoading(false);
             }
@@ -165,7 +171,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
 
     const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    // Pantalla de éxito para Transferencia
     if (orderFinished) {
         return ReactDOM.createPortal(
             <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[9999] p-4 backdrop-blur-sm">
@@ -210,7 +215,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
                     <div className="lg:w-3/5 p-6 overflow-y-auto custom-scrollbar">
                         <div className="space-y-8">
-                            {/* Selector de Pago */}
                             <section>
                                 <h4 className="text-md font-bold text-gray-700 mb-4 border-b pb-1">Selecciona cómo quieres pagar:</h4>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
