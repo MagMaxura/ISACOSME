@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Producto, OrderItem } from '@/types';
 import { fetchPublicProductsList } from '@/services/productosService';
-import { IconPackage, IconShoppingCart, IconList, IconLayoutGrid, IconTruck, IconPlus, IconMinus } from '@/components/Icons';
+import { IconPackage, IconShoppingCart, IconList, IconLayoutGrid, IconTruck, IconPlus, IconMinus, IconTag } from '@/components/Icons';
 import CheckoutModal from '@/components/CheckoutModal';
 
 const SHIPPING_COST = 9800;
@@ -178,6 +178,55 @@ const PublicPriceListPage: React.FC = () => {
     const formatPrice = (price: number) => `$${price.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const lineaColors: Record<string, string> = { 'ULTRAHISNE': 'bg-orange-500', 'BODYTAN CARIBEAN': 'bg-yellow-800', 'SECRET': 'bg-gray-800', 'ESSENS': 'bg-blue-300', 'General': 'bg-gray-500' };
     
+    // --- Helper Component for Upsell Message ---
+    const UpsellMessage: React.FC<{ product: Partial<Producto>, quantity: number }> = ({ product, quantity }) => {
+        const minComercio = product.cantidadMinimaComercio || 0;
+        const minMayorista = product.cantidadMinimaMayorista || 0;
+        const pComercio = product.precioComercio || 0;
+        const pMayorista = product.precioMayorista || 0;
+        const pPublico = product.precioPublico || 0;
+
+        // No mostrar nada si no hay descuentos configurados
+        if (minComercio === 0 && minMayorista === 0) return null;
+
+        // 1. Ya alcanzó precio mayorista
+        if (minMayorista > 0 && quantity >= minMayorista) {
+             return (
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100 animate-pulse w-fit">
+                    <IconTag className="w-3 h-3" />
+                    ¡Precio Mayorista Desbloqueado!
+                </div>
+             );
+        }
+
+        // 2. Alcanzó comercio, sugerir mayorista
+        if (minComercio > 0 && quantity >= minComercio) {
+             if (minMayorista > 0 && pMayorista < pComercio) {
+                 const missing = minMayorista - quantity;
+                 return (
+                    <div className="flex items-center gap-1 text-[10px] sm:text-xs text-violet-700 bg-violet-50 px-2 py-1 rounded-full border border-violet-100 w-fit">
+                        <span>Has alcanzado precio Comercio.</span>
+                        <span className="font-bold">Agregá {missing} más para precio Mayorista ({formatPrice(pMayorista)})</span>
+                    </div>
+                 );
+             } else {
+                 return <div className="text-[10px] sm:text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full w-fit">Precio Comercio Aplicado</div>;
+             }
+        }
+
+        // 3. Aún es público, sugerir comercio
+        if (quantity < minComercio && pComercio < pPublico) {
+             const missing = minComercio - quantity;
+             return (
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100 w-fit">
+                    Agregá <strong>{missing}</strong> u. para precio Comercio ({formatPrice(pComercio)})
+                </div>
+             );
+        }
+
+        return null;
+    };
+
     // --- Reusable content component ---
     const PriceListContent = (
         <>
@@ -227,12 +276,15 @@ const PublicPriceListPage: React.FC = () => {
                                                     }
 
                                                     return (
-                                                        <div key={product.id} className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 p-4">
+                                                        <div key={product.id} className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 p-4 hover:bg-gray-50 transition-colors">
                                                             <div className="flex items-center gap-4 flex-1 min-w-0">
                                                                 {product.imagenUrl ? <img src={product.imagenUrl} alt={product.nombre} className="h-16 w-16 object-contain flex-shrink-0" /> : <div className="h-16 w-16 bg-gray-100 flex items-center justify-center rounded flex-shrink-0"><IconPackage className="h-8 w-8 text-gray-400" /></div>}
                                                                 <div className="flex-grow">
                                                                     <p className="font-semibold text-gray-800">{product.nombre}</p>
                                                                     <p className="text-gray-600 text-xs">{product.descripcion}</p>
+                                                                    <div className="mt-1">
+                                                                        <UpsellMessage product={product} quantity={quantity} />
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                             <div className="flex w-full md:w-auto items-center justify-between md:justify-end gap-2 md:gap-4 shrink-0 mt-4 md:mt-0">
@@ -262,11 +314,11 @@ const PublicPriceListPage: React.FC = () => {
                                                                 </div>
                                                                 <div className="w-32 text-center">
                                                                     <label className="text-xs text-gray-500 font-semibold md:hidden">Precio Unit.</label>
-                                                                    <div className="font-semibold p-2 flex items-center justify-center gap-1">
+                                                                    <div className="font-semibold p-2 flex flex-col items-center justify-center">
                                                                         <span>{formatPrice(currentPrice)}</span>
                                                                         {discountPercent > 0 && (
-                                                                            <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full" title={`Descuento por comprar ${quantity} o más unidades.`}>
-                                                                                -{discountPercent.toFixed(0)}%
+                                                                            <span className="bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-0.5">
+                                                                                -{discountPercent.toFixed(0)}% OFF
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -295,18 +347,27 @@ const PublicPriceListPage: React.FC = () => {
                                                 }
 
                                                 return (
-                                                    <div key={product.id} className="bg-white shadow-lg rounded-lg overflow-hidden flex flex-col">
-                                                        <div className="h-48 flex items-center justify-center p-4 bg-gray-50">
+                                                    <div key={product.id} className="bg-white shadow-lg rounded-lg overflow-hidden flex flex-col hover:shadow-xl transition-shadow">
+                                                        <div className="h-48 flex items-center justify-center p-4 bg-gray-50 relative">
+                                                            {discountPercent > 0 && (
+                                                                <div className="absolute top-2 right-2 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded shadow">
+                                                                    -{discountPercent.toFixed(0)}%
+                                                                </div>
+                                                            )}
                                                             {product.imagenUrl ? 
                                                                 <img src={product.imagenUrl} alt={product.nombre} className="max-h-full max-w-full object-contain" /> : 
                                                                 <IconPackage className="h-16 w-16 text-gray-300" />
                                                             }
                                                         </div>
                                                         <div className="p-4 flex flex-col flex-grow">
-                                                            <h4 className="font-semibold text-gray-800 text-lg">{product.nombre}</h4>
+                                                            <h4 className="font-semibold text-gray-800 text-lg leading-tight">{product.nombre}</h4>
                                                             <p className="text-gray-600 text-xs mt-1 flex-grow">{product.descripcion}</p>
                                                             
-                                                            <div className="mt-4 pt-4 border-t">
+                                                            <div className="mt-3 mb-2 min-h-[24px]">
+                                                                <UpsellMessage product={product} quantity={quantity} />
+                                                            </div>
+
+                                                            <div className="pt-2 border-t mt-auto">
                                                                 <div className="flex justify-between items-center mb-3">
                                                                     <label htmlFor={`quantity-grid-${product.id}`} className="text-sm font-medium text-gray-700">Cantidad:</label>
                                                                     <div className="flex items-center border border-gray-300 rounded-md">
@@ -334,14 +395,7 @@ const PublicPriceListPage: React.FC = () => {
                                                                 </div>
                                                                 <div className="flex justify-between items-center text-sm">
                                                                     <span className="text-gray-500">Precio Unit.:</span>
-                                                                    <div className="font-semibold flex items-center gap-1">
-                                                                        <span>{formatPrice(currentPrice)}</span>
-                                                                        {discountPercent > 0 && (
-                                                                            <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full" title={`Descuento por comprar ${quantity} o más unidades.`}>
-                                                                                -{discountPercent.toFixed(0)}%
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
+                                                                    <span className="font-semibold text-gray-800">{formatPrice(currentPrice)}</span>
                                                                 </div>
                                                                 <div className="flex justify-between items-center mt-2 text-lg">
                                                                     <span className="font-bold text-gray-800">Total:</span>
