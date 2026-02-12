@@ -252,7 +252,7 @@ const PublicPriceListPage: React.FC = () => {
                             {Object.entries(groupedProducts).map(([linea, prods]) => (
                                 <div key={linea}>
                                     <div className={`p-4 text-white text-center rounded-t-lg ${lineaColors[linea] || 'bg-gray-500'}`}>
-                                        <h3 className="text-2xl font-bold tracking-wider uppercase">{linea}</h3>
+                                        <h3 className="text-2xl font-bold tracking-wider uppercase">{linea === 'ESSENS' ? 'ESSENCE' : linea}</h3>
                                     </div>
                                     
                                     {viewMode === 'list' ? (

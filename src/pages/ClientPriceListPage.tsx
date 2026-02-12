@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import ClientHeader from '@/components/ClientHeader';
@@ -129,7 +130,9 @@ const ClientPriceListPage: React.FC = () => {
                         <div className="lg:w-2/3">
                             {Object.entries(groupedProducts).map(([linea, prods]) => (
                                 <div key={linea} className="mb-10 bg-white shadow-lg rounded-lg overflow-hidden">
-                                    <div className={`p-4 text-white text-center ${lineaColors[linea] || 'bg-gray-500'}`}><h2 className="text-2xl font-bold tracking-wider uppercase">{linea}</h2></div>
+                                    <div className={`p-4 text-white text-center ${lineaColors[linea] || 'bg-gray-500'}`}>
+                                        <h2 className="text-2xl font-bold tracking-wider uppercase">{linea === 'ESSENS' ? 'ESSENCE' : linea}</h2>
+                                    </div>
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-sm">
                                             <thead className="bg-gray-50">

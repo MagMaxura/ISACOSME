@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -226,7 +227,7 @@ const Precios: React.FC = () => {
                 {Object.entries(groupedProducts).map(([linea, prods]) => (
                     <div key={linea} className="mb-12" style={{ breakInside: 'avoid' }}>
                         <div className={`p-4 text-white text-center rounded-t-lg ${lineaColors[linea] || 'bg-gray-500'}`}>
-                            <h2 className="text-3xl font-bold tracking-widest uppercase">{linea}</h2>
+                            <h2 className="text-3xl font-bold tracking-widest uppercase">{linea === 'ESSENS' ? 'ESSENCE' : linea}</h2>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm border-l border-r border-b border-gray-200">
