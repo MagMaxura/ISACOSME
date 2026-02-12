@@ -192,9 +192,9 @@ const PublicPriceListPage: React.FC = () => {
         // 1. Ya alcanzó precio mayorista
         if (minMayorista > 0 && quantity >= minMayorista) {
              return (
-                <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100 animate-pulse w-fit">
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100 animate-pulse w-fit mt-1">
                     <IconTag className="w-3 h-3" />
-                    ¡Precio Mayorista Desbloqueado!
+                    ¡Mejor Precio Conseguido!
                 </div>
              );
         }
@@ -204,13 +204,13 @@ const PublicPriceListPage: React.FC = () => {
              if (minMayorista > 0 && pMayorista < pComercio) {
                  const missing = minMayorista - quantity;
                  return (
-                    <div className="flex items-center gap-1 text-[10px] sm:text-xs text-violet-700 bg-violet-50 px-2 py-1 rounded-full border border-violet-100 w-fit">
-                        <span>Has alcanzado precio Comercio.</span>
-                        <span className="font-bold">Agregá {missing} más para precio Mayorista ({formatPrice(pMayorista)})</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 text-[10px] sm:text-xs text-violet-700 bg-violet-50 px-2 py-1 rounded-lg border border-violet-100 w-fit mt-1">
+                        <span className="font-semibold text-violet-800">✅ Precio Comercio.</span>
+                        <span>Faltan <strong>{missing} u.</strong> para precio Mayorista ({formatPrice(pMayorista)})</span>
                     </div>
                  );
              } else {
-                 return <div className="text-[10px] sm:text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full w-fit">Precio Comercio Aplicado</div>;
+                 return <div className="text-[10px] sm:text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full w-fit mt-1">Precio Comercio Aplicado</div>;
              }
         }
 
@@ -218,8 +218,8 @@ const PublicPriceListPage: React.FC = () => {
         if (quantity < minComercio && pComercio < pPublico) {
              const missing = minComercio - quantity;
              return (
-                <div className="flex items-center gap-1 text-[10px] sm:text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100 w-fit">
-                    Agregá <strong>{missing}</strong> u. para precio Comercio ({formatPrice(pComercio)})
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100 w-fit mt-1">
+                    Agregá <strong>{missing} u.</strong> para precio Comercio ({formatPrice(pComercio)})
                 </div>
              );
         }
@@ -282,9 +282,7 @@ const PublicPriceListPage: React.FC = () => {
                                                                 <div className="flex-grow">
                                                                     <p className="font-semibold text-gray-800">{product.nombre}</p>
                                                                     <p className="text-gray-600 text-xs">{product.descripcion}</p>
-                                                                    <div className="mt-1">
-                                                                        <UpsellMessage product={product} quantity={quantity} />
-                                                                    </div>
+                                                                    <UpsellMessage product={product} quantity={quantity} />
                                                                 </div>
                                                             </div>
                                                             <div className="flex w-full md:w-auto items-center justify-between md:justify-end gap-2 md:gap-4 shrink-0 mt-4 md:mt-0">
@@ -510,7 +508,7 @@ const PublicPriceListPage: React.FC = () => {
                     <div className={`flex flex-col sm:flex-row justify-between items-center transition-all duration-300 ${isScrolled ? 'gap-0' : 'gap-4'}`}>
                         <div className={`text-center sm:text-left transition-all duration-300 origin-left ${isScrolled ? 'scale-75' : 'scale-100 mb-4 sm:mb-0'}`}>
                             <img 
-                                src="https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.png" 
+                                src="https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20Header.webp" 
                                 alt="Isabella de la Perla Logo" 
                                 className="h-16 sm:h-20 object-contain"
                             />
