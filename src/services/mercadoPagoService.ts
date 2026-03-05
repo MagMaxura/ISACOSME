@@ -5,14 +5,14 @@ import { OrderItem } from '@/types';
 const SERVICE_NAME = 'MercadoPagoService';
 
 interface PayerInfo {
-  name: string;
-  surname: string;
-  email: string;
-  phone?: string; 
-  dni?: string;
-  street_name?: string;
-  street_number?: string;
-  zip_code?: string;
+    name: string;
+    surname: string;
+    email: string;
+    phone?: string;
+    dni?: string;
+    street_name?: string;
+    street_number?: string;
+    zip_code?: string;
 }
 
 /**
@@ -20,21 +20,21 @@ interface PayerInfo {
  */
 export const createPreference = async (orderItems: OrderItem[], payerInfo: PayerInfo, externalReference?: string, shippingCost?: number): Promise<string> => {
     const safeExternalReference = externalReference || 'NO_ID';
-    
+
     // Capturamos el dominio actual (ej: https://www.ultrashineskin.com o https://www.isabelladelaperla.app)
     const currentDomain = window.location.origin;
 
     console.log(`[${SERVICE_NAME}] Init preference. Sale ID: ${safeExternalReference}. Shipping: ${shippingCost}. Domain: ${currentDomain}`);
-    
+
     // Formatear items para el proxy
     const mpItems = orderItems.map(item => ({
         id: item.id,
         title: item.nombre,
-        description: item.nombre, 
+        description: item.nombre,
         quantity: Math.floor(item.quantity),
         unit_price: Number(item.unitPrice.toFixed(2)),
-        currency_id: 'ARS', 
-        picture_url: 'https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.png'
+        currency_id: 'ARS',
+        picture_url: 'https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.webp'
     }));
 
     // Agregar envío como item si existe
@@ -64,8 +64,8 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
 
     try {
         const { data, error } = await supabase.functions.invoke('mercadopago-proxy', {
-            body: { 
-                items: mpItems, 
+            body: {
+                items: mpItems,
                 payer: mpPayer,
                 external_reference: safeExternalReference,
                 back_url: currentDomain // Enviamos el dominio para que MP sepa donde volver
@@ -76,12 +76,12 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             console.error(`[${SERVICE_NAME}] Error en Edge Function:`, error);
             let errorMessage = error.message;
             try {
-                 if (error.context && typeof error.context.json === 'function') {
+                if (error.context && typeof error.context.json === 'function') {
                     const functionError = await error.context.json();
                     if (functionError && functionError.error) errorMessage = functionError.error;
-                 }
+                }
             } catch (e) { /* ignore json parse error */ }
-            
+
             throw new Error(`Error al conectar con pasarela de pago: ${errorMessage}`);
         }
 
@@ -89,7 +89,7 @@ export const createPreference = async (orderItems: OrderItem[], payerInfo: Payer
             console.error(`[${SERVICE_NAME}] Respuesta inválida:`, data);
             throw new Error(data?.error || 'No se recibió el link de pago.');
         }
-        
+
         console.log(`[${SERVICE_NAME}] Preferencia creada exitosamente: ${data.init_point}`);
         return data.init_point;
 

@@ -39,14 +39,14 @@ const Login: React.FC = () => {
         <div className="flex items-center justify-center min-h-screen bg-gray-100">
             <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
                 <div className="text-center">
-                    <img 
-                        src="https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.png" 
-                        alt="Isabella de la Perla Logo" 
+                    <img
+                        src="https://qlsyymuldzoyiazyzxlf.supabase.co/storage/v1/object/public/Isabella%20de%20la%20Perla/Isabella%20de%20la%20perla%20Logo%20completo.webp"
+                        alt="Isabella de la Perla Logo"
                         className="mx-auto h-24 object-contain mb-4"
                     />
                     <h2 className="text-xl font-semibold text-gray-700">Iniciar Sesión</h2>
                 </div>
-                
+
                 {error && (
                     <div className="p-3 text-center text-red-800 bg-red-100 border border-red-200 rounded-lg">
                         {error}
