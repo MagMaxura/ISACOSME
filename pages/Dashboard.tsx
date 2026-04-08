@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import Card from '../components/Card';
 import PageHeader from '../components/PageHeader';
 import { IconShoppingCart, IconPackage, IconUsers, IconBuildingWarehouse } from '../components/Icons';
-import { LowStockInsumo, LowStockProducto } from '../types';
+import { LowStockInsumo, LowStockProducto, MonthlyData } from '../types';
 import Table, { Column } from '../components/Table';
+import BarChart from '../components/BarChart';
+import { ChartData } from 'chart.js';
 import { Link } from 'react-router-dom';
 import { fetchDashboardData } from '../services/dashboardService';
 import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
@@ -18,6 +20,8 @@ const Dashboard: React.FC = () => {
   const [totalSales, setTotalSales] = useState(0);
   const [lowStockProducts, setLowStockProducts] = useState<LowStockProducto[]>([]);
   const [lowStockInsumos, setLowStockInsumos] = useState<LowStockInsumo[]>([]);
+  const [salesByMonth, setSalesByMonth] = useState<MonthlyData[]>([]);
+  const [unitsByMonth, setUnitsByMonth] = useState<MonthlyData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +38,8 @@ const Dashboard: React.FC = () => {
         setTotalInsumosCount(data.totalInsumosCount);
         setLowStockProducts(data.lowStockProducts);
         setLowStockInsumos(data.lowStockInsumos);
+        setSalesByMonth(data.salesByMonth || []);
+        setUnitsByMonth(data.unitsByMonth || []);
         console.log("[DashboardPage] Data fetched successfully.", data);
       } catch (err: any) {
         console.error("[DashboardPage] Failed to fetch data.", err.message);
@@ -103,6 +109,35 @@ const Dashboard: React.FC = () => {
           <InflationManager />
         </div>
       )}
+
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <BarChart 
+          title="Ventas Mensuales ($)" 
+          data={{
+            labels: salesByMonth.map(d => d.month),
+            datasets: [{
+              label: 'Monto Total',
+              data: salesByMonth.map(d => d.value),
+              backgroundColor: 'rgba(139, 92, 246, 0.6)',
+              borderColor: 'rgb(139, 92, 246)',
+              borderWidth: 1,
+            }]
+          }} 
+        />
+        <BarChart 
+          title="Unidades Vendidas por Mes" 
+          data={{
+            labels: unitsByMonth.map(d => d.month),
+            datasets: [{
+              label: 'Cantidad Unidades',
+              data: unitsByMonth.map(d => d.value),
+              backgroundColor: 'rgba(236, 72, 153, 0.6)',
+              borderColor: 'rgb(236, 72, 153)',
+              borderWidth: 1,
+            }]
+          }} 
+        />
+      </div>
 
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>

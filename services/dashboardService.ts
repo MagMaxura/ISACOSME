@@ -41,6 +41,8 @@ DECLARE
     total_insumos_count_val integer;
     low_stock_products_json json;
     low_stock_insumos_json json;
+    monthly_sales_json json;
+    monthly_units_json json;
 BEGIN
     -- Total sales count
     SELECT COUNT(*) INTO total_sales_count FROM ventas;
@@ -74,13 +76,46 @@ BEGIN
     FROM insumos i
     WHERE i.stock < 100;
 
+    -- Sales by month (Amount for current year)
+    SELECT json_agg(month_data) INTO monthly_sales_json FROM (
+        SELECT 
+            TO_CHAR(m, 'Mon') as month,
+            COALESCE(SUM(v.total), 0) as value
+        FROM generate_series(
+            date_trunc('year', CURRENT_DATE),
+            date_trunc('year', CURRENT_DATE) + interval '11 months',
+            interval '1 month'
+        ) m
+        LEFT JOIN ventas v ON date_trunc('month', v.fecha) = m
+        GROUP BY m
+        ORDER BY m
+    ) month_data;
+
+    -- Units by month (for current year)
+    SELECT json_agg(month_data) INTO monthly_units_json FROM (
+        SELECT 
+            TO_CHAR(m, 'Mon') as month,
+            COALESCE(SUM(vi.cantidad), 0) as value
+        FROM generate_series(
+            date_trunc('year', CURRENT_DATE),
+            date_trunc('year', CURRENT_DATE) + interval '11 months',
+            interval '1 month'
+        ) m
+        LEFT JOIN ventas v ON date_trunc('month', v.fecha) = m
+        LEFT JOIN venta_items vi ON v.id = vi.venta_id
+        GROUP BY m
+        ORDER BY m
+    ) month_data;
+
     RETURN json_build_object(
         'totalSales', COALESCE(total_sales_count, 0),
         'totalRevenue', COALESCE(total_revenue_val, 0),
         'totalProductStock', COALESCE(total_product_stock_val, 0),
         'totalInsumosCount', COALESCE(total_insumos_count_val, 0),
         'lowStockProducts', COALESCE(low_stock_products_json, '[]'::json),
-        'lowStockInsumos', COALESCE(low_stock_insumos_json, '[]'::json)
+        'lowStockInsumos', COALESCE(low_stock_insumos_json, '[]'::json),
+        'salesByMonth', COALESCE(monthly_sales_json, '[]'::json),
+        'unitsByMonth', COALESCE(monthly_units_json, '[]'::json)
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;`

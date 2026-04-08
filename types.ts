@@ -207,6 +207,11 @@ export interface LowStockInsumo {
   unidad: InsumoUnidad;
 }
 
+export interface MonthlyData {
+  month: string;
+  value: number;
+}
+
 export interface DashboardStats {
   totalSales: number;
   totalRevenue: number;
@@ -214,6 +219,8 @@ export interface DashboardStats {
   totalInsumosCount: number;
   lowStockProducts: LowStockProducto[];
   lowStockInsumos: LowStockInsumo[];
+  salesByMonth: MonthlyData[];
+  unitsByMonth: MonthlyData[];
 }
 
 // Types for Product Dashboard
