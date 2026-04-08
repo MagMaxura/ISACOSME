@@ -201,3 +201,46 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;`
         throw new Error(`No se pudo crear la lista: ${error?.message}`);
     }
 };
+
+export const updateAllPricesByPercentage = async (percentage: number): Promise<void> => {
+    console.log(`[${SERVICE_NAME}] Applying global price update of ${percentage}%.`);
+    try {
+        const factor = 1 + (percentage / 100);
+        
+        const { error } = await supabase.rpc('apply_inflation_to_prices', {
+            p_factor: factor
+        });
+
+        if (error) throw error;
+        
+        console.log(`[${SERVICE_NAME}] Successfully applied inflation adjustment.`);
+    } catch (error: any) {
+        console.error(`[${SERVICE_NAME}] Error applying inflation adjustment:`, error);
+        
+        const functionNotFound = error.code === '42883' || error.message?.includes('function apply_inflation_to_prices does not exist');
+        if (functionNotFound) {
+             throw {
+                message: "Error de base de datos: La función 'apply_inflation_to_prices' no existe.",
+                details: "Esta función es necesaria para actualizar masivamente todos los precios de los productos.",
+                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función.",
+                sql: `CREATE OR REPLACE FUNCTION apply_inflation_to_prices(p_factor numeric)
+RETURNS void AS $$
+BEGIN
+    -- Update base prices in productos table
+    UPDATE public.productos
+    SET 
+        precio_publico = ROUND(precio_publico * p_factor, 2),
+        precio_comercio = ROUND(precio_comercio * p_factor, 2),
+        precio_mayorista = ROUND(precio_mayorista * p_factor, 2);
+
+    -- Update prices in all custom price lists
+    UPDATE public.lista_precio_productos
+    SET precio = ROUND(precio * p_factor, 2);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`
+            };
+        }
+        
+        throw new Error(`No se pudo aplicar el aumento de precios: ${error?.message}`);
+    }
+};

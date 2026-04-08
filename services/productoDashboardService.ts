@@ -22,7 +22,7 @@ export const fetchProductoDashboardData = async (productoId: string): Promise<an
             .select(`
                 *,
                 productos_insumos (cantidad, insumos (*)),
-                lotes (cantidad_inicial, costo_laboratorio)
+                lotes (cantidad_inicial, costo_laboratorio, created_at)
             `)
             .eq('id', productoId)
             .single();
@@ -61,11 +61,14 @@ export const fetchProductoDashboardData = async (productoId: string): Promise<an
         const costoInsumos = productoData.costo_insumos || 0;
 
         const lotes = productoData.lotes || [];
-        const totalProducido = lotes.reduce((sum: number, lote: any) => sum + lote.cantidad_inicial, 0);
-        const totalCostoLaboratorio = lotes.reduce((sum: number, lote: any) => sum + lote.costo_laboratorio, 0);
-        const costoLaboratorioPromedio = totalProducido > 0 ? totalCostoLaboratorio / totalProducido : 0;
+        // Use the laboratory cost of the latest lot entered (by created_at)
+        const latestLot = lotes.length > 0 
+            ? [...lotes].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+            : null;
+        
+        const costoLaboratorioReciente = latestLot ? (latestLot.costo_laboratorio || 0) : 0;
 
-        const costoTotal = costoInsumos + costoLaboratorioPromedio;
+        const costoTotal = costoInsumos + costoLaboratorioReciente;
         const gananciaNeta = productoData.precio_publico - costoTotal;
         const margenGanancia = productoData.precio_publico > 0 ? (gananciaNeta / productoData.precio_publico) * 100 : 0;
         const unidadesVendidas = salesData.reduce((sum, item) => sum + item.cantidad, 0);
@@ -127,7 +130,7 @@ export const fetchProductoDashboardData = async (productoId: string): Promise<an
         return {
             producto,
             costoInsumos,
-            costoLaboratorioPromedio,
+            costoLaboratorioReciente,
             costoTotal,
             gananciaNeta,
             margenGanancia,

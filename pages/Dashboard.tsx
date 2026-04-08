@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { fetchDashboardData } from '../services/dashboardService';
 import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
 import { useAuth } from '../contexts/AuthContext';
+import InflationManager from '../components/InflationManager';
 
 const Dashboard: React.FC = () => {
   const { profile } = useAuth();
@@ -96,6 +97,12 @@ const Dashboard: React.FC = () => {
           color="bg-green-500"
         />
       </div>
+
+      {isSuperAdmin && (
+        <div className="mb-10 max-w-2xl">
+          <InflationManager />
+        </div>
+      )}
 
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
