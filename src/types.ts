@@ -201,6 +201,7 @@ export interface MonthlyData {
 
 export interface DashboardStats {
   totalSales: number;
+  totalRevenue: number;
   totalProductStock: number;
   inventoryValue: number;
   totalInsumosCount: number;

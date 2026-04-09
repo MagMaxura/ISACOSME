@@ -33,13 +33,13 @@ const Dashboard: React.FC = () => {
       setError(null);
       try {
         const data = await fetchDashboardData();
-        setTotalSales(data.totalSales);
-        setTotalRevenue(data.totalRevenue);
-        setTotalProductStock(data.totalProductStock);
-        setInventoryValue(data.inventoryValue);
-        setTotalInsumosCount(data.totalInsumosCount);
-        setLowStockProducts(data.lowStockProducts);
-        setLowStockInsumos(data.lowStockInsumos);
+        setTotalSales(data.totalSales ?? 0);
+        setTotalRevenue(data.totalRevenue ?? 0);
+        setTotalProductStock(data.totalProductStock ?? 0);
+        setInventoryValue(data.inventoryValue ?? 0);
+        setTotalInsumosCount(data.totalInsumosCount ?? 0);
+        setLowStockProducts(data.lowStockProducts || []);
+        setLowStockInsumos(data.lowStockInsumos || []);
         setSalesByMonth(data.salesByMonth || []);
         setUnitsByMonth(data.unitsByMonth || []);
         setTopProducts(data.topProducts || []);
@@ -82,26 +82,26 @@ const Dashboard: React.FC = () => {
         {isSuperAdmin && (
             <Card 
               title="Ingresos (Año Actual)" 
-              value={loading ? '...' : `$${totalRevenue.toLocaleString('es-AR')}`} 
+              value={loading ? '...' : `$${(totalRevenue ?? 0).toLocaleString('es-AR')}`} 
               icon={<IconShoppingCart className="h-6 w-6 text-white" />}
               color="bg-violet-500"
             />
         )}
         <Card 
           title="Total de Ventas" 
-          value={loading ? '...' : totalSales.toString()} 
+          value={loading ? '...' : (totalSales ?? 0).toString()} 
           icon={<IconUsers className="h-6 w-6 text-white" />}
           color="bg-pink-500"
         />
         <Card 
           title="Stock de Productos (U.)" 
-          value={loading ? '...' : totalProductStock.toLocaleString('es-AR')}
+          value={loading ? '...' : (totalProductStock ?? 0).toLocaleString('es-AR')}
           icon={<IconPackage className="h-6 w-6 text-white" />}
           color="bg-blue-500"
         />
         <Card 
           title="Valuación de Stock" 
-          value={loading ? '...' : `$${inventoryValue.toLocaleString('es-AR')}`} 
+          value={loading ? '...' : `$${(inventoryValue ?? 0).toLocaleString('es-AR')}`} 
           icon={<IconBuildingWarehouse className="h-6 w-6 text-white" />}
           color="bg-emerald-500"
         />
