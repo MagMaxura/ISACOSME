@@ -194,13 +194,23 @@ export interface LowStockInsumo {
   unidad: InsumoUnidad;
 }
 
+export interface MonthlyData {
+  month: string;
+  value: number;
+}
+
 export interface DashboardStats {
   totalSales: number;
-  totalRevenue: number;
   totalProductStock: number;
+  inventoryValue: number;
   totalInsumosCount: number;
+  low_stock_products_json: any;
   lowStockProducts: LowStockProducto[];
   lowStockInsumos: LowStockInsumo[];
+  salesByMonth: MonthlyData[];
+  unitsByMonth: MonthlyData[];
+  topProducts: { name: string; value: number }[];
+  salesByPOS: { name: string; value: number }[];
 }
 
 export interface InsumoConCosto {

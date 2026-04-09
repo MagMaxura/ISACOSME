@@ -29,9 +29,9 @@ export const fetchDashboardData = async (): Promise<DashboardStats> => {
 
         if (functionNotFound) {
             throw {
-                message: "Error de base de datos: La función 'get_dashboard_stats' no existe.",
+                message: "Error de base de datos: La función 'get_dashboard_stats' no existe o está desactualizada.",
                 details: "Esta función es crucial para recopilar todas las estadísticas que se muestran en el Dashboard. Sin ella, la página principal no puede funcionar.",
-                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear la función necesaria.",
+                hint: "Ejecuta el siguiente script SQL en tu editor de Supabase para crear o actualizar la función necesaria.",
                 sql: `CREATE OR REPLACE FUNCTION get_dashboard_stats()
 RETURNS json AS $$
 DECLARE
@@ -41,6 +41,11 @@ DECLARE
     total_insumos_count_val integer;
     low_stock_products_json json;
     low_stock_insumos_json json;
+    monthly_sales_json json;
+    monthly_units_json json;
+    top_products_json json;
+    sales_by_pos_json json;
+    inventory_value_val numeric;
 BEGIN
     -- Total sales count
     SELECT COUNT(*) INTO total_sales_count FROM ventas;
@@ -52,6 +57,9 @@ BEGIN
 
     -- Total product stock
     SELECT COALESCE(SUM(cantidad_actual), 0) INTO total_product_stock_val FROM lotes;
+
+    -- Inventory Value (sum of lotes cost * current quantity)
+    SELECT COALESCE(SUM(cantidad_actual * costo_laboratorio), 0) INTO inventory_value_val FROM lotes;
 
     -- Total insumos types
     SELECT COUNT(*) INTO total_insumos_count_val FROM insumos;
@@ -74,13 +82,71 @@ BEGIN
     FROM insumos i
     WHERE i.stock < 100;
 
+    -- Sales by month (Amount for current year)
+    SELECT json_agg(month_data) INTO monthly_sales_json FROM (
+        SELECT 
+            TO_CHAR(m, 'Mon') as month,
+            COALESCE(SUM(v.total), 0) as value
+        FROM generate_series(
+            date_trunc('year', CURRENT_DATE),
+            date_trunc('year', CURRENT_DATE) + interval '11 months',
+            interval '1 month'
+        ) m
+        LEFT JOIN ventas v ON date_trunc('month', v.fecha) = m
+        GROUP BY m
+        ORDER BY m
+    ) month_data;
+
+    -- Units by month (for current year)
+    SELECT json_agg(month_data) INTO monthly_units_json FROM (
+        SELECT 
+            TO_CHAR(m, 'Mon') as month,
+            COALESCE(SUM(vi.cantidad), 0) as value
+        FROM generate_series(
+            date_trunc('year', CURRENT_DATE),
+            date_trunc('year', CURRENT_DATE) + interval '11 months',
+            interval '1 month'
+        ) m
+        LEFT JOIN ventas v ON date_trunc('month', v.fecha) = m
+        LEFT JOIN venta_items vi ON v.id = vi.venta_id
+        GROUP BY m
+        ORDER BY m
+    ) month_data;
+
+    -- Top 5 Sold Products
+    SELECT json_agg(top_p) INTO top_products_json FROM (
+        SELECT 
+            p.nombre as name,
+            SUM(vi.cantidad) as value
+        FROM productos p
+        JOIN venta_items vi ON p.id = vi.producto_id
+        GROUP BY p.id, p.nombre
+        ORDER BY value DESC
+        LIMIT 5
+    ) top_p;
+
+    -- Sales by Point of Sale (POS)
+    SELECT json_agg(pos_data) INTO sales_by_pos_json FROM (
+        SELECT 
+            COALESCE(punto_de_venta, 'No especificado') as name,
+            COUNT(*) as value
+        FROM ventas
+        GROUP BY punto_de_venta
+        ORDER BY value DESC
+    ) pos_data;
+
     RETURN json_build_object(
         'totalSales', COALESCE(total_sales_count, 0),
         'totalRevenue', COALESCE(total_revenue_val, 0),
         'totalProductStock', COALESCE(total_product_stock_val, 0),
+        'inventoryValue', COALESCE(inventory_value_val, 0),
         'totalInsumosCount', COALESCE(total_insumos_count_val, 0),
         'lowStockProducts', COALESCE(low_stock_products_json, '[]'::json),
-        'lowStockInsumos', COALESCE(low_stock_insumos_json, '[]'::json)
+        'lowStockInsumos', COALESCE(low_stock_insumos_json, '[]'::json),
+        'salesByMonth', COALESCE(monthly_sales_json, '[]'::json),
+        'unitsByMonth', COALESCE(monthly_units_json, '[]'::json),
+        'topProducts', COALESCE(top_products_json, '[]'::json),
+        'salesByPOS', COALESCE(sales_by_pos_json, '[]'::json)
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;`
