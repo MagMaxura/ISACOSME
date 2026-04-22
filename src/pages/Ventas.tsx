@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
 import { Venta, SimpleCliente } from '@/types';
-import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld, IconFileText, IconCheck, IconUsers, IconUserPlus, IconUserCheck, IconArrowLeft } from '@/components/Icons';
+import { IconPlus, IconTrash, IconBrandWhatsapp, IconEye, IconX, IconPackage, IconTruck, IconClock, IconWorld, IconFileText, IconCheck, IconUsers, IconUserPlus, IconUserCheck, IconArrowLeft, IconDownload } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta, assignClientToVenta } from '@/services/ventasService';
 import { fetchSimpleClientes, createCliente } from '@/services/clientesService';
@@ -186,11 +186,23 @@ const VentaDetailContent: React.FC<{ venta: any }> = ({ venta }) => {
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Datos de Entrega</h4>
                     <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm flex items-start">
                         <IconTruck className="w-5 h-5 mr-3 text-primary mt-0.5" />
-                        <div>
+                        <div className="flex-1">
                             <p className="text-sm font-semibold text-gray-800 leading-tight">
                                 {webInfo?.direccionCompleta || 'Entrega en tienda / Manual'}
                             </p>
-                            {webInfo?.envioStatus && (
+                            {venta.oca_numero_envio && (
+                                <div className="mt-2 flex items-center gap-2">
+                                    <p className="text-[10px] bg-violet-50 border border-violet-100 text-primary px-2 py-0.5 rounded-full font-bold">
+                                        OCA: {venta.oca_numero_envio}
+                                    </p>
+                                    {venta.url_etiqueta_oca && (
+                                        <a href={venta.url_etiqueta_oca} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-[10px] font-extrabold uppercase">
+                                            <IconDownload className="w-3.5 h-3.5" /> Descargar Etiqueta
+                                        </a>
+                                    )}
+                                </div>
+                            )}
+                            {webInfo?.envioStatus && !venta.oca_numero_envio && (
                                 <p className="text-[10px] bg-violet-50 border border-violet-100 text-primary px-2 py-0.5 rounded-full mt-2 inline-block font-bold">
                                     {webInfo.envioStatus}
                                 </p>
@@ -592,6 +604,17 @@ const Ventas: React.FC = () => {
                                                 <option value="Carrito Abandonado">Abandonado</option>
                                                 <option value="Cancelada">Cancelada</option>
                                             </select>
+                                            {item.url_etiqueta_oca && (
+                                                <a 
+                                                    href={item.url_etiqueta_oca} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="p-2 rounded-full bg-blue-600 text-white transition-all transform hover:scale-110 shadow-lg"
+                                                    title="Descargar Etiqueta OCA (PDF)"
+                                                >
+                                                    <IconDownload className="h-4 w-4" />
+                                                </a>
+                                            )}
                                             {canManage && (
                                                 <button onClick={() => handleDelete(item.id, item.clienteNombre)} className="text-gray-300 hover:text-red-500 p-2"><IconTrash className="h-4 w-4" /></button>
                                             )}
