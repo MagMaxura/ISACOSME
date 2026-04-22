@@ -56,6 +56,8 @@ export const fetchVentas = async (): Promise<Venta[]> => {
                 items: items,
                 observaciones: v.observaciones,
                 puntoDeVenta: v.punto_de_venta,
+                oca_numero_envio: v.oca_numero_envio,
+                url_etiqueta_oca: v.url_etiqueta_oca,
             };
         });
         console.log(`[${SERVICE_NAME}] Successfully fetched and transformed ${transformedData.length} sales.`);
@@ -97,6 +99,8 @@ export const fetchVentaPorId = async (id: string): Promise<Venta | null> => {
             items: items,
             observaciones: data.observaciones,
             puntoDeVenta: data.punto_de_venta,
+            oca_numero_envio: data.oca_numero_envio,
+            url_etiqueta_oca: data.url_etiqueta_oca,
         };
     } catch (error) {
         console.error("Error fetching sale by ID:", error);

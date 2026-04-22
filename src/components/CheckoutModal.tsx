@@ -5,6 +5,7 @@ import { IconX, IconMercadoPago, IconAlertCircle, IconCheck, IconCashBanknote, I
 import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
 import { getOrCreateClientByEmail } from '../services/clientesService';
 import { createPreference } from '../services/mercadoPagoService';
+import { getBranchesByCP, OcaBranch } from '../services/ocaService';
 import { OrderItem } from '@/types';
 import DatabaseErrorDisplay from './DatabaseErrorDisplay';
 
@@ -60,6 +61,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         city: '',
         province: '',
     });
+    const [shippingType, setShippingType] = useState<'puerta' | 'sucursal'>('puerta');
+    const [branches, setBranches] = useState<OcaBranch[]>([]);
+    const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+    const [isFetchingBranches, setIsFetchingBranches] = useState(false);
     const [errors, setErrors] = useState<Record<string, string | null>>({});
     const [loading, setLoading] = useState(false);
     const [apiError, setApiError] = useState<any | null>(null);
@@ -98,6 +103,23 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         const { name, value } = e.target;
         setPayerInfo(prev => ({ ...prev, [name]: value }));
         validateField(name, value);
+
+        // Si cambia el CP, buscar sucursales
+        if (name === 'zip_code' && value.length >= 4) {
+            fetchBranches(value);
+        }
+    };
+
+    const fetchBranches = async (cp: string) => {
+        setIsFetchingBranches(true);
+        try {
+            const data = await getBranchesByCP(cp);
+            setBranches(data);
+        } catch (err) {
+            console.error("Error fetching branches", err);
+        } finally {
+            setIsFetchingBranches(false);
+        }
     };
 
     const getTiendaFromHostname = () => {
@@ -134,11 +156,21 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
             const shippingNote = shippingCost > 0 ? ` [Incluye Envío: $${shippingCost.toFixed(2)}]` : ' [Envío Gratis]';
             const discountNote = discountTransfer > 0 ? ` [Descuento Transferencia 5%: -$${discountTransfer.toFixed(2)}]` : '';
             const methodLabel = paymentMethod === 'mercadopago' ? 'WEB MP' : 'WEB TRANSFERENCIA';
-            const direccionCompleta = `${payerInfo.street_name} ${payerInfo.street_number}, ${payerInfo.city}, ${payerInfo.province} (CP: ${payerInfo.zip_code})`;
             
+            let direccionFinal = `${payerInfo.street_name} ${payerInfo.street_number}, ${payerInfo.city}, ${payerInfo.province} (CP: ${payerInfo.zip_code})`;
+            let obsEnvio = '';
+
+            if (shippingType === 'sucursal' && selectedBranchId) {
+                const branch = branches.find(b => b.id === selectedBranchId);
+                if (branch) {
+                    direccionFinal = `RETRE EN SUCURSAL OCA: ${branch.name} (${branch.address}, ${branch.city})`;
+                    obsEnvio = ` - ENVIAR A SUCURSAL ID ${branch.id}`;
+                }
+            }
+
             // 4. Crear la venta vinculada al ID real del cliente
             const saleData: VentaToCreate = {
-                clienteId: clientId, // <--- AHORA VINCULADO REALMENTE
+                clienteId: clientId, 
                 fecha: new Date().toISOString().split('T')[0],
                 tipo: 'Venta',
                 estado: 'Pendiente', 
@@ -146,7 +178,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 subtotal: subtotal,
                 iva: 0,
                 total: total,
-                observaciones: `${methodLabel}${shippingNote}${discountNote} - Tel: ${payerInfo.phone} - Envío a: ${direccionCompleta}`,
+                observaciones: `${methodLabel}${shippingNote}${discountNote}${obsEnvio} - Tel: ${payerInfo.phone} - Envío a: ${direccionFinal}`,
                 puntoDeVenta: 'Tienda física',
                 tienda: getTiendaFromHostname(),
             };
@@ -260,21 +292,67 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
 
                             <section>
                                 <h4 className="text-md font-semibold text-primary mb-3 border-b pb-1">2. Dirección de Envío</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div className="sm:col-span-2">
-                                        <InputField name="street_name" label="Calle" value={payerInfo.street_name} onChange={handleInputChange} error={errors.street_name} disabled={loading} />
+                                
+                                <div className="flex gap-2 p-1 bg-gray-100 rounded-lg mb-6">
+                                    <button 
+                                        onClick={() => setShippingType('puerta')}
+                                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${shippingType === 'puerta' ? 'bg-white shadow-sm text-primary' : 'text-gray-400'}`}
+                                    >
+                                        A Domicilio
+                                    </button>
+                                    <button 
+                                        onClick={() => setShippingType('sucursal')}
+                                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${shippingType === 'sucursal' ? 'bg-white shadow-sm text-primary' : 'text-gray-400'}`}
+                                    >
+                                        Sucursal OCA
+                                    </button>
+                                </div>
+
+                                {shippingType === 'puerta' ? (
+                                    <div className="space-y-4 animate-fade-in">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                            <div className="sm:col-span-2">
+                                                <InputField name="street_name" label="Calle" value={payerInfo.street_name} onChange={handleInputChange} error={errors.street_name} disabled={loading} />
+                                            </div>
+                                            <div>
+                                                <InputField name="street_number" label="Altura" type="number" value={payerInfo.street_number} onChange={handleInputChange} error={errors.street_number} disabled={loading} />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <InputField name="city" label="Ciudad" value={payerInfo.city} onChange={handleInputChange} error={errors.city} disabled={loading} />
+                                            <InputField name="province" label="Provincia" value={payerInfo.province} onChange={handleInputChange} error={errors.province} disabled={loading} />
+                                        </div>
+                                        <InputField name="zip_code" label="Código Postal" type="number" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} disabled={loading} />
                                     </div>
-                                    <div>
-                                        <InputField name="street_number" label="Altura" type="number" value={payerInfo.street_number} onChange={handleInputChange} error={errors.street_number} disabled={loading} />
+                                ) : (
+                                    <div className="space-y-6 animate-fade-in">
+                                        <InputField name="zip_code" label="Tu Código Postal" type="number" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} disabled={loading} />
+                                        
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-sm font-semibold text-gray-700">Selecciona Sucursal</label>
+                                            {isFetchingBranches ? (
+                                                <div className="p-8 text-center text-sm text-gray-400 animate-pulse">Buscando sucursales...</div>
+                                            ) : branches.length > 0 ? (
+                                                <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto custom-scrollbar pr-2">
+                                                    {branches.map(branch => (
+                                                        <button
+                                                            key={branch.id}
+                                                            onClick={() => setSelectedBranchId(branch.id)}
+                                                            className={`p-4 border-2 rounded-xl text-left transition-all ${selectedBranchId === branch.id ? 'border-primary bg-violet-50 text-primary' : 'border-gray-100 bg-white hover:border-gray-200'}`}
+                                                        >
+                                                            <p className="font-bold">{branch.name}</p>
+                                                            <p className="text-xs opacity-70">{branch.address} - {branch.city}</p>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="p-8 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl text-center text-sm text-gray-400">
+                                                    {payerInfo.zip_code.length >= 4 ? 'No se encontraron sucursales en este CP' : 'Ingresa tu CP para ver sucursales disponibles'}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                                    <InputField name="city" label="Ciudad" value={payerInfo.city} onChange={handleInputChange} error={errors.city} disabled={loading} />
-                                    <InputField name="province" label="Provincia" value={payerInfo.province} onChange={handleInputChange} error={errors.province} disabled={loading} />
-                                </div>
-                                <div className="mt-4">
-                                    <InputField name="zip_code" label="Código Postal" type="number" value={payerInfo.zip_code} onChange={handleInputChange} error={errors.zip_code} disabled={loading} />
-                                </div>
+                                )}
                             </section>
                         </div>
                     </div>

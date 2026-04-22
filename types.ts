@@ -154,6 +154,9 @@ export interface Venta {
   clienteNombre?: string;
   clienteTelefono?: string | null;
   observaciones?: string | null;
+  // OCA fields
+  oca_numero_envio?: string | null;
+  url_etiqueta_oca?: string | null;
 }
 
 // FIX: Added missing KnowledgeItem interface to resolve import error in KnowledgeBase.tsx

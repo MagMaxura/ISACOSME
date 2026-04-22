@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import Table, { Column } from '../components/Table';
 import { Venta } from '../types';
-import { IconPlus, IconTrash } from '../components/Icons';
+import { IconPlus, IconTrash, IconDownload } from '../components/Icons';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchVentas as fetchVentasService, updateVentaStatus, deleteVenta } from '../services/ventasService';
 import DatabaseErrorDisplay from '../components/DatabaseErrorDisplay';
@@ -139,6 +139,17 @@ const Ventas: React.FC = () => {
                     >
                         <IconTrash className="h-5 w-5" />
                     </button>
+                    {item.url_etiqueta_oca && (
+                        <a
+                            href={item.url_etiqueta_oca}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:text-blue-700 p-1 rounded-md hover:bg-blue-100 transition-colors"
+                            title="Descargar Etiqueta OCA (PDF)"
+                        >
+                            <IconDownload className="h-5 w-5" />
+                        </a>
+                    )}
                 </div>
             )
         });
