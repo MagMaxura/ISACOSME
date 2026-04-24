@@ -1,10 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
 import ReactDOM from 'react-dom';
-import { IconX, IconMercadoPago, IconAlertCircle, IconCheck, IconCashBanknote, IconTruck } from './Icons';
+import { IconX, IconMercadoPago, IconAlertCircle, IconCheck, IconCashBanknote, IconTruck, IconFileText, IconNave } from './Icons';
 import { createVenta, VentaToCreate, prepareVentaItemsFromCart } from '../services/ventasService';
 import { getOrCreateClientByEmail } from '../services/clientesService';
 import { createPreference } from '../services/mercadoPagoService';
+import { createNavePayment } from '../services/naveService';
 import { getBranchesByCP, OcaBranch } from '../services/ocaService';
 import { OrderItem } from '@/types';
 import DatabaseErrorDisplay from './DatabaseErrorDisplay';
@@ -48,7 +49,7 @@ const InputField: React.FC<InputFieldProps> = ({ name, label, value, onChange, e
 );
 
 const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderItems, subtotal, shippingCost = 0 }) => {
-    const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'transferencia'>('mercadopago');
+    const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'transferencia' | 'nave'>('mercadopago');
     const [payerInfo, setPayerInfo] = useState({
         name: '',
         surname: '',
@@ -76,7 +77,11 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
         return paymentMethod === 'transferencia' ? subtotal * 0.05 : 0;
     }, [paymentMethod, subtotal]);
 
-    const total = subtotal - discountTransfer + shippingCost;
+    const naveSurcharge = useMemo(() => {
+        return paymentMethod === 'nave' ? subtotal * 0.10 : 0;
+    }, [paymentMethod, subtotal]);
+
+    const total = subtotal - discountTransfer + naveSurcharge + shippingCost;
 
     if (!isOpen) return null;
 
@@ -155,7 +160,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
             // 3. Generar nota para la venta
             const shippingNote = shippingCost > 0 ? ` [Incluye Envío: $${shippingCost.toFixed(2)}]` : ' [Envío Gratis]';
             const discountNote = discountTransfer > 0 ? ` [Descuento Transferencia 5%: -$${discountTransfer.toFixed(2)}]` : '';
-            const methodLabel = paymentMethod === 'mercadopago' ? 'WEB MP' : 'WEB TRANSFERENCIA';
+            const surchargeNote = naveSurcharge > 0 ? ` [Recargo Nave 10%: +$${naveSurcharge.toFixed(2)}]` : '';
+            const methodLabel = paymentMethod === 'mercadopago' ? 'WEB MP' : paymentMethod === 'nave' ? 'WEB NAVE' : 'WEB TRANSFERENCIA';
             
             let direccionFinal = `${payerInfo.street_name} ${payerInfo.street_number}, ${payerInfo.city}, ${payerInfo.province} (CP: ${payerInfo.zip_code})`;
             let obsEnvio = '';
@@ -178,7 +184,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 subtotal: subtotal,
                 iva: 0,
                 total: total,
-                observaciones: `${methodLabel}${shippingNote}${discountNote}${obsEnvio} - Tel: ${payerInfo.phone} - Envío a: ${direccionFinal}`,
+                observaciones: `${methodLabel}${shippingNote}${discountNote}${surchargeNote}${obsEnvio} - Tel: ${payerInfo.phone} - Envío a: ${direccionFinal}`,
                 puntoDeVenta: 'Tienda física',
                 tienda: getTiendaFromHostname(),
             };
@@ -189,6 +195,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                 setStatusMessage('Generando link de pago...');
                 const initPoint = await createPreference(orderItems, payerInfo, newSaleId, shippingCost);
                 window.location.href = initPoint;
+            } else if (paymentMethod === 'nave') {
+                setStatusMessage('Generando link de pago Nave...');
+                const checkoutUrl = await createNavePayment(orderItems, payerInfo, newSaleId, shippingCost);
+                window.location.href = checkoutUrl;
             } else {
                 setOrderFinished(true);
                 setLoading(false);
@@ -270,6 +280,17 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                         <div className="text-left">
                                             <p className="font-bold">Transferencia</p>
                                             <p className="text-xs text-green-600 font-bold">¡5% de Descuento!</p>
+                                        </div>
+                                    </button>
+                                    <button 
+                                        onClick={() => setPaymentMethod('nave')}
+                                        className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${paymentMethod === 'nave' ? 'border-primary bg-violet-50 text-primary ring-4 ring-violet-100' : 'border-gray-200 hover:border-gray-300'}`}
+                                    >
+                                        <IconNave className="w-8 h-8" />
+                                        <div className="text-left">
+                                            <p className="font-bold">Nave (Galicia/Naranja X)</p>
+                                            <p className="text-xs text-zinc-900 font-bold uppercase">✨ 3 a 6 CUOTAS SIN INTERÉS</p>
+                                            <p className="text-[10px] text-zinc-500 font-bold leading-tight">Por tan solo 10% extra recibí cuotas fijas</p>
                                         </div>
                                     </button>
                                 </div>
@@ -379,6 +400,13 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     <div className="flex justify-between text-green-600 font-bold">
                                         <span>Descuento Transferencia (5%)</span>
                                         <span>-{formatPrice(discountTransfer)}</span>
+                                    </div>
+                                )}
+
+                                {naveSurcharge > 0 && (
+                                    <div className="flex justify-between text-zinc-600 font-bold">
+                                        <span>Recargo Cuotas (10%)</span>
+                                        <span>+{formatPrice(naveSurcharge)}</span>
                                     </div>
                                 )}
 
