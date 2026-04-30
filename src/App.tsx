@@ -5,6 +5,7 @@ import { useAuth } from './contexts/AuthContext';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import PromoBanner from './components/PromoBanner';
 import Dashboard from './pages/Dashboard';
 import Productos from './pages/Productos';
 import Stock from './pages/Stock';
@@ -65,6 +66,7 @@ const App: React.FC = () => {
   if (!user) {
     return (
       <HashRouter>
+        <PromoBanner />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -82,6 +84,7 @@ const App: React.FC = () => {
   if (profile?.roles?.includes('comex_pending')) {
     return (
         <HashRouter>
+            <PromoBanner />
             <div className="flex h-screen bg-gray-100 font-sans">
                 {/* No sidebar for pending users */}
                 <div className="flex-1 flex flex-col overflow-hidden">
@@ -102,6 +105,7 @@ const App: React.FC = () => {
   if (profile?.roles?.includes('cliente')) {
     return (
       <HashRouter>
+        <PromoBanner />
         <Routes>
            <Route
               path="/mi-lista"
@@ -121,6 +125,7 @@ const App: React.FC = () => {
   if (profile?.roles?.includes('comex') && !profile.roles.includes('superadmin')) {
     return (
       <HashRouter>
+          <PromoBanner />
           <div className="flex h-screen bg-gray-100 font-sans">
             <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -148,6 +153,7 @@ const App: React.FC = () => {
   // Main ERP view for other roles
   return (
     <HashRouter>
+      <PromoBanner />
       <div className="flex h-screen bg-gray-100 font-sans">
         <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
         

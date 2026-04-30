@@ -74,14 +74,18 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
 
     // Cálculos de descuentos y totales
     const discountTransfer = useMemo(() => {
-        return paymentMethod === 'transferencia' ? subtotal * 0.05 : 0;
+        return paymentMethod === 'transferencia' ? subtotal * 0.15 : 0;
+    }, [paymentMethod, subtotal]);
+
+    const discountMercadoPago = useMemo(() => {
+        return paymentMethod === 'mercadopago' ? subtotal * 0.10 : 0;
     }, [paymentMethod, subtotal]);
 
     const naveSurcharge = useMemo(() => {
-        return paymentMethod === 'nave' ? subtotal * 0.10 : 0;
+        return paymentMethod === 'nave' ? subtotal * 0 : 0;
     }, [paymentMethod, subtotal]);
 
-    const total = subtotal - discountTransfer + naveSurcharge + shippingCost;
+    const total = subtotal - discountTransfer - discountMercadoPago + naveSurcharge + shippingCost;
 
     if (!isOpen) return null;
 
@@ -266,8 +270,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     >
                                         <IconMercadoPago className="w-8 h-8" />
                                         <div className="text-left">
-                                            <p className="font-bold">Mercado Pago</p>
-                                            <p className="text-xs opacity-70">Tarjetas, Débito o Saldo</p>
+                                            <p className="font-bold">Mercado Pago (1 Cuota)</p>
+                                            <p className="text-xs text-green-600 font-bold uppercase">¡10% OFF EXTRA!</p>
                                         </div>
                                     </button>
                                     <button 
@@ -279,7 +283,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                         </div>
                                         <div className="text-left">
                                             <p className="font-bold">Transferencia</p>
-                                            <p className="text-xs text-green-600 font-bold">¡5% de Descuento!</p>
+                                            <p className="text-xs text-green-600 font-bold uppercase">¡15% OFF EXTRA!</p>
                                         </div>
                                     </button>
                                     <button 
@@ -288,9 +292,9 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                     >
                                         <IconNave className="w-8 h-8" />
                                         <div className="text-left">
-                                            <p className="font-bold">Nave (Galicia/Naranja X)</p>
-                                            <p className="text-xs text-zinc-900 font-bold uppercase">✨ 3 a 6 CUOTAS SIN INTERÉS</p>
-                                            <p className="text-[10px] text-zinc-500 font-bold leading-tight">Por tan solo 10% extra recibí cuotas fijas</p>
+                                            <p className="font-bold">Nave (Disponible para todos los bancos, con tarjeta de crédito)</p>
+                                            <p className="text-xs text-zinc-900 font-bold uppercase">✨ 3 a 6 CUOTAS FIJAS</p>
+                                            <p className="text-[10px] text-zinc-500 font-bold leading-tight">Precio de Lista / Financiación Incluida</p>
                                         </div>
                                     </button>
                                 </div>
@@ -397,15 +401,20 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                                 <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
                                 
                                 {discountTransfer > 0 && (
-                                    <div className="flex justify-between text-green-600 font-bold">
-                                        <span>Descuento Transferencia (5%)</span>
+                                    <div className="flex justify-between text-green-600 font-bold uppercase tracking-tight">
+                                        <span>Bonificación 15% OFF</span>
                                         <span>-{formatPrice(discountTransfer)}</span>
                                     </div>
                                 )}
-
+                                {discountMercadoPago > 0 && (
+                                    <div className="flex justify-between text-green-600 font-bold uppercase tracking-tight">
+                                        <span>Bonificación 10% OFF</span>
+                                        <span>-{formatPrice(discountMercadoPago)}</span>
+                                    </div>
+                                )}
                                 {naveSurcharge > 0 && (
-                                    <div className="flex justify-between text-zinc-600 font-bold">
-                                        <span>Recargo Cuotas (10%)</span>
+                                    <div className="flex justify-between text-zinc-600 font-bold uppercase tracking-tight">
+                                        <span>Recargo Cuotas (0%)</span>
                                         <span>+{formatPrice(naveSurcharge)}</span>
                                     </div>
                                 )}
