@@ -225,10 +225,14 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, orderIte
                         <IconCheck className="w-12 h-12" />
                     </div>
                     <h3 className="text-2xl font-bold text-gray-800 mb-2">¡Pedido Recibido!</h3>
-                    <p className="text-gray-600 mb-6">Hemos registrado tu pedido. Para completarlo, por favor realiza la transferencia a los datos que te enviaremos por WhatsApp.</p>
+                    <p className="text-gray-600 mb-6">Hemos registrado tu pedido. Para completarlo, por favor realiza la transferencia con los siguientes datos:</p>
                     
                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-left mb-6 space-y-2">
-                        <p className="text-sm font-semibold text-gray-500 uppercase">Total a transferir:</p>
+                        <p className="text-sm font-semibold text-gray-500 uppercase">Alias Bancario:</p>
+                        <p className="text-xl font-bold text-gray-800">ISABELLA-DELAPERLA</p>
+                        <p className="text-sm font-semibold text-gray-500 uppercase mt-2">Razón Social:</p>
+                        <p className="text-lg font-bold text-gray-800">QUANTUM LEAP SAS</p>
+                        <p className="text-sm font-semibold text-gray-500 uppercase mt-2">Total a transferir:</p>
                         <p className="text-3xl font-bold text-primary">{formatPrice(total)}</p>
                     </div>
 
