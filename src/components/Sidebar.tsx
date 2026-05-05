@@ -43,7 +43,7 @@ const navConfig: NavConfigItem[] = [
 
   { type: 'header', text: 'Inteligencia', allowedRoles: ['superadmin', 'analitico', 'vendedor', 'administrativo'] },
   { type: 'link', to: '/base-conocimiento', text: 'Entrenar Chatbot', icon: <IconMessage2 className="h-5 w-5" />, allowedRoles: ['superadmin', 'vendedor', 'administrativo', 'analitico'] },
-  { type: 'link', to: '/estadisticas-productos', text: 'Estadísticas Prod.', icon: <IconChartBar className="h-5 w-5" />, allowedRoles: ['superadmin', 'analitico', 'administrativo'] },
+  { type: 'link', to: '/estadisticas-productos', text: 'Estadísticas Prod.', icon: <IconChartBar className="h-5 w-5" />, allowedRoles: ['superadmin', 'analitico'] },
 
   { type: 'header', text: 'Administración', allowedRoles: ['superadmin', 'comex'] },
   { type: 'link', to: '/comex', text: 'COMEX', icon: <IconWorld className="h-5 w-5" />, allowedRoles: ['superadmin', 'comex'] },

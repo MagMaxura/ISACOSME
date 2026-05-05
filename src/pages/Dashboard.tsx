@@ -66,11 +66,11 @@ const Dashboard: React.FC = () => {
     { header: 'Stock Actual', accessor: 'stock', render: (item) => <span className="font-bold text-yellow-600">{item.stock} {item.unidad}</span> },
   ];
   
-  const isSuperAdmin = profile?.roles?.includes('superadmin');
+  const canSeeSensitiveInfo = profile?.roles?.some(role => ['superadmin', 'analitico'].includes(role));
   
-  const cardContainerClass = isSuperAdmin
+  const cardContainerClass = canSeeSensitiveInfo
     ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8'
-    : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8';
+    : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6 mb-8';
 
   return (
     <div>
@@ -79,7 +79,7 @@ const Dashboard: React.FC = () => {
       <DatabaseErrorDisplay error={error} />
       
       <div className={cardContainerClass}>
-        {isSuperAdmin && (
+        {canSeeSensitiveInfo && (
             <Card 
               title="Ingresos (Año Actual)" 
               value={loading ? '...' : `$${(totalRevenue ?? 0).toLocaleString('es-AR')}`} 
@@ -99,58 +99,64 @@ const Dashboard: React.FC = () => {
           icon={<IconPackage className="h-6 w-6 text-white" />}
           color="bg-blue-500"
         />
-        <Card 
-          title="Valuación de Stock" 
-          value={loading ? '...' : `$${(inventoryValue ?? 0).toLocaleString('es-AR')}`} 
-          icon={<IconBuildingWarehouse className="h-6 w-6 text-white" />}
-          color="bg-emerald-500"
-        />
+        {canSeeSensitiveInfo && (
+            <Card 
+              title="Valuación de Stock" 
+              value={loading ? '...' : `$${(inventoryValue ?? 0).toLocaleString('es-AR')}`} 
+              icon={<IconBuildingWarehouse className="h-6 w-6 text-white" />}
+              color="bg-emerald-500"
+            />
+        )}
       </div>
 
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <BarChart 
-          title="Ventas Mensuales ($)" 
-          data={{
-            labels: salesByMonth.map(d => d.month),
-            datasets: [{
-              label: 'Monto Total',
-              data: salesByMonth.map(d => d.value),
-              backgroundColor: 'rgba(139, 92, 246, 0.6)',
-              borderColor: 'rgb(139, 92, 246)',
-              borderWidth: 1,
-            }]
-          }} 
-        />
-        <BarChart 
-          title="Unidades Vendidas por Mes" 
-          data={{
-            labels: unitsByMonth.map(d => d.month),
-            datasets: [{
-              label: 'Cantidad Unidades',
-              data: unitsByMonth.map(d => d.value),
-              backgroundColor: 'rgba(236, 72, 153, 0.6)',
-              borderColor: 'rgb(236, 72, 153)',
-              borderWidth: 1,
-            }]
-          }} 
-        />
-      </div>
+      {canSeeSensitiveInfo && (
+        <>
+          <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <BarChart 
+              title="Ventas Mensuales ($)" 
+              data={{
+                labels: salesByMonth.map(d => d.month),
+                datasets: [{
+                  label: 'Monto Total',
+                  data: salesByMonth.map(d => d.value),
+                  backgroundColor: 'rgba(139, 92, 246, 0.6)',
+                  borderColor: 'rgb(139, 92, 246)',
+                  borderWidth: 1,
+                }]
+              }} 
+            />
+            <BarChart 
+              title="Unidades Vendidas por Mes" 
+              data={{
+                labels: unitsByMonth.map(d => d.month),
+                datasets: [{
+                  label: 'Cantidad Unidades',
+                  data: unitsByMonth.map(d => d.value),
+                  backgroundColor: 'rgba(236, 72, 153, 0.6)',
+                  borderColor: 'rgb(236, 72, 153)',
+                  borderWidth: 1,
+                }]
+              }} 
+            />
+          </div>
 
-      <div className="mt-8">
-        <BarChart 
-          title="Top 5 Productos más Vendidos" 
-          data={{
-            labels: topProducts.map(p => p.name),
-            datasets: [{
-              label: 'Unidades Vendidas',
-              data: topProducts.map(p => p.value),
-              backgroundColor: 'rgba(59, 130, 246, 0.6)',
-              borderColor: 'rgb(59, 130, 246)',
-              borderWidth: 1,
-            }]
-          }} 
-        />
-      </div>
+          <div className="mt-8">
+            <BarChart 
+              title="Top 5 Productos más Vendidos" 
+              data={{
+                labels: topProducts.map(p => p.name),
+                datasets: [{
+                  label: 'Unidades Vendidas',
+                  data: topProducts.map(p => p.value),
+                  backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                  borderColor: 'rgb(59, 130, 246)',
+                  borderWidth: 1,
+                }]
+              }} 
+            />
+          </div>
+        </>
+      )}
 
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
