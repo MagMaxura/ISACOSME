@@ -39,10 +39,16 @@ const Imagenes: React.FC = () => {
                 console.warn("[ImagenesPage] No buckets returned. Trying fallback...");
                 const fallbackBuckets: Bucket[] = [
                     { id: 'isabella-fallback', name: 'Isabella de la Perla', public: true } as any,
-                    { id: 'productos-fallback', name: 'PRODUCTOS', public: true } as any
+                    { id: 'productos-fallback', name: 'PRODUCTOS', public: true } as any,
+                    { id: 'bodytan-fallback', name: 'BodyTan', public: true } as any,
+                    { id: 'webultra-fallback', name: 'WEBULTRA', public: true } as any,
+                    { id: 'publi-fallback', name: 'PUBLI', public: true } as any,
+                    { id: 'banner-fallback', name: 'BANNER', public: true } as any,
+                    { id: 'logos-fallback', name: 'LOGOS', public: true } as any,
+                    { id: 'insumos-fallback', name: 'ISUMOS', public: true } as any
                 ];
                 setBuckets(fallbackBuckets);
-                setSelectedBucket('Isabella de la Perla');
+                setSelectedBucket('PRODUCTOS');
             }
         } catch (err: any) {
             console.error("[ImagenesPage] Error loading buckets:", err);
