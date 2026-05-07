@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Card from '@/components/Card';
 import PageHeader from '@/components/PageHeader';
-import { IconShoppingCart, IconPackage, IconUsers, IconBuildingWarehouse } from '@/components/Icons';
+import { IconShoppingCart, IconPackage, IconUsers, IconBuildingWarehouse, IconPhoto } from '@/components/Icons';
 import { LowStockInsumo, LowStockProducto, MonthlyData } from '@/types';
 import Table, { Column } from '@/components/Table';
 import BarChart from '@/components/BarChart';
@@ -106,6 +106,14 @@ const Dashboard: React.FC = () => {
               icon={<IconBuildingWarehouse className="h-6 w-6 text-white" />}
               color="bg-emerald-500"
             />
+            <Link to="/imagenes">
+              <Card 
+                title="Imágenes" 
+                value="Gestionar" 
+                icon={<IconPhoto className="h-6 w-6 text-white" />}
+                color="bg-zinc-800"
+              />
+            </Link>
         )}
       </div>
 
