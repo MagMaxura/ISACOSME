@@ -100,6 +100,7 @@ const Dashboard: React.FC = () => {
           color="bg-blue-500"
         />
         {canSeeSensitiveInfo && (
+          <>
             <Card 
               title="Valuación de Stock" 
               value={loading ? '...' : `$${(inventoryValue ?? 0).toLocaleString('es-AR')}`} 
@@ -114,6 +115,7 @@ const Dashboard: React.FC = () => {
                 color="bg-zinc-800"
               />
             </Link>
+          </>
         )}
       </div>
 
