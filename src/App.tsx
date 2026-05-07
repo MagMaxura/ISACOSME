@@ -31,6 +31,7 @@ import EstadisticasProductos from './pages/EstadisticasProductos';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import PaymentFailurePage from './pages/PaymentFailurePage';
 import KnowledgeBase from './pages/KnowledgeBase';
+import Imagenes from './pages/Imagenes';
 
 // Define roles for each route for clarity
 const routeConfig: { path: string; component: React.ReactElement; roles: AppRole[] }[] = [
@@ -48,6 +49,7 @@ const routeConfig: { path: string; component: React.ReactElement; roles: AppRole
     { path: '/comex', component: <Comex />, roles: ['superadmin', 'comex'] },
     { path: '/gestion-usuarios', component: <GestionUsuarios />, roles: ['superadmin'] },
     { path: '/gestion-listas-precios', component: <GestionListasPrecios />, roles: ['superadmin'] },
+    { path: '/imagenes', component: <Imagenes />, roles: ['superadmin', 'administrativo', 'vendedor', 'analitico'] },
 ];
 
 const App: React.FC = () => {

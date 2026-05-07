@@ -1,7 +1,7 @@
 
 import React, { Dispatch, SetStateAction } from 'react';
 import { NavLink } from 'react-router-dom';
-import { IconChartPie, IconShoppingCart, IconPackage, IconUsers, IconTag, IconBuildingWarehouse, IconUserCog, IconX, IconCashBanknote, IconBuilding, IconSwitchHorizontal, IconFileText, IconWorld, IconChartBar, IconMessage2 } from './Icons';
+import { IconChartPie, IconShoppingCart, IconPackage, IconUsers, IconTag, IconBuildingWarehouse, IconUserCog, IconX, IconCashBanknote, IconBuilding, IconSwitchHorizontal, IconFileText, IconWorld, IconChartBar, IconMessage2, IconPhoto } from './Icons';
 import { useAuth } from '../contexts/AuthContext';
 import { AppRole } from '../types';
 
@@ -33,6 +33,7 @@ const navConfig: NavConfigItem[] = [
 
   { type: 'header', text: 'Catálogo', allowedRoles: ['superadmin', 'administrativo', 'vendedor', 'analitico'] },
   { type: 'link', to: '/productos', text: 'Productos', icon: <IconPackage className="h-5 w-5" />, allowedRoles: ['superadmin', 'administrativo', 'vendedor', 'analitico'] },
+  { type: 'link', to: '/imagenes', text: 'Imágenes', icon: <IconPhoto className="h-5 w-5" />, allowedRoles: ['superadmin', 'administrativo', 'vendedor', 'analitico'] },
   { type: 'link', to: '/precios', text: 'Listas de Precios', icon: <IconTag className="h-5 w-5" />, allowedRoles: ['superadmin', 'administrativo', 'vendedor', 'analitico'] },
 
   { type: 'header', text: 'Inventario', allowedRoles: ['superadmin', 'administrativo'] },
