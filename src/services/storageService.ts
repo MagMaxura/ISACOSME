@@ -29,8 +29,13 @@ const SERVICE_NAME = 'StorageService';
 
 export const fetchBuckets = async (): Promise<Bucket[]> => {
   try {
+    console.log(`[${SERVICE_NAME}] Listing buckets...`);
     const { data, error } = await supabase.storage.listBuckets();
-    if (error) throw error;
+    if (error) {
+        console.error(`[${SERVICE_NAME}] listBuckets error:`, error);
+        throw error;
+    }
+    console.log(`[${SERVICE_NAME}] listBuckets success:`, data);
     return data || [];
   } catch (error: any) {
     console.error(`[${SERVICE_NAME}] Error fetching buckets:`, error);
@@ -40,12 +45,18 @@ export const fetchBuckets = async (): Promise<Bucket[]> => {
 
 export const fetchFiles = async (bucketName: string, path: string = ''): Promise<StorageFile[]> => {
   try {
+    console.log(`[${SERVICE_NAME}] Listing files in bucket "${bucketName}" at path "${path}"...`);
     const { data, error } = await supabase.storage.from(bucketName).list(path, {
         limit: 100,
         offset: 0,
         sortBy: { column: 'name', order: 'asc' }
     });
-    if (error) throw error;
+    if (error) {
+        console.error(`[${SERVICE_NAME}] listFiles error:`, error);
+        throw error;
+    }
+    
+    console.log(`[${SERVICE_NAME}] listFiles success, found ${data?.length || 0} items.`);
     
     const files = (data || []).filter(item => !!item.id) as StorageFile[];
     

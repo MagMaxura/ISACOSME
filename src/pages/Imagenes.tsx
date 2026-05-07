@@ -26,14 +26,26 @@ const Imagenes: React.FC = () => {
 
     const loadBuckets = async () => {
         setLoading(true);
+        console.log("[ImagenesPage] Fetching buckets...");
         try {
             const data = await fetchBuckets();
+            console.log("[ImagenesPage] Buckets found:", data);
             setBuckets(data);
             if (data.length > 0) {
-                const productBucket = data.find(b => b.name === 'PRODUCTOS');
+                const productBucket = data.find(b => b.name === 'PRODUCTOS' || b.name === 'Isabella de la Perla');
                 setSelectedBucket(productBucket ? productBucket.name : data[0].name);
+            } else {
+                // Fallback si no hay buckets visibles (problema de permisos de listado)
+                console.warn("[ImagenesPage] No buckets returned. Trying fallback...");
+                const fallbackBuckets: Bucket[] = [
+                    { id: 'isabella-fallback', name: 'Isabella de la Perla', public: true } as any,
+                    { id: 'productos-fallback', name: 'PRODUCTOS', public: true } as any
+                ];
+                setBuckets(fallbackBuckets);
+                setSelectedBucket('Isabella de la Perla');
             }
         } catch (err: any) {
+            console.error("[ImagenesPage] Error loading buckets:", err);
             setError(err);
         } finally {
             setLoading(false);
